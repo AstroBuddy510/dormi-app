@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useLocation, Link } from 'wouter';
-import { useResidentSignup, ResidentSignupRequestEstate } from '@workspace/api-client-react';
+import { useResidentSignup } from '@workspace/api-client-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronsUpDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Signup() {
@@ -19,23 +21,37 @@ export default function Signup() {
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
-    estate: ResidentSignupRequestEstate.Airport_Hills,
+    estate: '',
     blockNumber: '',
     houseNumber: '',
     ghanaGpsAddress: ''
   });
+  const [estateOpen, setEstateOpen] = useState(false);
+  const [estateInput, setEstateInput] = useState('');
+  const [estateError, setEstateError] = useState('');
+
+  const { data: existingEstates = [] } = useQuery<string[]>({
+    queryKey: ['estates'],
+    queryFn: () => fetch('/api/residents/estates').then(r => r.json()),
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.estate.trim()) {
+      setEstateError('Please select or type your estate name.');
+      return;
+    }
+    setEstateError('');
     signupMutation.mutate(
-      { data: formData },
+      { data: formData as any },
       {
         onSuccess: () => {
           toast({ title: "Account created!", description: "You can now log in." });
           setLocation('/login');
         },
-        onError: () => {
-          toast({ variant: "destructive", title: "Signup failed", description: "Please check your details and try again." });
+        onError: (err: any) => {
+          const msg = err?.data?.message ?? err?.message ?? 'Please check your details and try again.';
+          toast({ variant: "destructive", title: "Signup failed", description: msg });
         }
       }
     );
@@ -81,19 +97,82 @@ export default function Signup() {
 
                 <div className="space-y-2">
                   <Label>Estate</Label>
-                  <Select 
-                    value={formData.estate} 
-                    onValueChange={(val: any) => setFormData({...formData, estate: val})}
-                  >
-                    <SelectTrigger className="h-12 rounded-xl">
-                      <SelectValue placeholder="Select your estate" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ResidentSignupRequestEstate.Airport_Hills}>Airport Hills</SelectItem>
-                      <SelectItem value={ResidentSignupRequestEstate.East_Legon_Hills}>East Legon Hills</SelectItem>
-                      <SelectItem value={ResidentSignupRequestEstate.Trassaco_Valley}>Trassaco Valley</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Popover open={estateOpen} onOpenChange={setEstateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={estateOpen}
+                        className={`w-full h-12 rounded-xl justify-between font-normal ${estateError ? 'border-red-400' : ''}`}
+                      >
+                        <span className={formData.estate ? '' : 'text-muted-foreground'}>
+                          {formData.estate || 'Select or type your estate'}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search or type estate name..."
+                          value={estateInput}
+                          onValueChange={setEstateInput}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {estateInput.trim() ? (
+                              <button
+                                type="button"
+                                className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded-sm"
+                                onClick={() => {
+                                  const val = estateInput.trim();
+                                  setFormData({ ...formData, estate: val });
+                                  setEstateInput('');
+                                  setEstateOpen(false);
+                                  setEstateError('');
+                                }}
+                              >
+                                Use &quot;{estateInput.trim()}&quot;
+                              </button>
+                            ) : (
+                              <span className="px-2 py-1.5 text-sm text-muted-foreground">No estates found.</span>
+                            )}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {existingEstates.map((estate) => (
+                              <CommandItem
+                                key={estate}
+                                value={estate}
+                                onSelect={(val) => {
+                                  setFormData({ ...formData, estate: val });
+                                  setEstateInput('');
+                                  setEstateOpen(false);
+                                  setEstateError('');
+                                }}
+                              >
+                                {estate}
+                              </CommandItem>
+                            ))}
+                            {estateInput.trim() && !existingEstates.map(e => e.toLowerCase()).includes(estateInput.trim().toLowerCase()) && (
+                              <CommandItem
+                                value={estateInput.trim()}
+                                onSelect={(val) => {
+                                  setFormData({ ...formData, estate: val });
+                                  setEstateInput('');
+                                  setEstateOpen(false);
+                                  setEstateError('');
+                                }}
+                              >
+                                Use &quot;{estateInput.trim()}&quot;
+                              </CommandItem>
+                            )}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {estateError && <p className="text-xs text-red-500 mt-1">{estateError}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
