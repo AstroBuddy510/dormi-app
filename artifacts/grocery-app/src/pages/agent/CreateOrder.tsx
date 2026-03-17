@@ -6,13 +6,13 @@ import { useAuth } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Zap, CheckCircle, AlertCircle } from "lucide-react";
+import { ItemsBuilder } from "@/components/ItemsBuilder";
 
 const API = "/api";
 
@@ -20,8 +20,6 @@ async function fetchResidents() {
   const r = await fetch(`${API}/residents`);
   return r.json();
 }
-
-const ITEMS_HINT = "One item per line: ItemName, Qty, UnitPrice\nExample: Tomatoes, 2, 15";
 
 function OrderPreview({ rawItems }: { rawItems: string }) {
   const lines = rawItems.split("\n").filter(l => l.trim());
@@ -37,6 +35,7 @@ function OrderPreview({ rawItems }: { rawItems: string }) {
   const total = subtotal + serviceFee + 30;
   return (
     <div className="rounded-lg border bg-blue-50 p-3 text-sm space-y-1">
+      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Order Summary</p>
       {parsed.map((i, idx) => (
         <div key={idx} className="flex justify-between">
           <span className="text-gray-600">{i.name} × {i.qty}</span>
@@ -47,7 +46,7 @@ function OrderPreview({ rawItems }: { rawItems: string }) {
         <div className="flex justify-between text-gray-500 text-xs"><span>Subtotal</span><span>₵{subtotal.toFixed(2)}</span></div>
         <div className="flex justify-between text-gray-500 text-xs"><span>Service fee (18%)</span><span>₵{serviceFee.toFixed(2)}</span></div>
         <div className="flex justify-between text-gray-500 text-xs"><span>Delivery</span><span>₵30.00</span></div>
-        <div className="flex justify-between font-semibold text-blue-700"><span>Estimated Total</span><span>₵{total.toFixed(2)}</span></div>
+        <div className="flex justify-between font-semibold text-blue-700 text-base pt-1"><span>Estimated Total</span><span>₵{total.toFixed(2)}</span></div>
       </div>
     </div>
   );
@@ -69,6 +68,7 @@ export default function AgentCreateOrder() {
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [isUrgent, setIsUrgent] = useState(false);
   const [success, setSuccess] = useState<any>(null);
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     if (presetResidentId) setResidentId(presetResidentId);
@@ -99,6 +99,7 @@ export default function AgentCreateOrder() {
       setSuccess(data);
       setRawItems("");
       setNotes("");
+      setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -117,7 +118,7 @@ export default function AgentCreateOrder() {
             <div className="flex justify-between"><span className="text-gray-500">ETA</span><span>{success.eta}</span></div>
             <div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold">₵{success.total?.toFixed(2)}</span></div>
           </div>
-          <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => setSuccess(null)}>
+          <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => { setSuccess(null); }}>
             Create Another Order
           </Button>
         </div>
@@ -163,8 +164,8 @@ export default function AgentCreateOrder() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Order Items</CardTitle>
-            <CardDescription>Enter items exactly as told by the resident.</CardDescription>
+            <CardTitle className="text-base">Items & Quantities</CardTitle>
+            <CardDescription>Build the order list item by item — search from inventory or type custom items.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-lg border bg-orange-50">
@@ -177,17 +178,7 @@ export default function AgentCreateOrder() {
               {isUrgent && <Badge className="bg-red-100 text-red-700 text-xs">URGENT</Badge>}
             </div>
 
-            <div className="space-y-2">
-              <Label>Items *</Label>
-              <Textarea
-                placeholder={ITEMS_HINT}
-                rows={6}
-                value={rawItems}
-                onChange={e => setRawItems(e.target.value)}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-gray-500">Format: Item Name, Quantity, Unit Price — one item per line</p>
-            </div>
+            <ItemsBuilder key={resetKey} onChange={setRawItems} color="blue" />
 
             {rawItems.trim() && <OrderPreview rawItems={rawItems} />}
 

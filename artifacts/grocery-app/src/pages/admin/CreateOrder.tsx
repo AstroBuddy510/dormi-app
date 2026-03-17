@@ -4,7 +4,6 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Zap, Building2, Truck, Plus, Trash2, AlertCircle } from "lucide-react";
+import { ItemsBuilder } from "@/components/ItemsBuilder";
 
 const BASE = "";
 
@@ -23,8 +23,6 @@ async function fetchDeliveryPartners() {
   const r = await fetch(`${BASE}/api/delivery-partners`);
   return r.json();
 }
-
-const ITEMS_HINT = "One item per line: ItemName, Qty, UnitPrice\nExample: Tomatoes, 2, 15";
 
 function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawItems: string; deliveryFee?: number; markupPct?: number }) {
   const lines = rawItems.split("\n").filter(l => l.trim());
@@ -40,6 +38,7 @@ function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawIt
   if (parsed.length === 0) return null;
   return (
     <div className="rounded-lg border bg-green-50 p-3 text-sm space-y-1">
+      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Order Summary</p>
       {parsed.map((i, idx) => (
         <div key={idx} className="flex justify-between">
           <span className="text-gray-600">{i.name} × {i.qty}</span>
@@ -50,7 +49,7 @@ function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawIt
         <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>₵{subtotal.toFixed(2)}</span></div>
         <div className="flex justify-between text-gray-500"><span>Service fee ({markupPct}%)</span><span>₵{serviceFee.toFixed(2)}</span></div>
         <div className="flex justify-between text-gray-500"><span>Delivery</span><span>₵{deliveryFee.toFixed(2)}</span></div>
-        <div className="flex justify-between font-semibold text-green-700"><span>Total</span><span>₵{total.toFixed(2)}</span></div>
+        <div className="flex justify-between font-semibold text-green-700 text-base pt-1"><span>Total</span><span>₵{total.toFixed(2)}</span></div>
       </div>
     </div>
   );
@@ -65,6 +64,7 @@ function SingleOrderTab() {
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [isUrgent, setIsUrgent] = useState(true);
+  const [resetKey, setResetKey] = useState(0);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -80,6 +80,7 @@ function SingleOrderTab() {
       toast({ title: "Single order created!", description: isUrgent ? "Marked URGENT — 30-60 min ETA" : "ETA: 2-3 hours" });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setResidentId(""); setRawItems(""); setNotes("");
+      setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -129,15 +130,8 @@ function SingleOrderTab() {
       </div>
 
       <div className="space-y-2">
-        <Label>Items *</Label>
-        <Textarea
-          placeholder={ITEMS_HINT}
-          rows={5}
-          value={rawItems}
-          onChange={e => setRawItems(e.target.value)}
-          className="font-mono text-sm"
-        />
-        <p className="text-xs text-gray-500">Format: Item Name, Quantity, Unit Price (one per line)</p>
+        <Label className="text-sm font-semibold">Items & Quantities *</Label>
+        <ItemsBuilder key={resetKey} onChange={setRawItems} color="green" />
       </div>
 
       {rawItems.trim() && <OrderSummaryBox rawItems={rawItems} />}
@@ -159,6 +153,7 @@ function SingleOrderTab() {
 }
 
 interface BlockOrderEntry {
+  _eid: number;
   residentId: string;
   rawItems: string;
   notes: string;
@@ -172,12 +167,13 @@ function BlockOrderTab() {
   const [groupName, setGroupName] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [groupNotes, setGroupNotes] = useState("");
-  const [entries, setEntries] = useState<BlockOrderEntry[]>([{ residentId: "", rawItems: "", notes: "" }]);
+  const [entries, setEntries] = useState<BlockOrderEntry[]>([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
+  const [resetKey, setResetKey] = useState(0);
 
-  const addEntry = () => setEntries(prev => [...prev, { residentId: "", rawItems: "", notes: "" }]);
-  const removeEntry = (i: number) => setEntries(prev => prev.filter((_, idx) => idx !== i));
-  const updateEntry = (i: number, field: keyof BlockOrderEntry, val: string) =>
-    setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: val } : e));
+  const addEntry = () => setEntries(prev => [...prev, { _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
+  const removeEntry = (eid: number) => setEntries(prev => prev.filter(e => e._eid !== eid));
+  const updateEntry = (eid: number, field: keyof Omit<BlockOrderEntry, '_eid'>, val: string) =>
+    setEntries(prev => prev.map(e => e._eid === eid ? { ...e, [field]: val } : e));
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -193,7 +189,9 @@ function BlockOrderTab() {
     onSuccess: (data) => {
       toast({ title: "Block order created!", description: `${data.ordersCreated} orders grouped for ${estate}` });
       qc.invalidateQueries({ queryKey: ["orders"] });
-      setEstate(""); setGroupName(""); setEntries([{ residentId: "", rawItems: "", notes: "" }]);
+      setEstate(""); setGroupName("");
+      setEntries([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
+      setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -235,19 +233,19 @@ function BlockOrderTab() {
         </div>
 
         {entries.map((entry, i) => (
-          <Card key={i} className="border-dashed">
+          <Card key={entry._eid} className="border-dashed">
             <CardHeader className="pb-3 pt-4 px-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">Resident #{i + 1}</CardTitle>
                 {entries.length > 1 && (
-                  <Button variant="ghost" size="sm" className="text-red-500 h-7 w-7 p-0" onClick={() => removeEntry(i)}>
+                  <Button variant="ghost" size="sm" className="text-red-500 h-7 w-7 p-0" onClick={() => removeEntry(entry._eid)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
-              <Select value={entry.residentId} onValueChange={v => updateEntry(i, "residentId", v)}>
+              <Select value={entry.residentId} onValueChange={v => updateEntry(entry._eid, "residentId", v)}>
                 <SelectTrigger><SelectValue placeholder="Select resident" /></SelectTrigger>
                 <SelectContent>
                   {(residents as any[]).map((r: any) => (
@@ -257,15 +255,18 @@ function BlockOrderTab() {
                   ))}
                 </SelectContent>
               </Select>
-              <Textarea
-                placeholder={ITEMS_HINT}
-                rows={3}
-                value={entry.rawItems}
-                onChange={e => updateEntry(i, "rawItems", e.target.value)}
-                className="font-mono text-sm"
-              />
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-600">Items & Quantities</Label>
+                <ItemsBuilder
+                  key={`${entry._eid}-${resetKey}`}
+                  onChange={v => updateEntry(entry._eid, "rawItems", v)}
+                  color="green"
+                />
+              </div>
+
               {entry.rawItems.trim() && <OrderSummaryBox rawItems={entry.rawItems} />}
-              <Input placeholder="Notes for this resident (optional)" value={entry.notes} onChange={e => updateEntry(i, "notes", e.target.value)} />
+              <Input placeholder="Notes for this resident (optional)" value={entry.notes} onChange={e => updateEntry(entry._eid, "notes", e.target.value)} />
             </CardContent>
           </Card>
         ))}
@@ -292,6 +293,7 @@ function ThirdPartyTab() {
   const [rawItems, setRawItems] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
+  const [resetKey, setResetKey] = useState(0);
 
   const selectedPartner = (partners as any[]).find((p: any) => String(p.id) === deliveryPartnerId);
 
@@ -309,6 +311,7 @@ function ThirdPartyTab() {
       toast({ title: "Third-party order created!", description: `Assigned to ${selectedPartner?.name}` });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setResidentId(""); setDeliveryPartnerId(""); setRawItems(""); setNotes("");
+      setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -377,14 +380,8 @@ function ThirdPartyTab() {
       </div>
 
       <div className="space-y-2">
-        <Label>Items *</Label>
-        <Textarea
-          placeholder={ITEMS_HINT}
-          rows={5}
-          value={rawItems}
-          onChange={e => setRawItems(e.target.value)}
-          className="font-mono text-sm"
-        />
+        <Label className="text-sm font-semibold">Items & Quantities *</Label>
+        <ItemsBuilder key={resetKey} onChange={setRawItems} color="green" />
       </div>
 
       {rawItems.trim() && <OrderSummaryBox rawItems={rawItems} />}
