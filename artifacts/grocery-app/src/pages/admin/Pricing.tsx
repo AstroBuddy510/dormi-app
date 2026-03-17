@@ -46,10 +46,11 @@ export default function AdminPricing() {
   return (
     <div className="flex min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 p-8">
-        <h1 className="text-3xl font-display font-bold text-foreground mb-8">Pricing Configuration</h1>
+      <div className="flex-1 overflow-auto flex flex-col py-8 px-12">
+        <div className="w-full max-w-3xl self-center">
+        <h1 className="text-3xl font-display font-bold text-foreground mb-8 text-center">Pricing Configuration</h1>
 
-        <div className="max-w-xl">
+        <div className="">
           <Card className="rounded-2xl shadow-sm border-border/50">
             <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
               <CardTitle>Global Fees</CardTitle>
@@ -103,6 +104,7 @@ export default function AdminPricing() {
               )}
             </CardContent>
           </Card>
+        </div>
         </div>
       </div>
     </div>
