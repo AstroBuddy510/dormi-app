@@ -8,6 +8,7 @@ const router: IRouter = Router();
 function mapGroup(g: typeof blockOrderGroupsTable.$inferSelect) {
   return {
     id: g.id,
+    batchNumber: g.batchNumber ?? null,
     name: g.name,
     estate: g.estate,
     status: g.status,

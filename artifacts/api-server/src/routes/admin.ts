@@ -9,10 +9,23 @@ import {
   blockOrderGroupsTable,
   deliveryPartnersTable,
 } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { CreateCallLogOrderBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+async function generateBatchNumber(estate: string): Promise<string> {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // '20260317'
+  const estCode = estate.split(/\s+/).map(w => w[0]?.toUpperCase() ?? "").join(""); // 'AH', 'ELH'
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayGroups = await db
+    .select({ id: blockOrderGroupsTable.id })
+    .from(blockOrderGroupsTable)
+    .where(gte(blockOrderGroupsTable.createdAt, dayStart));
+  const seq = String(todayGroups.length + 1).padStart(3, "0");
+  return `BULK-${estCode}-${dateStr}-${seq}`;
+}
 
 function addHours(h: number) {
   const d = new Date();
@@ -191,8 +204,10 @@ router.post("/orders/block", async (req, res) => {
     const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
     const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
 
+    const batchNumber = await generateBatchNumber(estate);
     const name = groupName || `${estate} — ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
     const [group] = await db.insert(blockOrderGroupsTable).values({
+      batchNumber,
       name,
       estate,
       status: "collecting",

@@ -201,7 +201,11 @@ function BulkOrderTab() {
       return r.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Bulk order created!", description: `${data.ordersCreated} orders grouped for ${estate}` });
+      const bn = data.group?.batchNumber ?? data.batchNumber ?? "";
+      toast({
+        title: `Bulk order created! ${bn ? `· ${bn}` : ""}`,
+        description: `${data.ordersCreated} orders grouped for ${estate}${bn ? ` — Batch ref: ${bn}` : ""}`,
+      });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setEstate(""); setGroupName("");
       setEntries([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);

@@ -3,6 +3,7 @@ import { ridersTable } from "./riders";
 
 export const blockOrderGroupsTable = pgTable("block_order_groups", {
   id: serial("id").primaryKey(),
+  batchNumber: text("batch_number"),
   name: text("name").notNull(),
   estate: text("estate").notNull(),
   status: text("status").notNull().default("collecting"),
