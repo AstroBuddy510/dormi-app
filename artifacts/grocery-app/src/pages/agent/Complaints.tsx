@@ -63,6 +63,10 @@ export default function AgentComplaints() {
   const set = (k: keyof typeof form) => (v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
   const onResidentChange = (id: string) => {
+    if (id === "none") {
+      setForm(prev => ({ ...prev, residentId: "", residentName: "", residentPhone: "" }));
+      return;
+    }
     const r = (residents as any[]).find((r: any) => String(r.id) === id);
     setForm(prev => ({ ...prev, residentId: id, residentName: r?.fullName ?? "", residentPhone: r?.phone ?? "" }));
   };
@@ -197,7 +201,7 @@ export default function AgentComplaints() {
               <Select value={form.residentId} onValueChange={onResidentChange}>
                 <SelectTrigger><SelectValue placeholder="Select if complaint is about a resident" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No specific resident</SelectItem>
+                  <SelectItem value="none">No specific resident</SelectItem>
                   {(residents as any[]).map((r: any) => (
                     <SelectItem key={r.id} value={String(r.id)}>{r.fullName} — {r.phone}</SelectItem>
                   ))}
