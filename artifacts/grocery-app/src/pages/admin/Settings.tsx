@@ -391,10 +391,11 @@ export default function AdminSettings() {
   return (
     <div className="flex min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 p-8">
-        <h1 className="text-3xl font-display font-bold text-foreground mb-8">Settings</h1>
+      <div className="flex-1 overflow-auto flex flex-col py-8 px-12">
+        <div className="w-full max-w-2xl self-center">
+        <h1 className="text-3xl font-display font-bold text-foreground mb-8 text-center">Settings</h1>
 
-        <div className="max-w-xl">
+        <div className="w-full">
           <div className="flex gap-1 mb-6 bg-muted/50 p-1 rounded-xl border border-border/50">
             {tabs.map(tab => (
               <button
@@ -460,6 +461,7 @@ export default function AdminSettings() {
               </>
             )}
           </Card>
+        </div>
         </div>
       </div>
     </div>
