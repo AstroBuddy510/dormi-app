@@ -12,6 +12,7 @@ export const residentsTable = pgTable("residents", {
   ghanaGpsAddress: text("ghana_gps_address"),
   subscribeWeekly: boolean("subscribe_weekly").notNull().default(false),
   subscriptionDay: text("subscription_day").default("Friday"),
+  suspended: boolean("suspended").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

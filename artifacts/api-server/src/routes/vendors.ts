@@ -5,21 +5,26 @@ import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/", async (_req, res) => {
-  const vendors = await db.select().from(vendorsTable);
-  res.json(vendors.map(v => ({
+function mapVendor(v: typeof vendorsTable.$inferSelect) {
+  return {
     id: v.id,
     name: v.name,
     phone: v.phone,
     description: v.description,
     categories: v.categories,
     isActive: v.isActive,
-  })));
+    createdAt: v.createdAt.toISOString(),
+  };
+}
+
+router.get("/", async (_req, res) => {
+  const vendors = await db.select().from(vendorsTable).orderBy(vendorsTable.createdAt);
+  res.json(vendors.map(mapVendor));
 });
 
 router.post("/", async (req, res) => {
   try {
-    const { name, phone, description } = req.body;
+    const { name, phone, description, categories } = req.body;
     if (!name) {
       res.status(400).json({ error: "bad_request", message: "name is required" });
       return;
@@ -35,17 +40,61 @@ router.post("/", async (req, res) => {
       name,
       phone: phone ?? null,
       description: description ?? null,
-      categories: [],
+      categories: Array.isArray(categories) ? categories : [],
       isActive: true,
     }).returning();
-    res.status(201).json({
-      id: vendor.id,
-      name: vendor.name,
-      phone: vendor.phone,
-      description: vendor.description,
-      categories: vendor.categories,
-      isActive: vendor.isActive,
-    });
+    res.status(201).json(mapVendor(vendor));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { name, phone, description, categories } = req.body;
+    const [vendor] = await db.update(vendorsTable)
+      .set({
+        ...(name && { name }),
+        ...(phone !== undefined && { phone }),
+        ...(description !== undefined && { description }),
+        ...(Array.isArray(categories) && { categories }),
+      })
+      .where(eq(vendorsTable.id, id))
+      .returning();
+    if (!vendor) {
+      res.status(404).json({ error: "not_found", message: "Vendor not found" });
+      return;
+    }
+    res.json(mapVendor(vendor));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/suspend", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { suspended } = req.body;
+    const [vendor] = await db.update(vendorsTable)
+      .set({ isActive: !suspended })
+      .where(eq(vendorsTable.id, id))
+      .returning();
+    if (!vendor) {
+      res.status(404).json({ error: "not_found", message: "Vendor not found" });
+      return;
+    }
+    res.json(mapVendor(vendor));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(vendorsTable).where(eq(vendorsTable.id, id));
+    res.json({ success: true });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }

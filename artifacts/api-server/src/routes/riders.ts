@@ -10,14 +10,20 @@ function hashPin(pin: string): string {
   return createHash("sha256").update(pin).digest("hex");
 }
 
-router.get("/", async (_req, res) => {
-  const riders = await db.select().from(ridersTable);
-  res.json(riders.map(r => ({
+function mapRider(r: typeof ridersTable.$inferSelect) {
+  return {
     id: r.id,
     name: r.name,
     phone: r.phone,
     isAvailable: r.isAvailable,
-  })));
+    suspended: r.suspended,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+router.get("/", async (_req, res) => {
+  const riders = await db.select().from(ridersTable).orderBy(ridersTable.createdAt);
+  res.json(riders.map(mapRider));
 });
 
 router.post("/", async (req, res) => {
@@ -38,12 +44,57 @@ router.post("/", async (req, res) => {
       pin: pin ? hashPin(pin) : null,
       isAvailable: true,
     }).returning();
-    res.status(201).json({
-      id: rider.id,
-      name: rider.name,
-      phone: rider.phone,
-      isAvailable: rider.isAvailable,
-    });
+    res.status(201).json(mapRider(rider));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { name, phone, isAvailable } = req.body;
+    const [rider] = await db.update(ridersTable)
+      .set({
+        ...(name && { name }),
+        ...(phone && { phone }),
+        ...(isAvailable !== undefined && { isAvailable }),
+      })
+      .where(eq(ridersTable.id, id))
+      .returning();
+    if (!rider) {
+      res.status(404).json({ error: "not_found", message: "Rider not found" });
+      return;
+    }
+    res.json(mapRider(rider));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/suspend", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { suspended } = req.body;
+    const [rider] = await db.update(ridersTable)
+      .set({ suspended: !!suspended })
+      .where(eq(ridersTable.id, id))
+      .returning();
+    if (!rider) {
+      res.status(404).json({ error: "not_found", message: "Rider not found" });
+      return;
+    }
+    res.json(mapRider(rider));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(ridersTable).where(eq(ridersTable.id, id));
+    res.json({ success: true });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }
