@@ -7,15 +7,17 @@ import {
   useAssignRider,
   useListRiders,
 } from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { Activity, ShoppingCart, Users, DollarSign, RefreshCcw, CheckCircle, Package } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+
+interface DeliveryPartner { id: number; name: string; isActive: boolean; }
 
 type StatusFilter = 'all' | 'pending' | 'in_progress' | 'delivered';
 
@@ -27,9 +29,26 @@ export default function AdminDashboard() {
   const { data: stats } = useGetAdminStats();
   const { data: allOrders = [], isLoading: ordersLoading } = useListOrders();
   const { data: riders = [] } = useListRiders();
+  const { data: deliveryPartners = [] } = useQuery<DeliveryPartner[]>({
+    queryKey: ['/api/delivery-partners'],
+    queryFn: () => fetch('/api/delivery-partners').then(r => r.json()),
+  });
+  const activePartners = deliveryPartners.filter(p => p.isActive);
 
   const updateStatusMutation = useUpdateOrderStatus();
   const assignRiderMutation = useAssignRider();
+  const assignDeliveryPartnerMutation = useMutation({
+    mutationFn: ({ orderId, partnerId }: { orderId: number; partnerId: number }) =>
+      fetch(`/api/orders/${orderId}/assign-delivery-partner`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryPartnerId: partnerId }),
+      }).then(r => r.json()),
+    onSuccess: (_data, { orderId }) => {
+      queryClient.invalidateQueries();
+      toast({ title: 'Delivery Company Assigned', description: `Delivery partner assigned to order #${orderId}` });
+    },
+  });
 
   const refresh = () => {
     queryClient.invalidateQueries();
@@ -173,7 +192,7 @@ export default function AdminDashboard() {
                       <TableHead>Vendor</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Rider</TableHead>
+                      <TableHead>Rider / Delivery Co.</TableHead>
                       <TableHead>Action</TableHead>
                       <TableHead>Time</TableHead>
                     </TableRow>
@@ -208,23 +227,52 @@ export default function AdminDashboard() {
                           <TableCell className="text-sm text-muted-foreground">{order.vendorName || '—'}</TableCell>
                           <TableCell className="font-bold text-primary">₵{order.total.toFixed(2)}</TableCell>
                           <TableCell><StatusBadge status={order.status} /></TableCell>
-                          <TableCell className="min-w-[140px]">
+                          <TableCell className="min-w-[160px]">
                             {order.status !== 'delivered' && order.status !== 'cancelled' ? (
-                              <Select
-                                value={order.riderId?.toString() ?? ''}
-                                onValueChange={(val) => handleAssignRider(order.id, val)}
-                              >
-                                <SelectTrigger className="h-8 text-xs rounded-lg">
-                                  <SelectValue placeholder="Assign rider" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {riders.map((r) => (
-                                    <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              (order as any).orderType === 'third-party' ? (
+                                <div className="space-y-1">
+                                  <Select
+                                    value={(order as any).deliveryPartnerId?.toString() ?? ''}
+                                    onValueChange={(val) =>
+                                      assignDeliveryPartnerMutation.mutate({ orderId: order.id, partnerId: parseInt(val) })
+                                    }
+                                  >
+                                    <SelectTrigger className="h-8 text-xs rounded-lg border-blue-200 bg-blue-50">
+                                      <SelectValue placeholder="Assign delivery co." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {activePartners.map((p) => (
+                                        <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {(order as any).deliveryPartnerName && (
+                                    <p className="text-[10px] text-blue-600 font-medium truncate">
+                                      ✓ {(order as any).deliveryPartnerName}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <Select
+                                  value={order.riderId?.toString() ?? ''}
+                                  onValueChange={(val) => handleAssignRider(order.id, val)}
+                                >
+                                  <SelectTrigger className="h-8 text-xs rounded-lg">
+                                    <SelectValue placeholder="Assign rider" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {riders.map((r) => (
+                                      <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )
                             ) : (
-                              <span className="text-sm text-muted-foreground">{order.riderName || '—'}</span>
+                              <span className="text-sm text-muted-foreground">
+                                {(order as any).orderType === 'third-party'
+                                  ? ((order as any).deliveryPartnerName || '—')
+                                  : (order.riderName || '—')}
+                              </span>
                             )}
                           </TableCell>
                           <TableCell className="min-w-[110px]">

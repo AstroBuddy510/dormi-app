@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable } from "@workspace/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import {
   CreateOrderBody,
   UpdateOrderStatusBody,
@@ -21,6 +21,7 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
   const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, order.residentId)).limit(1);
   let vendorName: string | undefined;
   let riderName: string | undefined;
+  let deliveryPartnerName: string | undefined;
   if (order.vendorId) {
     const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, order.vendorId)).limit(1);
     vendorName = v?.name;
@@ -28,6 +29,10 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
   if (order.riderId) {
     const [r] = await db.select().from(ridersTable).where(eq(ridersTable.id, order.riderId)).limit(1);
     riderName = r?.name;
+  }
+  if (order.deliveryPartnerId) {
+    const [dp] = await db.select().from(deliveryPartnersTable).where(eq(deliveryPartnersTable.id, order.deliveryPartnerId)).limit(1);
+    deliveryPartnerName = dp?.name;
   }
   const address = resident
     ? `${resident.estate}, Block ${resident.blockNumber}, House ${resident.houseNumber}${resident.ghanaGpsAddress ? ` (${resident.ghanaGpsAddress})` : ""}`
@@ -42,6 +47,9 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     vendorName: vendorName ?? null,
     riderId: order.riderId,
     riderName: riderName ?? null,
+    deliveryPartnerId: order.deliveryPartnerId ?? null,
+    deliveryPartnerName: deliveryPartnerName ?? null,
+    orderType: order.orderType,
     items: order.items as any[],
     subtotal: parseFloat(order.subtotal),
     serviceFee: parseFloat(order.serviceFee),
@@ -73,8 +81,8 @@ router.get("/", async (req, res) => {
   if (isSubscription !== undefined) conditions.push(eq(ordersTable.isSubscription, isSubscription === "true"));
   if (callOnly !== undefined) conditions.push(eq(ordersTable.callOnly, callOnly === "true"));
   const rows = conditions.length > 0
-    ? await (query as any).where(and(...conditions)).orderBy(ordersTable.createdAt)
-    : await (query as any).orderBy(ordersTable.createdAt);
+    ? await (query as any).where(and(...conditions)).orderBy(desc(ordersTable.createdAt))
+    : await (query as any).orderBy(desc(ordersTable.createdAt));
   const enriched = await Promise.all(rows.map(enrichOrder));
   res.json(enriched);
 });
@@ -178,6 +186,28 @@ router.put("/:id/assign-rider", async (req, res) => {
     const body = AssignRiderBody.parse(req.body);
     const [order] = await db.update(ordersTable)
       .set({ riderId: body.riderId, updatedAt: new Date() })
+      .where(eq(ordersTable.id, id))
+      .returning();
+    if (!order) {
+      res.status(404).json({ error: "not_found", message: "Order not found" });
+      return;
+    }
+    res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/assign-delivery-partner", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { deliveryPartnerId } = req.body;
+    if (!deliveryPartnerId) {
+      res.status(400).json({ error: "bad_request", message: "deliveryPartnerId is required" });
+      return;
+    }
+    const [order] = await db.update(ordersTable)
+      .set({ deliveryPartnerId: parseInt(deliveryPartnerId), updatedAt: new Date() })
       .where(eq(ordersTable.id, id))
       .returning();
     if (!order) {
