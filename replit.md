@@ -56,6 +56,8 @@ lib/
 - Rider assignment per order
 - Pricing page: set delivery fee (GHS) and service markup (%)
 - Friday subscription queue
+- **User Management** (`/users`): view all residents/vendors/riders, edit details, upload profile photos, reset PINs, suspend/reactivate, delete
+- **Settings** (`/settings`): create riders, add residences, add vendors
 
 ### Rider
 - Login with PIN: **9012** (phone must exist in riders table)
@@ -93,6 +95,18 @@ lib/
 - **Household** (5): Sunlight Soap, OMO Powder, Toilet Roll, Dishwashing Liquid, Broom
 - **Cosmetics** (5): Close Up Toothpaste, Toothbrush, Vaseline Lotion, Shampoo, Deodorant
 - **Staples** (10): Rice 5kg, Rice 1kg, Cooking Oil, Bread, Sugar, Flour, Maggi Cubes, Tomato Paste, Salt, Noodles
+
+## Object Storage (Profile Photos)
+- Provisioned via Replit App Storage (GCS-backed)
+- Server: `artifacts/api-server/src/lib/objectStorage.ts` + `routes/storage.ts`
+- Upload flow: POST `/api/storage/uploads/request-url` → PUT to presigned URL → store objectPath
+- Serve photos: GET `/api/storage/objects/<objectPath>`
+- Photo columns added to all three user tables (`photo_url`)
+
+## Auth — Per-user PIN override
+- Vendors/Riders can have individual PINs (stored as SHA-256 hash)
+- If set, individual PIN takes precedence over global fallback (5678 / 9012)
+- Admin resets PIN from Users page → PUT `/api/vendors/:id/reset-pin` or `/api/riders/:id/reset-pin`
 
 ## API Endpoints
 All at `/api` prefix — see `lib/api-spec/openapi.yaml` for full contract.

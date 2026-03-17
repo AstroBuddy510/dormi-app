@@ -3,13 +3,24 @@ import { db } from "@workspace/db";
 import { residentsTable, vendorsTable, ridersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { LoginBody } from "@workspace/api-zod";
+import { createHash } from "crypto";
 
 const router: IRouter = Router();
 
-const ADMIN_PHONE = "0000000000";
 const ADMIN_PIN = "1234";
 const VENDOR_PIN = "5678";
 const RIDER_PIN = "9012";
+
+function hashPin(pin: string): string {
+  return createHash("sha256").update(pin).digest("hex");
+}
+
+function verifyPin(input: string, stored: string | null, fallback: string): boolean {
+  if (stored) {
+    return hashPin(input) === stored;
+  }
+  return input === fallback;
+}
 
 router.post("/login", async (req, res) => {
   try {
@@ -22,7 +33,7 @@ router.post("/login", async (req, res) => {
         return;
       }
       res.json({
-        user: { id: 0, name: "Admin", phone: ADMIN_PHONE, role: "admin" },
+        user: { id: 0, name: "Admin", phone, role: "admin" },
         role: "admin",
         token: "admin-token",
       });
@@ -36,7 +47,7 @@ router.post("/login", async (req, res) => {
         return;
       }
       res.json({
-        user: { id: resident.id, name: resident.fullName, phone: resident.phone, role: "resident" },
+        user: { id: resident.id, name: resident.fullName, phone: resident.phone, role: "resident", photoUrl: resident.photoUrl },
         role: "resident",
         token: `resident-${resident.id}`,
       });
@@ -44,17 +55,17 @@ router.post("/login", async (req, res) => {
     }
 
     if (role === "vendor") {
-      if (pin !== VENDOR_PIN) {
-        res.status(401).json({ error: "unauthorized", message: "Invalid vendor PIN" });
-        return;
-      }
       const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.phone, phone)).limit(1);
       if (!vendor) {
         res.status(401).json({ error: "unauthorized", message: "Vendor phone not found" });
         return;
       }
+      if (!verifyPin(pin ?? "", vendor.pin, VENDOR_PIN)) {
+        res.status(401).json({ error: "unauthorized", message: "Invalid vendor PIN" });
+        return;
+      }
       res.json({
-        user: { id: vendor.id, name: vendor.name, phone: vendor.phone, role: "vendor" },
+        user: { id: vendor.id, name: vendor.name, phone: vendor.phone, role: "vendor", photoUrl: vendor.photoUrl },
         role: "vendor",
         token: `vendor-${vendor.id}`,
       });
@@ -62,17 +73,17 @@ router.post("/login", async (req, res) => {
     }
 
     if (role === "rider") {
-      if (pin !== RIDER_PIN) {
-        res.status(401).json({ error: "unauthorized", message: "Invalid rider PIN" });
-        return;
-      }
       const [rider] = await db.select().from(ridersTable).where(eq(ridersTable.phone, phone)).limit(1);
       if (!rider) {
         res.status(401).json({ error: "unauthorized", message: "Rider phone not found" });
         return;
       }
+      if (!verifyPin(pin ?? "", rider.pin, RIDER_PIN)) {
+        res.status(401).json({ error: "unauthorized", message: "Invalid rider PIN" });
+        return;
+      }
       res.json({
-        user: { id: rider.id, name: rider.name, phone: rider.phone, role: "rider" },
+        user: { id: rider.id, name: rider.name, phone: rider.phone, role: "rider", photoUrl: rider.photoUrl },
         role: "rider",
         token: `rider-${rider.id}`,
       });

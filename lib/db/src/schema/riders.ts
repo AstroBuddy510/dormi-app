@@ -8,6 +8,7 @@ export const ridersTable = pgTable("riders", {
   phone: text("phone").notNull().unique(),
   pin: text("pin"),
   isAvailable: boolean("is_available").notNull().default(true),
+  photoUrl: text("photo_url"),
   suspended: boolean("suspended").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

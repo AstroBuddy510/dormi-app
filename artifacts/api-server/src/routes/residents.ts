@@ -17,6 +17,7 @@ function mapResident(r: typeof residentsTable.$inferSelect) {
     ghanaGpsAddress: r.ghanaGpsAddress,
     subscribeWeekly: r.subscribeWeekly,
     subscriptionDay: r.subscriptionDay,
+    photoUrl: r.photoUrl,
     suspended: r.suspended,
     createdAt: r.createdAt.toISOString(),
   };
@@ -109,6 +110,24 @@ router.put("/:id/suspend", async (req, res) => {
     const { suspended } = req.body;
     const [resident] = await db.update(residentsTable)
       .set({ suspended: !!suspended })
+      .where(eq(residentsTable.id, id))
+      .returning();
+    if (!resident) {
+      res.status(404).json({ error: "not_found", message: "Resident not found" });
+      return;
+    }
+    res.json(mapResident(resident));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/photo", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { photoUrl } = req.body;
+    const [resident] = await db.update(residentsTable)
+      .set({ photoUrl: photoUrl ?? null })
       .where(eq(residentsTable.id, id))
       .returning();
     if (!resident) {

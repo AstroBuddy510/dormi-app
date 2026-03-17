@@ -8,6 +8,8 @@ export const vendorsTable = pgTable("vendors", {
   phone: text("phone"),
   description: text("description"),
   categories: text("categories").array().notNull().default([]),
+  pin: text("pin"),
+  photoUrl: text("photo_url"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

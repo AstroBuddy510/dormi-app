@@ -16,7 +16,9 @@ function mapRider(r: typeof ridersTable.$inferSelect) {
     name: r.name,
     phone: r.phone,
     isAvailable: r.isAvailable,
+    photoUrl: r.photoUrl,
     suspended: r.suspended,
+    hasCustomPin: !!r.pin,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -78,6 +80,46 @@ router.put("/:id/suspend", async (req, res) => {
     const { suspended } = req.body;
     const [rider] = await db.update(ridersTable)
       .set({ suspended: !!suspended })
+      .where(eq(ridersTable.id, id))
+      .returning();
+    if (!rider) {
+      res.status(404).json({ error: "not_found", message: "Rider not found" });
+      return;
+    }
+    res.json(mapRider(rider));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/reset-pin", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { pin } = req.body;
+    if (!pin || pin.length < 4) {
+      res.status(400).json({ error: "bad_request", message: "PIN must be at least 4 digits" });
+      return;
+    }
+    const [rider] = await db.update(ridersTable)
+      .set({ pin: hashPin(pin) })
+      .where(eq(ridersTable.id, id))
+      .returning();
+    if (!rider) {
+      res.status(404).json({ error: "not_found", message: "Rider not found" });
+      return;
+    }
+    res.json({ success: true, message: "PIN updated successfully" });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/photo", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { photoUrl } = req.body;
+    const [rider] = await db.update(ridersTable)
+      .set({ photoUrl: photoUrl ?? null })
       .where(eq(ridersTable.id, id))
       .returning();
     if (!rider) {

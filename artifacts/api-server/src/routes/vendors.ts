@@ -2,8 +2,13 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { vendorsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { createHash } from "crypto";
 
 const router: IRouter = Router();
+
+function hashPin(pin: string): string {
+  return createHash("sha256").update(pin).digest("hex");
+}
 
 function mapVendor(v: typeof vendorsTable.$inferSelect) {
   return {
@@ -12,7 +17,9 @@ function mapVendor(v: typeof vendorsTable.$inferSelect) {
     phone: v.phone,
     description: v.description,
     categories: v.categories,
+    photoUrl: v.photoUrl,
     isActive: v.isActive,
+    hasCustomPin: !!v.pin,
     createdAt: v.createdAt.toISOString(),
   };
 }
@@ -78,6 +85,46 @@ router.put("/:id/suspend", async (req, res) => {
     const { suspended } = req.body;
     const [vendor] = await db.update(vendorsTable)
       .set({ isActive: !suspended })
+      .where(eq(vendorsTable.id, id))
+      .returning();
+    if (!vendor) {
+      res.status(404).json({ error: "not_found", message: "Vendor not found" });
+      return;
+    }
+    res.json(mapVendor(vendor));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/reset-pin", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { pin } = req.body;
+    if (!pin || pin.length < 4) {
+      res.status(400).json({ error: "bad_request", message: "PIN must be at least 4 digits" });
+      return;
+    }
+    const [vendor] = await db.update(vendorsTable)
+      .set({ pin: hashPin(pin) })
+      .where(eq(vendorsTable.id, id))
+      .returning();
+    if (!vendor) {
+      res.status(404).json({ error: "not_found", message: "Vendor not found" });
+      return;
+    }
+    res.json({ success: true, message: "PIN updated successfully" });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/photo", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { photoUrl } = req.body;
+    const [vendor] = await db.update(vendorsTable)
+      .set({ photoUrl: photoUrl ?? null })
       .where(eq(vendorsTable.id, id))
       .returning();
     if (!vendor) {

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useListResidents, useListVendors, useListRiders } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +41,11 @@ import {
   Search,
   UserCheck,
   UserX,
+  Camera,
+  ShieldCheck,
+  Loader2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -58,28 +63,160 @@ async function apiFetch(path: string, options?: RequestInit) {
   return res.json();
 }
 
+// ─── Two-step presigned upload ────────────────────────────────────────────────
+async function uploadPhoto(file: File): Promise<string> {
+  const metaRes = await fetch('/api/storage/uploads/request-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+  });
+  if (!metaRes.ok) throw new Error('Failed to get upload URL');
+  const { uploadURL, objectPath } = await metaRes.json();
+  const putRes = await fetch(uploadURL, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type },
+  });
+  if (!putRes.ok) throw new Error('Failed to upload photo');
+  return objectPath as string;
+}
+
+// ─── Shared UI pieces ─────────────────────────────────────────────────────────
 function StatusPill({ active, suspended }: { active?: boolean; suspended?: boolean }) {
   const isSuspended = suspended === true || active === false;
   return (
-    <span
-      className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${
-        isSuspended ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-      }`}
-    >
+    <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${isSuspended ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
       {isSuspended ? <UserX size={11} /> : <UserCheck size={11} />}
       {isSuspended ? 'Suspended' : 'Active'}
     </span>
   );
 }
 
-function LoginBadge({ role, pin }: { role: string; pin: string }) {
+function Avatar({ name, photoUrl, color }: { name: string; photoUrl?: string | null; color: string }) {
+  if (photoUrl) {
+    const src = `/api/storage${photoUrl}`;
+    return <img src={src} alt={name} className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-white shadow" />;
+  }
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Key size={11} className="text-primary" />
-      <span>
-        Login: <span className="font-mono font-medium text-foreground">{role === 'resident' ? 'Phone only' : `PIN: ${pin}`}</span>
-      </span>
+    <div className={`w-12 h-12 ${color} rounded-full flex items-center justify-center font-bold text-base shrink-0 ring-2 ring-white shadow`}>
+      {name.charAt(0).toUpperCase()}
     </div>
+  );
+}
+
+// ─── Photo Upload button (inline camera icon) ─────────────────────────────────
+function PhotoUploadButton({ onUpload }: { onUpload: (file: File) => Promise<void> }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      await onUpload(file);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handle} />
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        title="Upload photo"
+        className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-1.5 shadow-md hover:bg-primary/90 transition-colors"
+      >
+        {uploading ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
+      </button>
+    </>
+  );
+}
+
+// ─── PIN Reset Dialog ─────────────────────────────────────────────────────────
+function PinResetDialog({
+  open, onClose, onSave, name,
+}: { open: boolean; onClose: () => void; onSave: (pin: string) => Promise<void>; name: string }) {
+  const [pin, setPin] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const handleClose = () => { setPin(''); setConfirm(''); setShow(false); onClose(); };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length < 4) return toast({ title: 'PIN too short', description: 'PIN must be at least 4 digits', variant: 'destructive' });
+    if (pin !== confirm) return toast({ title: 'PINs do not match', variant: 'destructive' });
+    setSaving(true);
+    try {
+      await onSave(pin);
+      toast({ title: 'PIN Reset', description: `New PIN set for ${name}` });
+      handleClose();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="rounded-2xl max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck size={18} className="text-primary" /> Reset PIN — {name}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <p className="text-sm text-muted-foreground">Set a new PIN for this user. They will use it to log in next time.</p>
+          <div className="space-y-1">
+            <Label>New PIN</Label>
+            <div className="relative">
+              <Input
+                type={show ? 'text' : 'password'}
+                inputMode="numeric"
+                maxLength={8}
+                placeholder="e.g. 4821"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                required
+                className="rounded-xl pr-10 font-mono tracking-widest"
+              />
+              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShow(!show)}>
+                {show ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Confirm PIN</Label>
+            <Input
+              type={show ? 'text' : 'password'}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="Repeat new PIN"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))}
+              required
+              className="rounded-xl font-mono tracking-widest"
+            />
+          </div>
+          {pin && confirm && pin !== confirm && (
+            <p className="text-xs text-destructive">PINs do not match</p>
+          )}
+          <DialogFooter className="gap-2 pt-1">
+            <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
+            <Button type="submit" className="rounded-xl" disabled={saving || pin !== confirm || pin.length < 4}>
+              {saving ? <><Loader2 size={14} className="animate-spin mr-1" /> Saving…</> : 'Set PIN'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -94,23 +231,24 @@ function ResidentsTab() {
   const [isSaving, setIsSaving] = useState(false);
 
   const filtered = residents.filter(
-    (r) =>
-      r.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      r.phone.includes(search) ||
-      r.estate.toLowerCase().includes(search.toLowerCase())
+    (r) => r.fullName.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search) || r.estate.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handlePhotoUpload = async (r: any, file: File) => {
+    try {
+      const objectPath = await uploadPhoto(file);
+      await apiFetch(`/residents/${r.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      queryClient.invalidateQueries();
+      toast({ title: 'Photo updated' });
+    } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
+  };
 
   const handleSuspend = async (r: any) => {
     try {
-      await apiFetch(`/residents/${r.id}/suspend`, {
-        method: 'PUT',
-        body: JSON.stringify({ suspended: !r.suspended }),
-      });
+      await apiFetch(`/residents/${r.id}/suspend`, { method: 'PUT', body: JSON.stringify({ suspended: !r.suspended }) });
       queryClient.invalidateQueries();
       toast({ title: r.suspended ? 'Resident Reactivated' : 'Resident Suspended' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
   const handleDelete = async () => {
@@ -120,9 +258,7 @@ function ResidentsTab() {
       queryClient.invalidateQueries();
       toast({ title: 'Resident Deleted' });
       setDeleteTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -133,22 +269,16 @@ function ResidentsTab() {
       await apiFetch(`/residents/${editTarget.id}`, {
         method: 'PUT',
         body: JSON.stringify({
-          fullName: fd.get('fullName'),
-          phone: fd.get('phone'),
-          estate: fd.get('estate'),
-          blockNumber: fd.get('blockNumber'),
-          houseNumber: fd.get('houseNumber'),
+          fullName: fd.get('fullName'), phone: fd.get('phone'), estate: fd.get('estate'),
+          blockNumber: fd.get('blockNumber'), houseNumber: fd.get('houseNumber'),
           ghanaGpsAddress: fd.get('ghanaGpsAddress') || undefined,
         }),
       });
       queryClient.invalidateQueries();
       toast({ title: 'Resident Updated' });
       setEditTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setIsSaving(false); }
   };
 
   return (
@@ -156,39 +286,28 @@ function ResidentsTab() {
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, phone or estate…"
-            className="pl-9 h-9 rounded-xl text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input placeholder="Search by name, phone or estate…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} residents</span>
       </div>
 
-      {isLoading ? (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      ) : filtered.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground">
-          <Users size={36} className="mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No residents found</p>
-        </div>
-      ) : (
+      {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((r) => (
-            <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${r.suspended ? 'opacity-60' : ''}`}>
+            <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${(r as any).suspended ? 'opacity-60' : ''}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-sm shrink-0">
-                      {r.fullName.charAt(0)}
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" />
+                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
                     </div>
                     <div>
                       <p className="font-semibold text-sm leading-tight">{r.fullName}</p>
                       <p className="text-xs text-muted-foreground">ID #{r.id}</p>
                     </div>
                   </div>
-                  <StatusPill suspended={r.suspended} />
+                  <StatusPill suspended={(r as any).suspended} />
                 </div>
 
                 <div className="space-y-1.5 mb-3">
@@ -200,52 +319,30 @@ function ResidentsTab() {
                     <MapPin size={11} className="text-primary" />
                     <span>{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</span>
                   </div>
-                  {r.ghanaGpsAddress && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="w-3" />
-                      <span className="font-mono">{r.ghanaGpsAddress}</span>
-                    </div>
-                  )}
+                  {r.ghanaGpsAddress && <p className="text-xs text-muted-foreground pl-4 font-mono">{r.ghanaGpsAddress}</p>}
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Calendar size={11} className="text-primary" />
                     <span>Joined {format(new Date(r.createdAt), 'dd MMM yyyy')}</span>
                   </div>
-                  {r.subscribeWeekly && (
-                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                      📅 Friday Subscriber
-                    </span>
-                  )}
+                  {r.subscribeWeekly && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📅 Friday Subscriber</span>}
                 </div>
 
-                <div className="mb-3 pb-3 border-b border-border/50">
-                  <LoginBadge role="resident" pin="" />
-                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">Uses phone number to log in</p>
+                <div className="mb-3 pb-3 border-b border-border/50 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Key size={11} className="text-primary" />
+                  <span>Login: <span className="font-medium text-foreground">Phone only</span></span>
                 </div>
 
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 h-8 text-xs rounded-xl gap-1"
-                    onClick={() => setEditTarget({ ...r })}
-                  >
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...r })}>
                     <Pencil size={12} /> Edit
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={r.suspended ? 'default' : 'outline'}
-                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!r.suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
-                    onClick={() => handleSuspend(r)}
-                  >
-                    {r.suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
-                    {r.suspended ? 'Reactivate' : 'Suspend'}
+                  <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
+                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!(r as any).suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
+                    onClick={() => handleSuspend(r)}>
+                    {(r as any).suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
+                    {(r as any).suspended ? 'Reactivate' : 'Suspend'}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10"
-                    onClick={() => setDeleteTarget(r)}
-                  >
+                  <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
                     <Trash2 size={12} />
                   </Button>
                 </div>
@@ -255,67 +352,37 @@ function ResidentsTab() {
         </div>
       )}
 
-      {/* Edit Dialog */}
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
         <DialogContent className="rounded-2xl max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Resident</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Edit Resident</DialogTitle></DialogHeader>
           {editTarget && (
             <form onSubmit={handleSave} className="space-y-3 pt-2">
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 space-y-1">
-                  <Label>Full Name</Label>
-                  <Input name="fullName" defaultValue={editTarget.fullName} required className="rounded-xl" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Phone</Label>
-                  <Input name="phone" defaultValue={editTarget.phone} required className="rounded-xl" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Estate</Label>
-                  <Input name="estate" defaultValue={editTarget.estate} required className="rounded-xl" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Block Number</Label>
-                  <Input name="blockNumber" defaultValue={editTarget.blockNumber} required className="rounded-xl" />
-                </div>
-                <div className="space-y-1">
-                  <Label>House Number</Label>
-                  <Input name="houseNumber" defaultValue={editTarget.houseNumber} required className="rounded-xl" />
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <Label>Ghana GPS Address</Label>
-                  <Input name="ghanaGpsAddress" defaultValue={editTarget.ghanaGpsAddress ?? ''} className="rounded-xl" placeholder="Optional" />
-                </div>
+                <div className="col-span-2 space-y-1"><Label>Full Name</Label><Input name="fullName" defaultValue={editTarget.fullName} required className="rounded-xl" /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input name="phone" defaultValue={editTarget.phone} required className="rounded-xl" /></div>
+                <div className="space-y-1"><Label>Estate</Label><Input name="estate" defaultValue={editTarget.estate} required className="rounded-xl" /></div>
+                <div className="space-y-1"><Label>Block</Label><Input name="blockNumber" defaultValue={editTarget.blockNumber} required className="rounded-xl" /></div>
+                <div className="space-y-1"><Label>House</Label><Input name="houseNumber" defaultValue={editTarget.houseNumber} required className="rounded-xl" /></div>
+                <div className="col-span-2 space-y-1"><Label>Ghana GPS (optional)</Label><Input name="ghanaGpsAddress" defaultValue={editTarget.ghanaGpsAddress ?? ''} className="rounded-xl" /></div>
               </div>
               <DialogFooter className="gap-2 pt-2">
-                <DialogClose asChild>
-                  <Button type="button" variant="outline" className="rounded-xl">Cancel</Button>
-                </DialogClose>
-                <Button type="submit" className="rounded-xl" disabled={isSaving}>
-                  {isSaving ? 'Saving…' : 'Save Changes'}
-                </Button>
+                <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
+                <Button type="submit" className="rounded-xl" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save Changes'}</Button>
               </DialogFooter>
             </form>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Resident</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to permanently delete <strong>{deleteTarget?.fullName}</strong>? This cannot be undone and will remove all their orders too.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Permanently delete <strong>{deleteTarget?.fullName}</strong>? This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction className="rounded-xl bg-destructive hover:bg-destructive/90" onClick={handleDelete}>
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction className="rounded-xl bg-destructive hover:bg-destructive/90" onClick={handleDelete}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -331,25 +398,33 @@ function VendorsTab() {
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [pinTarget, setPinTarget] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const filtered = vendors.filter(
-    (v) =>
-      v.name.toLowerCase().includes(search.toLowerCase()) ||
-      (v.phone && v.phone.includes(search))
+    (v) => v.name.toLowerCase().includes(search.toLowerCase()) || (v.phone && v.phone.includes(search))
   );
+
+  const handlePhotoUpload = async (v: any, file: File) => {
+    try {
+      const objectPath = await uploadPhoto(file);
+      await apiFetch(`/vendors/${v.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      queryClient.invalidateQueries();
+      toast({ title: 'Photo updated' });
+    } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
+  };
+
+  const handlePinReset = async (v: any, pin: string) => {
+    await apiFetch(`/vendors/${v.id}/reset-pin`, { method: 'PUT', body: JSON.stringify({ pin }) });
+    queryClient.invalidateQueries();
+  };
 
   const handleSuspend = async (v: any) => {
     try {
-      await apiFetch(`/vendors/${v.id}/suspend`, {
-        method: 'PUT',
-        body: JSON.stringify({ suspended: v.isActive }),
-      });
+      await apiFetch(`/vendors/${v.id}/suspend`, { method: 'PUT', body: JSON.stringify({ suspended: v.isActive }) });
       queryClient.invalidateQueries();
       toast({ title: v.isActive ? 'Vendor Suspended' : 'Vendor Reactivated' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
   const handleDelete = async () => {
@@ -359,35 +434,21 @@ function VendorsTab() {
       queryClient.invalidateQueries();
       toast({ title: 'Vendor Deleted' });
       setDeleteTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSaving(true);
     const fd = new FormData(e.currentTarget);
-    const categoriesRaw = (fd.get('categories') as string) || '';
-    const categories = categoriesRaw.split(',').map((c) => c.trim()).filter(Boolean);
+    const cats = (fd.get('categories') as string || '').split(',').map((c) => c.trim()).filter(Boolean);
     try {
-      await apiFetch(`/vendors/${editTarget.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: fd.get('name'),
-          phone: fd.get('phone') || null,
-          description: fd.get('description') || null,
-          categories,
-        }),
-      });
+      await apiFetch(`/vendors/${editTarget.id}`, { method: 'PUT', body: JSON.stringify({ name: fd.get('name'), phone: fd.get('phone') || null, description: fd.get('description') || null, categories: cats }) });
       queryClient.invalidateQueries();
       toast({ title: 'Vendor Updated' });
       setEditTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setIsSaving(false); }
   };
 
   return (
@@ -395,74 +456,60 @@ function VendorsTab() {
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search vendors…"
-            className="pl-9 h-9 rounded-xl text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input placeholder="Search vendors…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} vendors</span>
       </div>
 
-      {isLoading ? (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      ) : (
+      {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((v) => (
             <Card key={v.id} className={`rounded-2xl shadow-sm border-border/50 ${!v.isActive ? 'opacity-60' : ''}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-bold text-sm shrink-0">
-                      <Store size={16} />
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" />
+                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
                     </div>
                     <div>
                       <p className="font-semibold text-sm leading-tight">{v.name}</p>
-                      <p className="text-xs text-muted-foreground">Vendor ID #{v.id}</p>
+                      <p className="text-xs text-muted-foreground">Vendor #{v.id}</p>
                     </div>
                   </div>
                   <StatusPill active={v.isActive} />
                 </div>
 
                 <div className="space-y-1.5 mb-3">
-                  {v.phone && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Phone size={11} className="text-primary" />
-                      <span className="font-mono font-medium text-foreground">{v.phone}</span>
-                    </div>
-                  )}
-                  {v.description && (
-                    <p className="text-xs text-muted-foreground">{v.description}</p>
-                  )}
+                  {v.phone && <div className="flex items-center gap-1.5 text-xs"><Phone size={11} className="text-primary" /><span className="font-mono font-medium">{v.phone}</span></div>}
+                  {(v as any).description && <p className="text-xs text-muted-foreground">{(v as any).description}</p>}
                   {v.categories && v.categories.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {v.categories.map((cat) => (
-                        <span key={cat} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          {cat}
-                        </span>
-                      ))}
+                      {v.categories.map((cat) => <span key={cat} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{cat}</span>)}
                     </div>
                   )}
                 </div>
 
                 <div className="mb-3 pb-3 border-b border-border/50">
-                  <LoginBadge role="vendor" pin="5678" />
-                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">
-                    Login: {v.phone || 'No phone set'} + PIN 5678
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Key size={11} className="text-primary" />
+                      <span>Login PIN: <span className="font-mono font-medium text-foreground">{(v as any).hasCustomPin ? '••••' : '5678 (default)'}</span></span>
+                    </div>
+                    <button onClick={() => setPinTarget(v)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
+                      <ShieldCheck size={11} /> Reset
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">Phone: {v.phone || 'not set'}</p>
                 </div>
 
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...v })}>
                     <Pencil size={12} /> Edit
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={!v.isActive ? 'default' : 'outline'}
+                  <Button size="sm" variant={!v.isActive ? 'default' : 'outline'}
                     className={`flex-1 h-8 text-xs rounded-xl gap-1 ${v.isActive ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
-                    onClick={() => handleSuspend(v)}
-                  >
+                    onClick={() => handleSuspend(v)}>
                     {!v.isActive ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
                     {!v.isActive ? 'Reactivate' : 'Suspend'}
                   </Button>
@@ -476,28 +523,20 @@ function VendorsTab() {
         </div>
       )}
 
-      {/* Edit Dialog */}
+      <PinResetDialog
+        open={!!pinTarget} onClose={() => setPinTarget(null)} name={pinTarget?.name ?? ''}
+        onSave={(pin) => handlePinReset(pinTarget, pin)}
+      />
+
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader><DialogTitle>Edit Vendor</DialogTitle></DialogHeader>
           {editTarget && (
             <form onSubmit={handleSave} className="space-y-3 pt-2">
-              <div className="space-y-1">
-                <Label>Name *</Label>
-                <Input name="name" defaultValue={editTarget.name} required className="rounded-xl" />
-              </div>
-              <div className="space-y-1">
-                <Label>Phone</Label>
-                <Input name="phone" defaultValue={editTarget.phone ?? ''} className="rounded-xl" placeholder="Optional" />
-              </div>
-              <div className="space-y-1">
-                <Label>Description / Location</Label>
-                <Input name="description" defaultValue={editTarget.description ?? ''} className="rounded-xl" placeholder="e.g. Makola Market, Stall 5" />
-              </div>
-              <div className="space-y-1">
-                <Label>Categories (comma-separated)</Label>
-                <Input name="categories" defaultValue={(editTarget.categories || []).join(', ')} className="rounded-xl" placeholder="Vegetables, Fruits, Meat" />
-              </div>
+              <div className="space-y-1"><Label>Name *</Label><Input name="name" defaultValue={editTarget.name} required className="rounded-xl" /></div>
+              <div className="space-y-1"><Label>Phone</Label><Input name="phone" defaultValue={editTarget.phone ?? ''} className="rounded-xl" placeholder="Optional" /></div>
+              <div className="space-y-1"><Label>Description / Location</Label><Input name="description" defaultValue={editTarget.description ?? ''} className="rounded-xl" placeholder="e.g. Makola Market, Stall 5" /></div>
+              <div className="space-y-1"><Label>Categories (comma-separated)</Label><Input name="categories" defaultValue={(editTarget.categories || []).join(', ')} className="rounded-xl" placeholder="Vegetables, Fruits" /></div>
               <DialogFooter className="gap-2 pt-2">
                 <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
                 <Button type="submit" className="rounded-xl" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save Changes'}</Button>
@@ -511,7 +550,7 @@ function VendorsTab() {
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
-            <AlertDialogDescription>Permanently delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>Permanently delete <strong>{deleteTarget?.name}</strong>?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
@@ -531,25 +570,33 @@ function RidersTab() {
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [pinTarget, setPinTarget] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const filtered = riders.filter(
-    (r) =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.phone.includes(search)
+    (r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search)
   );
+
+  const handlePhotoUpload = async (r: any, file: File) => {
+    try {
+      const objectPath = await uploadPhoto(file);
+      await apiFetch(`/riders/${r.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      queryClient.invalidateQueries();
+      toast({ title: 'Photo updated' });
+    } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
+  };
+
+  const handlePinReset = async (r: any, pin: string) => {
+    await apiFetch(`/riders/${r.id}/reset-pin`, { method: 'PUT', body: JSON.stringify({ pin }) });
+    queryClient.invalidateQueries();
+  };
 
   const handleSuspend = async (r: any) => {
     try {
-      await apiFetch(`/riders/${r.id}/suspend`, {
-        method: 'PUT',
-        body: JSON.stringify({ suspended: !(r as any).suspended }),
-      });
+      await apiFetch(`/riders/${r.id}/suspend`, { method: 'PUT', body: JSON.stringify({ suspended: !r.suspended }) });
       queryClient.invalidateQueries();
-      toast({ title: (r as any).suspended ? 'Rider Reactivated' : 'Rider Suspended' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+      toast({ title: r.suspended ? 'Rider Reactivated' : 'Rider Suspended' });
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
   const handleDelete = async () => {
@@ -559,9 +606,7 @@ function RidersTab() {
       queryClient.invalidateQueries();
       toast({ title: 'Rider Deleted' });
       setDeleteTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -569,21 +614,12 @@ function RidersTab() {
     setIsSaving(true);
     const fd = new FormData(e.currentTarget);
     try {
-      await apiFetch(`/riders/${editTarget.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: fd.get('name'),
-          phone: fd.get('phone'),
-        }),
-      });
+      await apiFetch(`/riders/${editTarget.id}`, { method: 'PUT', body: JSON.stringify({ name: fd.get('name'), phone: fd.get('phone') }) });
       queryClient.invalidateQueries();
       toast({ title: 'Rider Updated' });
       setEditTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setIsSaving(false); }
   };
 
   return (
@@ -591,100 +627,89 @@ function RidersTab() {
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search riders…"
-            className="pl-9 h-9 rounded-xl text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input placeholder="Search riders…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} riders</span>
       </div>
 
-      {isLoading ? (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      ) : (
+      {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((r) => {
-            const rAny = r as any;
-            return (
-              <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${rAny.suspended ? 'opacity-60' : ''}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm shrink-0">
-                        <Truck size={16} />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm leading-tight">{r.name}</p>
-                        <p className="text-xs text-muted-foreground">Rider ID #{r.id}</p>
-                      </div>
+          {filtered.map((r) => (
+            <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" />
+                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
                     </div>
-                    <StatusPill suspended={rAny.suspended} />
+                    <div>
+                      <p className="font-semibold text-sm leading-tight">{r.name}</p>
+                      <p className="text-xs text-muted-foreground">Rider #{r.id}</p>
+                    </div>
                   </div>
+                  <StatusPill suspended={(r as any).suspended} />
+                </div>
 
-                  <div className="space-y-1.5 mb-3">
+                <div className="space-y-1.5 mb-3">
+                  <div className="flex items-center gap-1.5 text-xs"><Phone size={11} className="text-primary" /><span className="font-mono font-medium">{r.phone}</span></div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
+                    <span className="text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
+                  </div>
+                  {(r as any).createdAt && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Phone size={11} className="text-primary" />
-                      <span className="font-mono font-medium text-foreground">{r.phone}</span>
+                      <Calendar size={11} className="text-primary" />
+                      <span>Joined {format(new Date((r as any).createdAt), 'dd MMM yyyy')}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
-                      <span className="text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
+                  )}
+                </div>
+
+                <div className="mb-3 pb-3 border-b border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Key size={11} className="text-primary" />
+                      <span>Login PIN: <span className="font-mono font-medium text-foreground">{(r as any).hasCustomPin ? '••••' : '9012 (default)'}</span></span>
                     </div>
-                    {rAny.createdAt && (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Calendar size={11} className="text-primary" />
-                        <span>Joined {format(new Date(rAny.createdAt), 'dd MMM yyyy')}</span>
-                      </div>
-                    )}
+                    <button onClick={() => setPinTarget(r)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
+                      <ShieldCheck size={11} /> Reset
+                    </button>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">Phone: {r.phone}</p>
+                </div>
 
-                  <div className="mb-3 pb-3 border-b border-border/50">
-                    <LoginBadge role="rider" pin="9012" />
-                    <p className="text-xs text-muted-foreground mt-0.5 pl-4">
-                      Login: {r.phone} + PIN 9012
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...r })}>
-                      <Pencil size={12} /> Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={rAny.suspended ? 'default' : 'outline'}
-                      className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!rAny.suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
-                      onClick={() => handleSuspend(r)}
-                    >
-                      {rAny.suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
-                      {rAny.suspended ? 'Reactivate' : 'Suspend'}
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
-                      <Trash2 size={12} />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...r })}>
+                    <Pencil size={12} /> Edit
+                  </Button>
+                  <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
+                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!(r as any).suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
+                    onClick={() => handleSuspend(r)}>
+                    {(r as any).suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
+                    {(r as any).suspended ? 'Reactivate' : 'Suspend'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      {/* Edit Dialog */}
+      <PinResetDialog
+        open={!!pinTarget} onClose={() => setPinTarget(null)} name={pinTarget?.name ?? ''}
+        onSave={(pin) => handlePinReset(pinTarget, pin)}
+      />
+
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
         <DialogContent className="rounded-2xl max-w-sm">
           <DialogHeader><DialogTitle>Edit Rider</DialogTitle></DialogHeader>
           {editTarget && (
             <form onSubmit={handleSave} className="space-y-3 pt-2">
-              <div className="space-y-1">
-                <Label>Full Name *</Label>
-                <Input name="name" defaultValue={editTarget.name} required className="rounded-xl" />
-              </div>
-              <div className="space-y-1">
-                <Label>Phone *</Label>
-                <Input name="phone" defaultValue={editTarget.phone} required className="rounded-xl" />
-              </div>
+              <div className="space-y-1"><Label>Full Name *</Label><Input name="name" defaultValue={editTarget.name} required className="rounded-xl" /></div>
+              <div className="space-y-1"><Label>Phone *</Label><Input name="phone" defaultValue={editTarget.phone} required className="rounded-xl" /></div>
               <DialogFooter className="gap-2 pt-2">
                 <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
                 <Button type="submit" className="rounded-xl" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save Changes'}</Button>
@@ -723,11 +748,10 @@ export default function AdminUsers() {
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">User Management</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            View, edit, suspend or delete all users across roles
+            View, edit, upload photos, reset PINs, suspend or delete all users
           </p>
         </div>
 
-        {/* Summary Row */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
             { icon: Users, label: 'Residents', count: residents.length, color: 'bg-green-50 text-green-700' },
@@ -736,9 +760,7 @@ export default function AdminUsers() {
           ].map(({ icon: Icon, label, count, color }) => (
             <Card key={label} className="rounded-2xl shadow-sm border-border/50">
               <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${color}`}>
-                  <Icon size={20} />
-                </div>
+                <div className={`p-2.5 rounded-xl ${color}`}><Icon size={20} /></div>
                 <div>
                   <p className="text-xs text-muted-foreground">{label}</p>
                   <p className="text-2xl font-bold">{count}</p>
@@ -750,17 +772,10 @@ export default function AdminUsers() {
 
         <Tabs defaultValue="residents">
           <TabsList className="mb-6 rounded-xl">
-            <TabsTrigger value="residents" className="rounded-lg gap-2">
-              <Users size={15} /> Residents ({residents.length})
-            </TabsTrigger>
-            <TabsTrigger value="vendors" className="rounded-lg gap-2">
-              <Store size={15} /> Vendors ({vendors.length})
-            </TabsTrigger>
-            <TabsTrigger value="riders" className="rounded-lg gap-2">
-              <Truck size={15} /> Riders ({riders.length})
-            </TabsTrigger>
+            <TabsTrigger value="residents" className="rounded-lg gap-2"><Users size={15} /> Residents ({residents.length})</TabsTrigger>
+            <TabsTrigger value="vendors" className="rounded-lg gap-2"><Store size={15} /> Vendors ({vendors.length})</TabsTrigger>
+            <TabsTrigger value="riders" className="rounded-lg gap-2"><Truck size={15} /> Riders ({riders.length})</TabsTrigger>
           </TabsList>
-
           <TabsContent value="residents"><ResidentsTab /></TabsContent>
           <TabsContent value="vendors"><VendorsTab /></TabsContent>
           <TabsContent value="riders"><RidersTab /></TabsContent>
