@@ -10,9 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { Truck, User, MapPin, Package } from 'lucide-react';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
+import { Truck, User, MapPin, Package, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
+
+interface DeliveryPartner { id: number; name: string; isActive: boolean; }
 
 export default function AdminRiders() {
   const { toast } = useToast();
@@ -20,11 +22,38 @@ export default function AdminRiders() {
 
   const { data: orders = [], isLoading: ordersLoading } = useListOrders();
   const { data: riders = [], isLoading: ridersLoading } = useListRiders();
+  const { data: deliveryPartners = [] } = useQuery<DeliveryPartner[]>({
+    queryKey: ['/api/delivery-partners'],
+    queryFn: () => fetch('/api/delivery-partners').then(r => r.json()),
+  });
+  const activePartners = deliveryPartners.filter(p => p.isActive);
 
   const assignRiderMutation = useAssignRider();
   const updateStatusMutation = useUpdateOrderStatus();
+  const assignDeliveryPartnerMutation = useMutation({
+    mutationFn: ({ orderId, partnerId }: { orderId: number; partnerId: number }) =>
+      fetch(`/api/orders/${orderId}/assign-delivery-partner`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryPartnerId: partnerId }),
+      }).then(r => r.json()),
+    onSuccess: (_data, { orderId }) => {
+      queryClient.invalidateQueries();
+      toast({ title: 'Delivery Company Assigned', description: `Delivery company assigned to order #${orderId}` });
+    },
+  });
 
   const activeOrders = orders.filter((o) => !['delivered', 'cancelled'].includes(o.status));
+
+  const inHouseUnassigned = activeOrders.filter(
+    (o) => (o as any).orderType !== 'third_party' && !o.riderId
+  );
+  const thirdPartyOrders = activeOrders.filter(
+    (o) => (o as any).orderType === 'third_party'
+  );
+  const inHouseAssigned = activeOrders.filter(
+    (o) => (o as any).orderType !== 'third_party' && !!o.riderId
+  );
 
   const handleAssign = (orderId: number, riderId: string) => {
     assignRiderMutation.mutate(
@@ -99,25 +128,25 @@ export default function AdminRiders() {
           </div>
         )}
 
-        {/* Unassigned Orders */}
+        {/* Unassigned In-House Orders */}
         <Card className="rounded-2xl shadow-sm border-border/50 mb-6">
           <CardHeader className="border-b border-border/50 bg-red-50/50 rounded-t-2xl">
             <CardTitle className="text-base text-red-700 flex items-center gap-2">
               <Package size={18} />
               Unassigned Orders
               <span className="ml-1 text-sm font-normal text-red-500">
-                ({activeOrders.filter((o) => !o.riderId).length})
+                ({inHouseUnassigned.length})
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {ordersLoading ? (
               <div className="py-8 text-center text-muted-foreground">Loading…</div>
-            ) : activeOrders.filter((o) => !o.riderId).length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm">All active orders have riders assigned ✓</div>
+            ) : inHouseUnassigned.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">All in-house orders have riders assigned ✓</div>
             ) : (
               <div className="divide-y divide-border/50">
-                {activeOrders.filter((o) => !o.riderId).map((order) => (
+                {inHouseUnassigned.map((order) => (
                   <div key={order.id} className="p-4 flex items-center gap-4 hover:bg-gray-50/50">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
@@ -149,23 +178,92 @@ export default function AdminRiders() {
           </CardContent>
         </Card>
 
-        {/* All Active Orders with Riders */}
+        {/* Third-Party Delivery Orders */}
+        {thirdPartyOrders.length > 0 && (
+          <Card className="rounded-2xl shadow-sm border-border/50 mb-6">
+            <CardHeader className="border-b border-border/50 bg-blue-50/50 rounded-t-2xl">
+              <CardTitle className="text-base text-blue-700 flex items-center gap-2">
+                <Building2 size={18} />
+                Third-Party Deliveries
+                <span className="ml-1 text-sm font-normal text-blue-500">
+                  ({thirdPartyOrders.length})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/50">
+                {thirdPartyOrders.map((order) => {
+                  const partnerName = (order as any).deliveryPartnerName as string | null;
+                  const partnerId = (order as any).deliveryPartnerId as number | null;
+                  return (
+                    <div key={order.id} className="p-4 flex items-center gap-4 hover:bg-blue-50/30">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-xs font-medium text-primary">#{order.id}</span>
+                          <StatusBadge status={order.status} />
+                        </div>
+                        <p className="font-semibold text-sm">{order.residentName}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin size={11} /> {order.residentAddress}
+                        </p>
+                        {partnerName && (
+                          <p className="text-xs text-blue-600 font-medium flex items-center gap-1 mt-0.5">
+                            <Building2 size={11} /> {partnerName}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(order.createdAt), 'dd MMM, HH:mm')}</p>
+                      </div>
+                      <div className="shrink-0 flex flex-col gap-2 items-end">
+                        <Select
+                          value={partnerId?.toString() ?? ''}
+                          onValueChange={(val) =>
+                            assignDeliveryPartnerMutation.mutate({ orderId: order.id, partnerId: parseInt(val) })
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-xs rounded-xl w-44 border-blue-200 bg-blue-50">
+                            <SelectValue placeholder={partnerName ?? 'Assign delivery co.'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activePartners.map((p) => (
+                              <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {order.status === 'ready' && (
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs rounded-lg px-3 bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleUpdateStatus(order.id, 'in_transit')}
+                          >
+                            Dispatch
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* All Active In-House Orders with Riders */}
         <Card className="rounded-2xl shadow-sm border-border/50">
           <CardHeader className="border-b border-border/50 bg-white rounded-t-2xl">
             <CardTitle className="text-base flex items-center gap-2">
               <Truck size={18} className="text-primary" />
               Active Deliveries
               <span className="ml-1 text-sm font-normal text-muted-foreground">
-                ({activeOrders.filter((o) => !!o.riderId).length})
+                ({inHouseAssigned.length})
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {activeOrders.filter((o) => !!o.riderId).length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm">No active deliveries in progress</div>
+            {inHouseAssigned.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">No active in-house deliveries in progress</div>
             ) : (
               <div className="divide-y divide-border/50">
-                {activeOrders.filter((o) => !!o.riderId).map((order) => (
+                {inHouseAssigned.map((order) => (
                   <div key={order.id} className="p-4 flex items-center gap-4 hover:bg-gray-50/50">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
