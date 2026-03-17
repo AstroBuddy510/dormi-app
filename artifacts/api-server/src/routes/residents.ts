@@ -46,6 +46,12 @@ router.post("/signup", async (req, res) => {
   }
 });
 
+router.get("/estates", async (_req, res) => {
+  const rows = await db.select({ estate: residentsTable.estate }).from(residentsTable);
+  const estates = [...new Set(rows.map(r => r.estate).filter(Boolean))].sort();
+  res.json(estates);
+});
+
 router.get("/", async (_req, res) => {
   const residents = await db.select().from(residentsTable).orderBy(residentsTable.createdAt);
   res.json(residents.map(mapResident));

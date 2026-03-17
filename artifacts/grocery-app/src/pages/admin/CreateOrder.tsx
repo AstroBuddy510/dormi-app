@@ -19,6 +19,10 @@ async function fetchResidents() {
   const r = await fetch(`${BASE}/api/residents`);
   return r.json();
 }
+async function fetchEstates() {
+  const r = await fetch(`${BASE}/api/residents/estates`);
+  return r.json() as Promise<string[]>;
+}
 async function fetchDeliveryPartners() {
   const r = await fetch(`${BASE}/api/delivery-partners`);
   return r.json();
@@ -159,10 +163,11 @@ interface BlockOrderEntry {
   notes: string;
 }
 
-function BlockOrderTab() {
+function BulkOrderTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: residents = [] } = useQuery({ queryKey: ["residents"], queryFn: fetchResidents });
+  const { data: estates = [] } = useQuery({ queryKey: ["estates"], queryFn: fetchEstates });
   const [estate, setEstate] = useState("");
   const [groupName, setGroupName] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
@@ -174,6 +179,15 @@ function BlockOrderTab() {
   const removeEntry = (eid: number) => setEntries(prev => prev.filter(e => e._eid !== eid));
   const updateEntry = (eid: number, field: keyof Omit<BlockOrderEntry, '_eid'>, val: string) =>
     setEntries(prev => prev.map(e => e._eid === eid ? { ...e, [field]: val } : e));
+
+  const estateResidents = estate
+    ? (residents as any[]).filter((r: any) => r.estate === estate)
+    : (residents as any[]);
+
+  const handleEstateChange = (val: string) => {
+    setEstate(val);
+    setEntries(prev => prev.map(e => ({ ...e, residentId: "" })));
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -187,7 +201,7 @@ function BlockOrderTab() {
       return r.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Block order created!", description: `${data.ordersCreated} orders grouped for ${estate}` });
+      toast({ title: "Bulk order created!", description: `${data.ordersCreated} orders grouped for ${estate}` });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setEstate(""); setGroupName("");
       setEntries([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
@@ -202,17 +216,34 @@ function BlockOrderTab() {
     <div className="space-y-5">
       <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
         <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-        <p className="text-sm text-blue-700">Block orders batch all residents from one estate into a single driver run. One driver, one estate, all deliveries in sequence.</p>
+        <p className="text-sm text-blue-700">Bulk orders batch all residents from one estate into a single driver run. Select the estate first — only residents registered to that estate will be available to add.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Estate / Area *</Label>
-          <Input placeholder="e.g. Oyarifa Housing Project" value={estate} onChange={e => setEstate(e.target.value)} />
+          <Select value={estate} onValueChange={handleEstateChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select estate…" />
+            </SelectTrigger>
+            <SelectContent>
+              {estates.length === 0 && (
+                <SelectItem value="__none__" disabled>No estates found</SelectItem>
+              )}
+              {estates.map((e: string) => (
+                <SelectItem key={e} value={e}>{e}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {estate && (
+            <p className="text-xs text-blue-600">
+              {estateResidents.length} resident{estateResidents.length !== 1 ? "s" : ""} registered in {estate}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Group Name (auto-generated if empty)</Label>
-          <Input placeholder="e.g. Oyarifa — 17 Mar 2026" value={groupName} onChange={e => setGroupName(e.target.value)} />
+          <Input placeholder={estate ? `${estate} — bulk run` : "e.g. Airport Hills — 17 Mar 2026"} value={groupName} onChange={e => setGroupName(e.target.value)} />
         </div>
         <div className="space-y-2">
           <Label>Scheduled Delivery Date (optional)</Label>
@@ -227,16 +258,25 @@ function BlockOrderTab() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label className="text-base font-semibold">Resident Orders ({entries.length})</Label>
-          <Button variant="outline" size="sm" onClick={addEntry} className="gap-1">
+          <Button variant="outline" size="sm" onClick={addEntry} className="gap-1" disabled={!estate}>
             <Plus className="w-4 h-4" /> Add Resident
           </Button>
         </div>
+
+        {!estate && (
+          <div className="p-3 rounded-lg border border-dashed border-blue-200 bg-blue-50/50 text-sm text-blue-600 text-center">
+            Select an estate above to start adding resident orders.
+          </div>
+        )}
 
         {entries.map((entry, i) => (
           <Card key={entry._eid} className="border-dashed">
             <CardHeader className="pb-3 pt-4 px-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Resident #{i + 1}</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  Resident #{i + 1}
+                  {estate && <span className="font-normal text-gray-400 text-xs">— {estate}</span>}
+                </CardTitle>
                 {entries.length > 1 && (
                   <Button variant="ghost" size="sm" className="text-red-500 h-7 w-7 p-0" onClick={() => removeEntry(entry._eid)}>
                     <Trash2 className="w-4 h-4" />
@@ -245,14 +285,20 @@ function BlockOrderTab() {
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
-              <Select value={entry.residentId} onValueChange={v => updateEntry(entry._eid, "residentId", v)}>
-                <SelectTrigger><SelectValue placeholder="Select resident" /></SelectTrigger>
+              <Select value={entry.residentId} onValueChange={v => updateEntry(entry._eid, "residentId", v)} disabled={!estate}>
+                <SelectTrigger>
+                  <SelectValue placeholder={estate ? `Select resident from ${estate}…` : "Select estate first"} />
+                </SelectTrigger>
                 <SelectContent>
-                  {(residents as any[]).map((r: any) => (
-                    <SelectItem key={r.id} value={String(r.id)}>
-                      {r.fullName} — {r.estate}, {r.phone}
-                    </SelectItem>
-                  ))}
+                  {estateResidents.length === 0 ? (
+                    <SelectItem value="__none__" disabled>No residents in {estate}</SelectItem>
+                  ) : (
+                    estateResidents.map((r: any) => (
+                      <SelectItem key={r.id} value={String(r.id)}>
+                        {r.fullName} — Block {r.blockNumber}, House {r.houseNumber} · {r.phone}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
 
@@ -277,7 +323,7 @@ function BlockOrderTab() {
         disabled={!valid || mutation.isPending}
         onClick={() => mutation.mutate()}
       >
-        {mutation.isPending ? "Creating..." : `Create Block Order (${entries.length} resident${entries.length !== 1 ? "s" : ""})`}
+        {mutation.isPending ? "Creating..." : `Create Bulk Order (${entries.length} resident${entries.length !== 1 ? "s" : ""})`}
       </Button>
     </div>
   );
@@ -417,7 +463,7 @@ export default function CreateOrder() {
               <Zap className="w-4 h-4" /> Single
             </TabsTrigger>
             <TabsTrigger value="block" className="gap-1.5">
-              <Building2 className="w-4 h-4" /> Block
+              <Building2 className="w-4 h-4" /> Bulk
             </TabsTrigger>
             <TabsTrigger value="third-party" className="gap-1.5">
               <Truck className="w-4 h-4" /> Third-Party
@@ -437,10 +483,10 @@ export default function CreateOrder() {
           <TabsContent value="block">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-blue-500" /> Block Order</CardTitle>
-                <CardDescription>Group orders from an entire estate — one driver dispatched to fulfil all households in sequence.</CardDescription>
+                <CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-blue-500" /> Bulk Order</CardTitle>
+                <CardDescription>Group orders from an entire estate — select the estate first, then add residents and their items.</CardDescription>
               </CardHeader>
-              <CardContent><BlockOrderTab /></CardContent>
+              <CardContent><BulkOrderTab /></CardContent>
             </Card>
           </TabsContent>
 
