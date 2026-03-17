@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import {
   useCreateRider,
@@ -11,9 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-type Tab = 'rider' | 'residence' | 'vendor' | 'agent';
+type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner';
 
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`/api${path}`, {
@@ -378,6 +381,193 @@ function AddAgentForm() {
   );
 }
 
+const EMPTY_PARTNER = { name: '', contactPerson: '', phone: '', email: '', address: '', commissionPercent: '10' };
+
+function DeliveryPartnersTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [form, setForm] = useState(EMPTY_PARTNER);
+  const set = (k: keyof typeof EMPTY_PARTNER) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(prev => ({ ...prev, [k]: e.target.value }));
+
+  const { data: partners = [], isLoading } = useQuery<any[]>({
+    queryKey: ['delivery-partners'],
+    queryFn: () => apiFetch('/delivery-partners'),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof EMPTY_PARTNER) =>
+      apiFetch('/delivery-partners', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      toast({ title: 'Delivery partner registered!' });
+      qc.invalidateQueries({ queryKey: ['delivery-partners'] });
+      setShowForm(false);
+      setForm(EMPTY_PARTNER);
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: typeof EMPTY_PARTNER }) =>
+      apiFetch(`/delivery-partners/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      toast({ title: 'Partner updated!' });
+      qc.invalidateQueries({ queryKey: ['delivery-partners'] });
+      setEditId(null);
+      setForm(EMPTY_PARTNER);
+    },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiFetch(`/delivery-partners/${id}`, { method: 'PUT', body: JSON.stringify({ isActive }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['delivery-partners'] }),
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/delivery-partners/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { toast({ title: 'Partner removed' }); qc.invalidateQueries({ queryKey: ['delivery-partners'] }); },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  function startEdit(p: any) {
+    setEditId(p.id);
+    setForm({ name: p.name, contactPerson: p.contactPerson, phone: p.phone, email: p.email ?? '', address: p.address ?? '', commissionPercent: String(p.commissionPercent) });
+    setShowForm(true);
+  }
+
+  function cancelForm() {
+    setShowForm(false);
+    setEditId(null);
+    setForm(EMPTY_PARTNER);
+  }
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (editId !== null) {
+      updateMutation.mutate({ id: editId, data: form });
+    } else {
+      createMutation.mutate(form);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      {!showForm ? (
+        <Button
+          className="w-full h-11 rounded-xl gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold"
+          onClick={() => { cancelForm(); setShowForm(true); }}
+        >
+          <PlusCircle size={17} /> Register New Delivery Company
+        </Button>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-4 border border-green-100 rounded-xl p-4 bg-green-50/40">
+          <p className="text-sm font-semibold text-gray-700">
+            {editId !== null ? 'Edit Delivery Company' : 'New Delivery Company'}
+          </p>
+          <div className="space-y-1">
+            <Label>Company Name *</Label>
+            <Input required value={form.name} onChange={set('name')} className="h-11 rounded-xl" placeholder="e.g. GIG Logistics" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Contact Person *</Label>
+              <Input required value={form.contactPerson} onChange={set('contactPerson')} className="h-11 rounded-xl" placeholder="Full name" />
+            </div>
+            <div className="space-y-1">
+              <Label>Phone *</Label>
+              <Input required value={form.phone} onChange={set('phone')} className="h-11 rounded-xl" placeholder="024XXXXXXX" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Email (optional)</Label>
+              <Input value={form.email} onChange={set('email')} className="h-11 rounded-xl" placeholder="info@company.com" />
+            </div>
+            <div className="space-y-1">
+              <Label>Commission Rate (%)</Label>
+              <Input type="number" min="0" max="100" value={form.commissionPercent} onChange={set('commissionPercent')} className="h-11 rounded-xl" placeholder="10" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Address (optional)</Label>
+            <Input value={form.address} onChange={set('address')} className="h-11 rounded-xl" placeholder="e.g. East Legon, Accra" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button type="submit" className="flex-1 h-11 rounded-xl bg-green-600 hover:bg-green-700 font-semibold" disabled={isSaving}>
+              {isSaving ? 'Saving...' : editId !== null ? 'Save Changes' : 'Register Company'}
+            </Button>
+            <Button type="button" variant="outline" className="h-11 rounded-xl px-5" onClick={cancelForm}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <div className="text-center py-6 text-gray-400 text-sm">Loading...</div>
+      ) : partners.length === 0 ? (
+        <div className="text-center py-8 text-gray-400">
+          <Truck className="w-9 h-9 mx-auto mb-2 text-gray-300" />
+          <p className="text-sm">No delivery companies registered yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {partners.map((p: any) => (
+            <div
+              key={p.id}
+              className={`rounded-xl border p-4 bg-white space-y-2 ${!p.isActive ? 'opacity-60' : ''}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Truck className="w-4 h-4 text-green-600 shrink-0" />
+                  <span className="font-semibold text-sm text-gray-800 truncate">{p.name}</span>
+                  {p.isActive
+                    ? <Badge className="bg-green-100 text-green-700 text-xs shrink-0">Active</Badge>
+                    : <Badge variant="outline" className="text-gray-400 text-xs shrink-0">Suspended</Badge>
+                  }
+                </div>
+                <span className="text-xs text-gray-400 shrink-0">{p.commissionPercent}% commission</span>
+              </div>
+              <div className="text-xs text-gray-500 space-y-0.5">
+                <div className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {p.contactPerson} · {p.phone}</div>
+                {p.email && <div className="flex items-center gap-1.5"><Mail className="w-3 h-3" /> {p.email}</div>}
+                {p.address && <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {p.address}</div>}
+              </div>
+              <div className="flex gap-2 pt-0.5">
+                <button
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                  onClick={() => startEdit(p)}
+                >
+                  <Edit2 size={11} /> Edit
+                </button>
+                <button
+                  className={`text-xs flex items-center gap-1 ${p.isActive ? 'text-orange-500 hover:underline' : 'text-green-600 hover:underline'}`}
+                  onClick={() => toggleMutation.mutate({ id: p.id, isActive: !p.isActive })}
+                >
+                  {p.isActive ? <><XCircle size={11} /> Suspend</> : <><CheckCircle size={11} /> Activate</>}
+                </button>
+                <button
+                  className="text-xs text-red-500 hover:underline flex items-center gap-1 ml-auto"
+                  onClick={() => { if (confirm(`Remove ${p.name}?`)) deleteMutation.mutate(p.id); }}
+                >
+                  <Trash2 size={11} /> Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<Tab>('rider');
 
@@ -386,6 +576,7 @@ export default function AdminSettings() {
     { id: 'residence', label: 'Add Residence' },
     { id: 'vendor', label: 'Add Vendor' },
     { id: 'agent', label: 'Add Agent' },
+    { id: 'delivery-partner', label: 'Delivery Companies' },
   ];
 
   return (
@@ -393,75 +584,87 @@ export default function AdminSettings() {
       <AdminSidebar />
       <div className="flex-1 overflow-auto flex flex-col py-8 px-12">
         <div className="w-full max-w-2xl self-center">
-        <h1 className="text-3xl font-display font-bold text-foreground mb-8 text-center">Settings</h1>
+          <h1 className="text-3xl font-display font-bold text-foreground mb-8 text-center">Settings</h1>
 
-        <div className="w-full">
-          <div className="flex gap-1 mb-6 bg-muted/50 p-1 rounded-xl border border-border/50">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? 'bg-white text-foreground shadow-sm border border-border/50'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="w-full">
+            <div className="flex gap-1 mb-6 bg-muted/50 p-1 rounded-xl border border-border/50 flex-wrap">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? 'bg-white text-foreground shadow-sm border border-border/50'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <Card className="rounded-2xl shadow-sm border-border/50">
+              {activeTab === 'rider' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <CardTitle>Create Rider Account</CardTitle>
+                    <CardDescription>Add a new rider who can accept and fulfil deliveries.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <CreateRiderForm />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'residence' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <CardTitle>Add Residence</CardTitle>
+                    <CardDescription>Register a resident's address for delivery.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <AddResidenceForm />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'vendor' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <CardTitle>Add Vendor</CardTitle>
+                    <CardDescription>Register a new vendor available for orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <AddVendorForm />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'agent' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <CardTitle>Add Call Agent</CardTitle>
+                    <CardDescription>Create a call center agent account for logging resident complaints and placing orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <AddAgentForm />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'delivery-partner' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <CardTitle>Third-Party Delivery Companies</CardTitle>
+                    <CardDescription>Register and manage the external delivery companies you work with, set their commission rates, and control their active status.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <DeliveryPartnersTab />
+                  </CardContent>
+                </>
+              )}
+            </Card>
           </div>
-
-          <Card className="rounded-2xl shadow-sm border-border/50">
-            {activeTab === 'rider' && (
-              <>
-                <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
-                  <CardTitle>Create Rider Account</CardTitle>
-                  <CardDescription>Add a new rider who can accept and fulfil deliveries.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <CreateRiderForm />
-                </CardContent>
-              </>
-            )}
-
-            {activeTab === 'residence' && (
-              <>
-                <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
-                  <CardTitle>Add Residence</CardTitle>
-                  <CardDescription>Register a resident's address for delivery.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <AddResidenceForm />
-                </CardContent>
-              </>
-            )}
-
-            {activeTab === 'vendor' && (
-              <>
-                <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
-                  <CardTitle>Add Vendor</CardTitle>
-                  <CardDescription>Register a new vendor available for orders.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <AddVendorForm />
-                </CardContent>
-              </>
-            )}
-
-            {activeTab === 'agent' && (
-              <>
-                <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
-                  <CardTitle>Add Call Agent</CardTitle>
-                  <CardDescription>Create a call center agent account for logging resident complaints and placing orders.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <AddAgentForm />
-                </CardContent>
-              </>
-            )}
-          </Card>
-        </div>
         </div>
       </div>
     </div>
