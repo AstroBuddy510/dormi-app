@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useListResidents, useListVendors, useListRiders } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,8 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Headset,
+  Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -735,11 +737,235 @@ function RidersTab() {
   );
 }
 
+// ─── Agents Tab ───────────────────────────────────────────────────────────────
+function AgentsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: agents = [], isLoading } = useQuery<any[]>({
+    queryKey: ['agents'],
+    queryFn: () => fetch('/api/agents').then((r) => r.json()),
+  });
+  const [search, setSearch] = useState('');
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [pinTarget, setPinTarget] = useState<any>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const filtered = agents.filter(
+    (a) => a.name.toLowerCase().includes(search.toLowerCase()) || a.phone.includes(search)
+  );
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['agents'] });
+
+  const handlePhotoUpload = async (a: any, file: File) => {
+    try {
+      const objectPath = await uploadPhoto(file);
+      await apiFetch(`/agents/${a.id}`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      invalidate();
+      toast({ title: 'Photo updated' });
+    } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
+  };
+
+  const handlePinReset = async (a: any, pin: string) => {
+    await apiFetch(`/agents/${a.id}/reset-pin`, { method: 'PUT', body: JSON.stringify({ pin }) });
+    invalidate();
+  };
+
+  const handleToggleActive = async (a: any) => {
+    try {
+      await apiFetch(`/agents/${a.id}`, { method: 'PUT', body: JSON.stringify({ isActive: !a.isActive }) });
+      invalidate();
+      toast({ title: a.isActive ? 'Agent Suspended' : 'Agent Reactivated' });
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiFetch(`/agents/${deleteTarget.id}`, { method: 'DELETE' });
+      invalidate();
+      toast({ title: 'Agent Deleted' });
+      setDeleteTarget(null);
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+  };
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSaving(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      await apiFetch(`/agents/${editTarget.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: fd.get('name'), phone: fd.get('phone') }),
+      });
+      invalidate();
+      toast({ title: 'Agent Updated' });
+      setEditTarget(null);
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSaving(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      await apiFetch('/agents', {
+        method: 'POST',
+        body: JSON.stringify({ name: fd.get('name'), phone: fd.get('phone'), pin: fd.get('pin') || undefined }),
+      });
+      invalidate();
+      toast({ title: 'Agent Created' });
+      setAddOpen(false);
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setIsSaving(false); }
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search agents…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <span className="text-sm text-muted-foreground">{filtered.length} agents</span>
+        <Button size="sm" className="rounded-xl gap-1.5 ml-auto" onClick={() => setAddOpen(true)}>
+          <Plus size={14} /> Add Agent
+        </Button>
+      </div>
+
+      {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : filtered.length === 0 ? (
+        <div className="py-16 text-center text-muted-foreground">
+          <Headset size={36} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">No call agents yet. Click <strong>Add Agent</strong> to create one.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((a) => (
+            <Card key={a.id} className={`rounded-2xl shadow-sm border-border/50 ${!a.isActive ? 'opacity-60' : ''}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar name={a.name} photoUrl={a.photoUrl} color="bg-indigo-100 text-indigo-700" />
+                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(a, file)} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm leading-tight">{a.name}</p>
+                      <p className="text-xs text-muted-foreground">Agent #{a.id}</p>
+                    </div>
+                  </div>
+                  <StatusPill active={a.isActive} />
+                </div>
+
+                <div className="space-y-1.5 mb-3">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Phone size={11} className="text-indigo-500" />
+                    <span className="font-mono font-medium">{a.phone}</span>
+                  </div>
+                  {a.createdAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Calendar size={11} className="text-indigo-500" />
+                      <span>Added {format(new Date(a.createdAt), 'dd MMM yyyy')}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-3 pb-3 border-b border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Key size={11} className="text-indigo-500" />
+                      <span>Login PIN: <span className="font-mono font-medium text-foreground">••••</span></span>
+                    </div>
+                    <button onClick={() => setPinTarget(a)} className="text-xs text-indigo-600 hover:underline font-medium flex items-center gap-1">
+                      <ShieldCheck size={11} /> Reset
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">Role: Call Center Agent</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...a })}>
+                    <Pencil size={12} /> Edit
+                  </Button>
+                  <Button size="sm" variant={!a.isActive ? 'default' : 'outline'}
+                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${a.isActive ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
+                    onClick={() => handleToggleActive(a)}>
+                    {!a.isActive ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
+                    {!a.isActive ? 'Reactivate' : 'Suspend'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(a)}>
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <PinResetDialog
+        open={!!pinTarget} onClose={() => setPinTarget(null)} name={pinTarget?.name ?? ''}
+        onSave={(pin) => handlePinReset(pinTarget, pin)}
+      />
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Headset size={16} className="text-indigo-500" /> Add Call Agent</DialogTitle></DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-3 pt-2">
+            <div className="space-y-1"><Label>Full Name *</Label><Input name="name" required placeholder="e.g. Akosua Frimpong" className="rounded-xl" /></div>
+            <div className="space-y-1"><Label>Phone *</Label><Input name="phone" required placeholder="e.g. 0244222001" className="rounded-xl font-mono" /></div>
+            <div className="space-y-1">
+              <Label>Initial PIN <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input name="pin" inputMode="numeric" maxLength={8} placeholder="e.g. 3456" className="rounded-xl font-mono tracking-widest" />
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
+              <Button type="submit" className="rounded-xl bg-indigo-600 hover:bg-indigo-700" disabled={isSaving}>{isSaving ? 'Creating…' : 'Create Agent'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader><DialogTitle>Edit Agent</DialogTitle></DialogHeader>
+          {editTarget && (
+            <form onSubmit={handleSave} className="space-y-3 pt-2">
+              <div className="space-y-1"><Label>Full Name *</Label><Input name="name" defaultValue={editTarget.name} required className="rounded-xl" /></div>
+              <div className="space-y-1"><Label>Phone *</Label><Input name="phone" defaultValue={editTarget.phone} required className="rounded-xl font-mono" /></div>
+              <DialogFooter className="gap-2 pt-2">
+                <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
+                <Button type="submit" className="rounded-xl" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save Changes'}</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Agent</AlertDialogTitle>
+            <AlertDialogDescription>Permanently delete agent <strong>{deleteTarget?.name}</strong>? This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="rounded-xl bg-destructive hover:bg-destructive/90" onClick={handleDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminUsers() {
   const { data: residents = [] } = useListResidents();
   const { data: vendors = [] } = useListVendors();
   const { data: riders = [] } = useListRiders();
+  const { data: agents = [] } = useQuery<any[]>({ queryKey: ['agents'], queryFn: () => fetch('/api/agents').then((r) => r.json()) });
 
   return (
     <div className="flex min-h-screen bg-gray-50/50">
@@ -752,11 +978,12 @@ export default function AdminUsers() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             { icon: Users, label: 'Residents', count: residents.length, color: 'bg-green-50 text-green-700' },
             { icon: Store, label: 'Vendors', count: vendors.length, color: 'bg-amber-50 text-amber-700' },
             { icon: Truck, label: 'Riders', count: riders.length, color: 'bg-blue-50 text-blue-700' },
+            { icon: Headset, label: 'Agents', count: agents.length, color: 'bg-indigo-50 text-indigo-700' },
           ].map(({ icon: Icon, label, count, color }) => (
             <Card key={label} className="rounded-2xl shadow-sm border-border/50">
               <CardContent className="p-4 flex items-center gap-3">
@@ -775,10 +1002,12 @@ export default function AdminUsers() {
             <TabsTrigger value="residents" className="rounded-lg gap-2"><Users size={15} /> Residents ({residents.length})</TabsTrigger>
             <TabsTrigger value="vendors" className="rounded-lg gap-2"><Store size={15} /> Vendors ({vendors.length})</TabsTrigger>
             <TabsTrigger value="riders" className="rounded-lg gap-2"><Truck size={15} /> Riders ({riders.length})</TabsTrigger>
+            <TabsTrigger value="agents" className="rounded-lg gap-2"><Headset size={15} /> Agents ({agents.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="residents"><ResidentsTab /></TabsContent>
           <TabsContent value="vendors"><VendorsTab /></TabsContent>
           <TabsContent value="riders"><RidersTab /></TabsContent>
+          <TabsContent value="agents"><AgentsTab /></TabsContent>
         </Tabs>
       </div>
     </div>
