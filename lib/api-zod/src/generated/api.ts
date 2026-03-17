@@ -19,7 +19,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const LoginBody = zod.object({
   phone: zod.string(),
-  role: zod.enum(["resident", "vendor", "admin", "rider"]),
+  role: zod.enum(["resident", "vendor", "admin", "rider", "agent"]),
   pin: zod.string().optional(),
 });
 

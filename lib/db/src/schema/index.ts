@@ -5,4 +5,6 @@ export * from "./items";
 export * from "./pricing";
 export * from "./blockOrderGroups";
 export * from "./deliveryPartners";
+export * from "./agents";
+export * from "./complaints";
 export * from "./orders";

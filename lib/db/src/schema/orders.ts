@@ -6,12 +6,14 @@ import { vendorsTable } from "./vendors";
 import { ridersTable } from "./riders";
 import { blockOrderGroupsTable } from "./blockOrderGroups";
 import { deliveryPartnersTable } from "./deliveryPartners";
+import { agentsTable } from "./agents";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
   residentId: integer("resident_id").notNull().references(() => residentsTable.id),
   vendorId: integer("vendor_id").references(() => vendorsTable.id),
   riderId: integer("rider_id").references(() => ridersTable.id),
+  agentId: integer("agent_id").references(() => agentsTable.id),
   orderType: text("order_type").notNull().default("single"),
   blockGroupId: integer("block_group_id").references(() => blockOrderGroupsTable.id),
   deliveryPartnerId: integer("delivery_partner_id").references(() => deliveryPartnersTable.id),

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { residentsTable, vendorsTable, ridersTable } from "@workspace/db/schema";
+import { residentsTable, vendorsTable, ridersTable, agentsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { LoginBody } from "@workspace/api-zod";
 import { createHash } from "crypto";
@@ -10,6 +10,7 @@ const router: IRouter = Router();
 const ADMIN_PIN = "1234";
 const VENDOR_PIN = "5678";
 const RIDER_PIN = "9012";
+const AGENT_PIN = "3456";
 
 function hashPin(pin: string): string {
   return createHash("sha256").update(pin).digest("hex");
@@ -86,6 +87,28 @@ router.post("/login", async (req, res) => {
         user: { id: rider.id, name: rider.name, phone: rider.phone, role: "rider", photoUrl: rider.photoUrl },
         role: "rider",
         token: `rider-${rider.id}`,
+      });
+      return;
+    }
+
+    if (role === "agent") {
+      const [agent] = await db.select().from(agentsTable).where(eq(agentsTable.phone, phone)).limit(1);
+      if (!agent) {
+        res.status(401).json({ error: "unauthorized", message: "Agent phone not found. Contact your admin." });
+        return;
+      }
+      if (!agent.isActive) {
+        res.status(401).json({ error: "unauthorized", message: "Your account has been suspended. Contact admin." });
+        return;
+      }
+      if (!verifyPin(pin ?? "", agent.pin, AGENT_PIN)) {
+        res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
+        return;
+      }
+      res.json({
+        user: { id: agent.id, name: agent.name, phone: agent.phone, role: "agent", photoUrl: agent.photoUrl },
+        role: "agent",
+        token: `agent-${agent.id}`,
       });
       return;
     }

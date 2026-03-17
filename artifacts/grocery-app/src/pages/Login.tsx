@@ -92,6 +92,7 @@ export default function Login() {
                     <SelectItem value="resident" className="text-base py-3">Resident</SelectItem>
                     <SelectItem value="vendor" className="text-base py-3">Vendor</SelectItem>
                     <SelectItem value="rider" className="text-base py-3">Rider</SelectItem>
+                    <SelectItem value="agent" className="text-base py-3">Call Agent</SelectItem>
                     <SelectItem value="admin" className="text-base py-3">Admin</SelectItem>
                   </SelectContent>
                 </Select>

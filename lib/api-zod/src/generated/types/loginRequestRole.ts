@@ -14,4 +14,5 @@ export const LoginRequestRole = {
   vendor: "vendor",
   admin: "admin",
   rider: "rider",
+  agent: "agent",
 } as const;

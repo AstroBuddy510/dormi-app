@@ -23,6 +23,10 @@ import AdminSettings from "@/pages/admin/Settings";
 import AdminUsers from "@/pages/admin/Users";
 import AdminCreateOrder from "@/pages/admin/CreateOrder";
 import AdminDeliveryPartners from "@/pages/admin/DeliveryPartners";
+import AdminComplaints from "@/pages/admin/Complaints";
+import AgentDashboard from "@/pages/agent/Dashboard";
+import AgentCreateOrder from "@/pages/agent/CreateOrder";
+import AgentComplaints from "@/pages/agent/Complaints";
 import RiderJobs from "@/pages/rider/Jobs";
 
 const queryClient = new QueryClient();
@@ -80,6 +84,7 @@ function RoleBasedRouter() {
         <Route path="/users" component={AdminUsers} />
         <Route path="/create-order" component={AdminCreateOrder} />
         <Route path="/delivery-partners" component={AdminDeliveryPartners} />
+        <Route path="/complaints" component={AdminComplaints} />
         <Route path="/settings" component={AdminSettings} />
         <Route component={NotFound} />
       </Switch>
@@ -90,6 +95,17 @@ function RoleBasedRouter() {
     return (
       <Switch>
         <Route path="/" component={RiderJobs} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+
+  if (role === 'agent') {
+    return (
+      <Switch>
+        <Route path="/" component={AgentDashboard} />
+        <Route path="/create-order" component={AgentCreateOrder} />
+        <Route path="/complaints" component={AgentComplaints} />
         <Route component={NotFound} />
       </Switch>
     );
