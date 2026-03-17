@@ -1,0 +1,38 @@
+Build a full grocery delivery app for new estates in Accra. Use these exact user roles and flows:
+
+Resident (Customer)
+Signup: Full Name, Phone Number, Estate (dropdown: Airport Hills, East Legon Hills, Trassaco Valley), Block Number, House Number, Ghana GPS Address (text, optional).
+Home screen: big "Order Now" button + "Subscribe Weekly" toggle (select day: Friday).
+Order form: categories dropdown (Vegetables, Fruits, Dairy, Meat, Household, Cosmetics, Staples). Inside each: pre-loaded items (e.g. Tomatoes, Onions, Rice 5kg, Oil 1L, Soap, Toothpaste, Bread, Milk, Eggs) with quantity field + price auto-fill (editable by resident).
+Checkout: dynamically show subtotal (goods) + service fee (admin-set % markup) + delivery fee (admin-set flat amount). Paystack mobile money button + Cash-on-Delivery checkbox.
+After order: auto-create record, show "Order Placed" with ETA.
+
+Vendor (Market Women/Supermarkets)
+Two tabs: "App Orders" (tech-savvy) and "Call-Only Orders" (non-tech).
+Each order card: Resident Name + Address + Items List + Quantity + Pickup Deadline + "Accept" / "Ready" button + photo upload.
+On "Ready": auto-notify admin + SMS/WhatsApp to rider: "Pickup ready: , ".
+Call-Only tab: admin can mark "Called & Accepted" after phone chat—same fields auto-fill.
+
+Admin / Call Team
+Dashboard: live orders feed (filter: Pending / In Progress / Delivered). Columns: Resident, Items, Vendor, Status, Rider, Timestamp.
+Call-log form: dropdown Resident (from signup list), free-text items + quantity, "Create Order" button—auto-splits by category (Veg → Veg Vendor, etc.), auto-creates record.
+Vendor notify: on order create, auto-send SMS/WhatsApp to assigned vendor (Zapier if needed): "New order: , pickup by ".
+Rider assign: one-click dropdown (Rider 1, Rider 2, etc.)—auto-push to rider view.
+Pricing page: admin-only—set Delivery Fee (flat, e.g. 30 cedis), Service Markup (%, e.g. 18%), per-item overrides if needed. All prices pull live into checkout—no hard-coding.
+Subscription scheduler: auto-flag weekly subscribers → show in Friday 9am call queue.
+
+Rider Mobile View
+List of jobs: Resident Name, Full Address, Ghana GPS Code (click → Google Maps).
+Buttons: "On Way", "Picked Up", "Delivered" + photo upload.
+Status updates live to admin.
+
+Extras
+All orders timestamped + photo proofs.
+Payments via Paystack.
+Notifications: SMS/WhatsApp for vendor pickup & rider delivery.
+Mobile-first UI—big buttons, green = ready, red = pending.
+Limit items to 50 total—pre-fill common Ghana groceries.
+Make pricing editable in admin—system must recalculate checkout instantly when admin changes fees.
+
+
+Generate everything in one go: database, screens, logic, notifications. No extras—just this. Test with fake data.

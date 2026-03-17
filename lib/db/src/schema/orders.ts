@@ -1,0 +1,34 @@
+import { pgTable, text, serial, integer, numeric, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { residentsTable } from "./residents";
+import { vendorsTable } from "./vendors";
+import { ridersTable } from "./riders";
+
+export const ordersTable = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  residentId: integer("resident_id").notNull().references(() => residentsTable.id),
+  vendorId: integer("vendor_id").references(() => vendorsTable.id),
+  riderId: integer("rider_id").references(() => ridersTable.id),
+  items: jsonb("items").notNull().default([]),
+  subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull(),
+  serviceFee: numeric("service_fee", { precision: 10, scale: 2 }).notNull(),
+  deliveryFee: numeric("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  total: numeric("total", { precision: 10, scale: 2 }).notNull(),
+  status: text("status").notNull().default("pending"),
+  paymentMethod: text("payment_method").notNull(),
+  isSubscription: boolean("is_subscription").notNull().default(false),
+  callOnly: boolean("call_only").notNull().default(false),
+  callAccepted: boolean("call_accepted").notNull().default(false),
+  photoUrl: text("photo_url"),
+  deliveryPhotoUrl: text("delivery_photo_url"),
+  pickupDeadline: timestamp("pickup_deadline"),
+  eta: text("eta"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertOrderSchema = createInsertSchema(ordersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Order = typeof ordersTable.$inferSelect;

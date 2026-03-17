@@ -1,0 +1,19 @@
+packages:
+  "zustand": "State management for auth and shopping cart"
+  "framer-motion": "Smooth page transitions and micro-interactions"
+  "date-fns": "Formatting dates and times for orders"
+  "clsx": "Utility for constructing className strings"
+  "tailwind-merge": "Utility for merging tailwind classes"
+
+images:
+  - path: "artifacts/grocery-app/public/images/hero-groceries.png"
+    description: "Vibrant overhead shot of fresh organic vegetables, fruits, and artisan groceries in a modern eco-friendly reusable bag, bright lighting, clean white background, high quality"
+    aspect_ratio: "16:9"
+  - path: "artifacts/grocery-app/public/images/logo-icon.png"
+    description: "Minimalist bold modern app icon logo for a fresh grocery delivery app, featuring a simple stylized green leaf and shopping basket, solid white background"
+    aspect_ratio: "1:1"
+
+notes:
+  - App uses localStorage via Zustand for auth and cart persistence
+  - Generated API hooks from @workspace/api-client-react are used for all data fetching
+  - Role-based routing is handled at the App.tsx level

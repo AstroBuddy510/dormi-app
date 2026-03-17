@@ -1,8 +1,8 @@
-# Workspace
+# GrocerEase Accra
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+Full-stack grocery delivery app for gated estates in Accra, Ghana. Supports 4 user roles: Resident, Vendor, Admin, and Rider.
 
 ## Stack
 
@@ -10,6 +10,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
+- **Frontend**: React + Vite, Tailwind CSS, shadcn/ui, Zustand, TanStack Query, Wouter
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
@@ -19,78 +20,81 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ## Structure
 
 ```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+artifacts/
+├── api-server/         # Express API server (port 8080, serves at /api)
+│   └── src/routes/     # auth, residents, items, pricing, orders, vendors, riders, admin
+└── grocery-app/        # React+Vite frontend (port 20428, serves at /)
+    └── src/
+        ├── pages/      # Login, Signup, resident/, vendor/, admin/, rider/
+        ├── components/ # ui/, layout/ (BottomNav, AdminSidebar, StatusBadge)
+        └── store.ts    # Zustand auth + cart stores
+lib/
+├── api-spec/openapi.yaml   # OpenAPI spec (single source of truth)
+├── api-client-react/       # Generated React Query hooks
+├── api-zod/                # Generated Zod schemas
+└── db/src/schema/          # Drizzle schema (residents, vendors, riders, items, pricing, orders)
 ```
 
-## TypeScript & Composite Projects
+## User Roles & Access
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+### Resident (Customer)
+- Sign up with: Full Name, Phone, Estate, Block/House number, optional GPS address
+- Login with phone number (no PIN needed)
+- Browse 50 pre-loaded grocery items across 7 categories
+- Checkout with Paystack or Cash on Delivery
+- Weekly subscription option (Fridays)
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+### Vendor
+- Login with PIN: **5678** (phone must exist in vendors table)
+- Tab 1 "App Orders": accept orders, mark ready, upload photo
+- Tab 2 "Call-Only Orders": orders placed by admin via phone call
 
-## Root Scripts
+### Admin
+- Login with PIN: **1234** (any phone number)
+- Live orders dashboard (All / Pending / In Progress / Delivered)
+- Call log form: create orders on behalf of residents
+- Rider assignment per order
+- Pricing page: set delivery fee (GHS) and service markup (%)
+- Friday subscription queue
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+### Rider
+- Login with PIN: **9012** (phone must exist in riders table)
+- View assigned jobs with full address and Ghana GPS code
+- Update status: On Way → Picked Up → Delivered
+- Upload delivery photo proof
 
-## Packages
+## Pricing Logic
+- Delivery fee: flat amount (default GHS 30)
+- Service markup: percentage of subtotal (default 18%)
+- Total = subtotal + (subtotal × markup%) + delivery fee
+- Admin can change fees live — checkout recalculates instantly
 
-### `artifacts/api-server` (`@workspace/api-server`)
+## Demo Data
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+### Residents (phone-based login)
+- Kwesi Boateng: 0244567890 (Airport Hills, weekly subscriber)
+- Abena Owusu: 0244567891 (East Legon Hills)
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+### Vendors
+- Makola Fresh Produce: 0244000001 (Vegetables, Fruits)
+- Estate Supermarket: 0244000002 (Dairy, Staples, Household, Cosmetics)
+- Fresh Meats & More: 0244000003 (Meat, Dairy)
 
-### `lib/db` (`@workspace/db`)
+### Riders
+- Kofi Mensah: 0244111001
+- Ama Darko: 0244111002
+- Kwame Asante: 0244111003
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+## Grocery Categories & Items (~50 total)
+- **Vegetables** (8): Tomatoes, Onions, Pepper, Garden Eggs, Spinach, Cabbage, Carrots, Spring Onions
+- **Fruits** (6): Plantain, Banana, Pineapple, Watermelon, Mango, Oranges
+- **Dairy** (5): Fan Ice Milk, Eggs, Fanyogo Yoghurt, Butter, Cheese
+- **Meat** (5): Fresh Chicken, Beef, Tilapia, Goat Meat, Pork
+- **Household** (5): Sunlight Soap, OMO Powder, Toilet Roll, Dishwashing Liquid, Broom
+- **Cosmetics** (5): Close Up Toothpaste, Toothbrush, Vaseline Lotion, Shampoo, Deodorant
+- **Staples** (10): Rice 5kg, Rice 1kg, Cooking Oil, Bread, Sugar, Flour, Maggi Cubes, Tomato Paste, Salt, Noodles
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+## API Endpoints
+All at `/api` prefix — see `lib/api-spec/openapi.yaml` for full contract.
+Codegen: `pnpm --filter @workspace/api-spec run codegen`
+DB push: `pnpm --filter @workspace/db run push`

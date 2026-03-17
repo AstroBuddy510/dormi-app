@@ -1,22 +1,36 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: GrocerEase Accra - Grocery Delivery API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: residents
+    description: Resident operations
+  - name: orders
+    description: Order management
+  - name: vendors
+    description: Vendor operations
+  - name: admin
+    description: Admin operations
+  - name: riders
+    description: Rider operations
+  - name: pricing
+    description: Pricing management
+  - name: items
+    description: Grocery items catalog
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +38,422 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with phone and role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /residents/signup:
+    post:
+      operationId: residentSignup
+      tags: [residents]
+      summary: Register a new resident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResidentSignupRequest"
+      responses:
+        "201":
+          description: Resident created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resident"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /residents:
+    get:
+      operationId: listResidents
+      tags: [residents]
+      summary: List all residents (admin only)
+      responses:
+        "200":
+          description: List of residents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resident"
+
+  /residents/{id}:
+    get:
+      operationId: getResident
+      tags: [residents]
+      summary: Get resident by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resident found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resident"
+
+  /residents/{id}/subscription:
+    put:
+      operationId: updateSubscription
+      tags: [residents]
+      summary: Update weekly subscription setting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRequest"
+      responses:
+        "200":
+          description: Subscription updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resident"
+
+  /items:
+    get:
+      operationId: listItems
+      tags: [items]
+      summary: List all grocery items with current prices
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroceryItem"
+
+  /pricing:
+    get:
+      operationId: getPricing
+      tags: [pricing]
+      summary: Get current pricing settings
+      responses:
+        "200":
+          description: Pricing settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingSettings"
+    put:
+      operationId: updatePricing
+      tags: [pricing]
+      summary: Update pricing settings (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePricingRequest"
+      responses:
+        "200":
+          description: Pricing updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingSettings"
+
+  /items/{id}/price:
+    put:
+      operationId: updateItemPrice
+      tags: [items]
+      summary: Update individual item price (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemPriceRequest"
+      responses:
+        "200":
+          description: Item price updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroceryItem"
+
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List orders with filters
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, ready, in_transit, delivered, cancelled]
+        - name: residentId
+          in: query
+          schema:
+            type: integer
+        - name: vendorId
+          in: query
+          schema:
+            type: integer
+        - name: riderId
+          in: query
+          schema:
+            type: integer
+        - name: isSubscription
+          in: query
+          schema:
+            type: boolean
+        - name: callOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/status:
+    put:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Update order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusRequest"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/assign-rider:
+    put:
+      operationId: assignRider
+      tags: [orders]
+      summary: Assign rider to order (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignRiderRequest"
+      responses:
+        "200":
+          description: Rider assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/photo:
+    post:
+      operationId: uploadOrderPhoto
+      tags: [orders]
+      summary: Upload photo proof for order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadPhotoRequest"
+      responses:
+        "200":
+          description: Photo uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      summary: List all vendors
+      responses:
+        "200":
+          description: List of vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vendor"
+
+  /riders:
+    get:
+      operationId: listRiders
+      tags: [riders]
+      summary: List all riders
+      responses:
+        "200":
+          description: List of riders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rider"
+
+  /admin/call-log:
+    post:
+      operationId: createCallLogOrder
+      tags: [admin]
+      summary: Admin creates order via call log
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallLogOrderRequest"
+      responses:
+        "201":
+          description: Order(s) created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /admin/subscriptions/friday-queue:
+    get:
+      operationId: getFridayQueue
+      tags: [admin]
+      summary: Get weekly subscribers queued for Friday
+      responses:
+        "200":
+          description: Friday subscription queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resident"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +464,427 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+
+    LoginRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [resident, vendor, admin, rider]
+        pin:
+          type: string
+      required:
+        - phone
+        - role
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        role:
+          type: string
+        token:
+          type: string
+      required:
+        - user
+        - role
+        - token
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+      required:
+        - id
+        - name
+        - phone
+        - role
+
+    ResidentSignupRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        estate:
+          type: string
+          enum: [Airport Hills, East Legon Hills, Trassaco Valley]
+        blockNumber:
+          type: string
+        houseNumber:
+          type: string
+        ghanaGpsAddress:
+          type: string
+      required:
+        - fullName
+        - phone
+        - estate
+        - blockNumber
+        - houseNumber
+
+    SubscriptionRequest:
+      type: object
+      properties:
+        subscribeWeekly:
+          type: boolean
+        subscriptionDay:
+          type: string
+      required:
+        - subscribeWeekly
+
+    Resident:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        phone:
+          type: string
+        estate:
+          type: string
+        blockNumber:
+          type: string
+        houseNumber:
+          type: string
+        ghanaGpsAddress:
+          type: string
+        subscribeWeekly:
+          type: boolean
+        subscriptionDay:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - fullName
+        - phone
+        - estate
+        - blockNumber
+        - houseNumber
+        - subscribeWeekly
+        - createdAt
+
+    GroceryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+          enum: [Vegetables, Fruits, Dairy, Meat, Household, Cosmetics, Staples]
+        price:
+          type: number
+        unit:
+          type: string
+        vendorCategory:
+          type: string
+      required:
+        - id
+        - name
+        - category
+        - price
+        - unit
+
+    UpdateItemPriceRequest:
+      type: object
+      properties:
+        price:
+          type: number
+      required:
+        - price
+
+    PricingSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        deliveryFee:
+          type: number
+        serviceMarkupPercent:
+          type: number
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - deliveryFee
+        - serviceMarkupPercent
+        - updatedAt
+
+    UpdatePricingRequest:
+      type: object
+      properties:
+        deliveryFee:
+          type: number
+        serviceMarkupPercent:
+          type: number
+      required:
+        - deliveryFee
+        - serviceMarkupPercent
+
+    OrderItem:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        category:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+      required:
+        - itemId
+        - itemName
+        - category
+        - quantity
+        - unitPrice
+        - totalPrice
+
+    CreateOrderRequest:
+      type: object
+      properties:
+        residentId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemInput"
+        paymentMethod:
+          type: string
+          enum: [paystack, cash_on_delivery]
+        isSubscription:
+          type: boolean
+        notes:
+          type: string
+      required:
+        - residentId
+        - items
+        - paymentMethod
+
+    OrderItemInput:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+      required:
+        - itemId
+        - quantity
+        - unitPrice
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        residentId:
+          type: integer
+        residentName:
+          type: string
+        residentPhone:
+          type: string
+        residentAddress:
+          type: string
+        vendorId:
+          type: integer
+        vendorName:
+          type: string
+        riderId:
+          type: integer
+        riderName:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        subtotal:
+          type: number
+        serviceFee:
+          type: number
+        deliveryFee:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [pending, accepted, ready, in_transit, delivered, cancelled]
+        paymentMethod:
+          type: string
+        isSubscription:
+          type: boolean
+        callOnly:
+          type: boolean
+        callAccepted:
+          type: boolean
+        photoUrl:
+          type: string
+        deliveryPhotoUrl:
+          type: string
+        pickupDeadline:
+          type: string
+          format: date-time
+        eta:
+          type: string
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - residentId
+        - items
+        - subtotal
+        - serviceFee
+        - deliveryFee
+        - total
+        - status
+        - paymentMethod
+        - isSubscription
+        - callOnly
+        - createdAt
+        - updatedAt
+
+    UpdateOrderStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, ready, in_transit, delivered, cancelled]
+        callAccepted:
+          type: boolean
+        note:
+          type: string
+      required:
+        - status
+
+    AssignRiderRequest:
+      type: object
+      properties:
+        riderId:
+          type: integer
+      required:
+        - riderId
+
+    UploadPhotoRequest:
+      type: object
+      properties:
+        photoUrl:
+          type: string
+        photoType:
+          type: string
+          enum: [pickup, delivery]
+      required:
+        - photoUrl
+        - photoType
+
+    CallLogOrderRequest:
+      type: object
+      properties:
+        residentId:
+          type: integer
+        rawItems:
+          type: string
+        notes:
+          type: string
+      required:
+        - residentId
+        - rawItems
+
+    Vendor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+      required:
+        - id
+        - name
+        - phone
+        - categories
+        - isActive
+
+    Rider:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        isAvailable:
+          type: boolean
+      required:
+        - id
+        - name
+        - phone
+        - isAvailable
+
+    AdminStats:
+      type: object
+      properties:
+        totalOrders:
+          type: integer
+        pendingOrders:
+          type: integer
+        inProgressOrders:
+          type: integer
+        deliveredOrders:
+          type: integer
+        totalRevenue:
+          type: number
+        subscriberCount:
+          type: integer
+      required:
+        - totalOrders
+        - pendingOrders
+        - inProgressOrders
+        - deliveredOrders
+        - totalRevenue
+        - subscriberCount

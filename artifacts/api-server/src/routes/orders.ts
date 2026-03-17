@@ -1,0 +1,211 @@
+import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
+import {
+  CreateOrderBody,
+  UpdateOrderStatusBody,
+  AssignRiderBody,
+  UploadOrderPhotoBody,
+} from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+function addHours(h: number) {
+  const d = new Date();
+  d.setHours(d.getHours() + h);
+  return d;
+}
+
+async function enrichOrder(order: typeof ordersTable.$inferSelect) {
+  const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, order.residentId)).limit(1);
+  let vendorName: string | undefined;
+  let riderName: string | undefined;
+  if (order.vendorId) {
+    const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, order.vendorId)).limit(1);
+    vendorName = v?.name;
+  }
+  if (order.riderId) {
+    const [r] = await db.select().from(ridersTable).where(eq(ridersTable.id, order.riderId)).limit(1);
+    riderName = r?.name;
+  }
+  const address = resident
+    ? `${resident.estate}, Block ${resident.blockNumber}, House ${resident.houseNumber}${resident.ghanaGpsAddress ? ` (${resident.ghanaGpsAddress})` : ""}`
+    : "";
+  return {
+    id: order.id,
+    residentId: order.residentId,
+    residentName: resident?.fullName ?? "",
+    residentPhone: resident?.phone ?? "",
+    residentAddress: address,
+    vendorId: order.vendorId,
+    vendorName: vendorName ?? null,
+    riderId: order.riderId,
+    riderName: riderName ?? null,
+    items: order.items as any[],
+    subtotal: parseFloat(order.subtotal),
+    serviceFee: parseFloat(order.serviceFee),
+    deliveryFee: parseFloat(order.deliveryFee),
+    total: parseFloat(order.total),
+    status: order.status,
+    paymentMethod: order.paymentMethod,
+    isSubscription: order.isSubscription,
+    callOnly: order.callOnly,
+    callAccepted: order.callAccepted,
+    photoUrl: order.photoUrl,
+    deliveryPhotoUrl: order.deliveryPhotoUrl,
+    pickupDeadline: order.pickupDeadline?.toISOString() ?? null,
+    eta: order.eta,
+    notes: order.notes,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+  };
+}
+
+router.get("/", async (req, res) => {
+  const { status, residentId, vendorId, riderId, isSubscription, callOnly } = req.query;
+  let query = db.select().from(ordersTable);
+  const conditions: any[] = [];
+  if (status) conditions.push(eq(ordersTable.status, status as string));
+  if (residentId) conditions.push(eq(ordersTable.residentId, parseInt(residentId as string)));
+  if (vendorId) conditions.push(eq(ordersTable.vendorId, parseInt(vendorId as string)));
+  if (riderId) conditions.push(eq(ordersTable.riderId, parseInt(riderId as string)));
+  if (isSubscription !== undefined) conditions.push(eq(ordersTable.isSubscription, isSubscription === "true"));
+  if (callOnly !== undefined) conditions.push(eq(ordersTable.callOnly, callOnly === "true"));
+  const rows = conditions.length > 0
+    ? await (query as any).where(and(...conditions)).orderBy(ordersTable.createdAt)
+    : await (query as any).orderBy(ordersTable.createdAt);
+  const enriched = await Promise.all(rows.map(enrichOrder));
+  res.json(enriched);
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const body = CreateOrderBody.parse(req.body);
+    const [pricing] = await db.select().from(pricingTable).limit(1);
+    const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
+    const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+
+    const subtotal = body.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
+    const total = subtotal + serviceFee + deliveryFee;
+
+    const orderItems = await Promise.all(body.items.map(async (item) => {
+      const [dbItem] = await db.select().from(itemsTable).where(eq(itemsTable.id, item.itemId)).limit(1);
+      return {
+        itemId: item.itemId,
+        itemName: dbItem?.name ?? `Item ${item.itemId}`,
+        category: dbItem?.category ?? "Unknown",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: Math.round(item.quantity * item.unitPrice * 100) / 100,
+      };
+    }));
+
+    const categories = [...new Set(orderItems.map(i => i.category))];
+    const vendorCategoryMap: Record<string, string[]> = {
+      Vegetables: ["Vegetables", "Fruits"],
+      Meat: ["Meat"],
+      Dairy: ["Dairy"],
+      Staples: ["Staples", "Household"],
+      Cosmetics: ["Cosmetics"],
+    };
+
+    let assignedVendorId: number | null = null;
+    const vendors = await db.select().from(vendorsTable);
+    for (const [vendorCat, cats] of Object.entries(vendorCategoryMap)) {
+      if (categories.some(c => cats.includes(c))) {
+        const vendor = vendors.find(v => v.categories.some(vc => cats.includes(vc)));
+        if (vendor) { assignedVendorId = vendor.id; break; }
+      }
+    }
+    if (!assignedVendorId && vendors.length > 0) assignedVendorId = vendors[0].id;
+
+    const [order] = await db.insert(ordersTable).values({
+      residentId: body.residentId,
+      vendorId: assignedVendorId,
+      items: orderItems,
+      subtotal: subtotal.toString(),
+      serviceFee: serviceFee.toString(),
+      deliveryFee: deliveryFee.toString(),
+      total: total.toString(),
+      status: "pending",
+      paymentMethod: body.paymentMethod,
+      isSubscription: body.isSubscription ?? false,
+      callOnly: false,
+      callAccepted: false,
+      pickupDeadline: addHours(2),
+      eta: "2-3 hours",
+      notes: body.notes ?? null,
+    }).returning();
+
+    res.status(201).json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.get("/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+  if (!order) {
+    res.status(404).json({ error: "not_found", message: "Order not found" });
+    return;
+  }
+  res.json(await enrichOrder(order));
+});
+
+router.put("/:id/status", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = UpdateOrderStatusBody.parse(req.body);
+    const updateData: any = { status: body.status, updatedAt: new Date() };
+    if (body.callAccepted !== undefined) updateData.callAccepted = body.callAccepted;
+    const [order] = await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, id)).returning();
+    if (!order) {
+      res.status(404).json({ error: "not_found", message: "Order not found" });
+      return;
+    }
+    res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/assign-rider", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = AssignRiderBody.parse(req.body);
+    const [order] = await db.update(ordersTable)
+      .set({ riderId: body.riderId, updatedAt: new Date() })
+      .where(eq(ordersTable.id, id))
+      .returning();
+    if (!order) {
+      res.status(404).json({ error: "not_found", message: "Order not found" });
+      return;
+    }
+    res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.post("/:id/photo", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = UploadOrderPhotoBody.parse(req.body);
+    const updateData: any = { updatedAt: new Date() };
+    if (body.photoType === "pickup") updateData.photoUrl = body.photoUrl;
+    else updateData.deliveryPhotoUrl = body.photoUrl;
+    const [order] = await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, id)).returning();
+    if (!order) {
+      res.status(404).json({ error: "not_found", message: "Order not found" });
+      return;
+    }
+    res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+export default router;
