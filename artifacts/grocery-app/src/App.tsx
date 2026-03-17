@@ -16,6 +16,9 @@ import ResidentHistory from "@/pages/resident/History";
 import VendorDashboard from "@/pages/vendor/Dashboard";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminPricing from "@/pages/admin/Pricing";
+import AdminCallLog from "@/pages/admin/CallLog";
+import AdminRiders from "@/pages/admin/Riders";
+import AdminSubscribers from "@/pages/admin/Subscribers";
 import RiderJobs from "@/pages/rider/Jobs";
 
 const queryClient = new QueryClient();
@@ -67,9 +70,9 @@ function RoleBasedRouter() {
       <Switch>
         <Route path="/" component={AdminDashboard} />
         <Route path="/pricing" component={AdminPricing} />
-        <Route path="/call-log" component={AdminDashboard} />
-        <Route path="/riders" component={AdminDashboard} />
-        <Route path="/subscribers" component={AdminDashboard} />
+        <Route path="/call-log" component={AdminCallLog} />
+        <Route path="/riders" component={AdminRiders} />
+        <Route path="/subscribers" component={AdminSubscribers} />
         <Route component={NotFound} />
       </Switch>
     );
