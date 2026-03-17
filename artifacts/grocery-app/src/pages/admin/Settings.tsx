@@ -13,7 +13,19 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 
-type Tab = 'rider' | 'residence' | 'vendor';
+type Tab = 'rider' | 'residence' | 'vendor' | 'agent';
+
+async function apiFetch(path: string, options?: RequestInit) {
+  const res = await fetch(`/api${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || 'Request failed');
+  }
+  return res.json();
+}
 
 function FormStatus({ success, error }: { success?: string; error?: string }) {
   if (success) {
@@ -293,6 +305,79 @@ function AddVendorForm() {
   );
 }
 
+function AddAgentForm() {
+  const [form, setForm] = useState({ name: '', phone: '', pin: '' });
+  const [status, setStatus] = useState<{ success?: string; error?: string }>({});
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus({});
+    setLoading(true);
+    try {
+      await apiFetch('/agents', {
+        method: 'POST',
+        body: JSON.stringify({ name: form.name, phone: form.phone, pin: form.pin || undefined }),
+      });
+      setStatus({ success: 'Call agent account created successfully.' });
+      setForm({ name: '', phone: '', pin: '' });
+    } catch (err: any) {
+      setStatus({ error: err.message ?? 'Failed to create agent.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="space-y-2">
+        <Label htmlFor="agent-name">Full Name</Label>
+        <Input
+          id="agent-name"
+          required
+          className="h-12 rounded-xl"
+          placeholder="e.g. Akosua Frimpong"
+          value={form.name}
+          onChange={e => setForm({ ...form, name: e.target.value })}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="agent-phone">Phone Number</Label>
+        <Input
+          id="agent-phone"
+          required
+          type="tel"
+          className="h-12 rounded-xl"
+          placeholder="024 123 4567"
+          value={form.phone}
+          onChange={e => setForm({ ...form, phone: e.target.value })}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="agent-pin">PIN (optional)</Label>
+        <Input
+          id="agent-pin"
+          type="password"
+          inputMode="numeric"
+          maxLength={8}
+          className="h-12 rounded-xl font-mono tracking-widest"
+          placeholder="4-digit PIN"
+          value={form.pin}
+          onChange={e => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })}
+        />
+      </div>
+      <FormStatus {...status} />
+      <Button
+        type="submit"
+        className="w-full h-12 text-base font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700"
+        disabled={loading}
+      >
+        {loading ? 'Creating...' : 'Create Agent Account'}
+      </Button>
+    </form>
+  );
+}
+
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<Tab>('rider');
 
@@ -300,6 +385,7 @@ export default function AdminSettings() {
     { id: 'rider', label: 'Create Rider' },
     { id: 'residence', label: 'Add Residence' },
     { id: 'vendor', label: 'Add Vendor' },
+    { id: 'agent', label: 'Add Agent' },
   ];
 
   return (
@@ -358,6 +444,18 @@ export default function AdminSettings() {
                 </CardHeader>
                 <CardContent className="p-6">
                   <AddVendorForm />
+                </CardContent>
+              </>
+            )}
+
+            {activeTab === 'agent' && (
+              <>
+                <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                  <CardTitle>Add Call Agent</CardTitle>
+                  <CardDescription>Create a call center agent account for logging resident complaints and placing orders.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <AddAgentForm />
                 </CardContent>
               </>
             )}
