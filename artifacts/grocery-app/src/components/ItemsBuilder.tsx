@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, X, Package, ShoppingCart } from 'lucide-react';
+import { Search, Plus, X, Package, ShoppingCart, Tag } from 'lucide-react';
 
 export const UNITS = [
   'Piece(s)', 'Kg', 'Grams', 'Litres', 'ml',
@@ -16,6 +16,7 @@ export const UNITS = [
 export interface OrderItem {
   _id: number;
   name: string;
+  brand: string;
   qty: number;
   unit: string;
   unitPrice: number;
@@ -29,13 +30,15 @@ export interface ItemsBuilderProps {
 export function toRawItems(items: OrderItem[]): string {
   return items
     .map(i => {
-      const label = i.unit && i.unit !== 'Piece(s)' ? `${i.name} (${i.unit})` : i.name;
+      const displayName = i.brand ? `${i.brand} ${i.name}` : i.name;
+      const label = i.unit && i.unit !== 'Piece(s)' ? `${displayName} (${i.unit})` : displayName;
       return `${label}, ${i.qty}, ${i.unitPrice}`;
     })
     .join('\n');
 }
 
-const BLANK_DRAFT = { name: '', qty: 1, unit: 'Piece(s)', unitPrice: 0 };
+interface Draft { name: string; brand: string; qty: number; unit: string; unitPrice: number; }
+const BLANK_DRAFT: Draft = { name: '', brand: '', qty: 1, unit: 'Piece(s)', unitPrice: 0 };
 
 function guessUnit(invUnit: string): string {
   if (!invUnit) return 'Piece(s)';
@@ -62,7 +65,7 @@ function guessUnit(invUnit: string): string {
 
 export function ItemsBuilder({ onChange, color = 'green' }: ItemsBuilderProps) {
   const [items, setItems] = useState<OrderItem[]>([]);
-  const [draft, setDraft] = useState<typeof BLANK_DRAFT>({ ...BLANK_DRAFT });
+  const [draft, setDraft] = useState<Draft>({ ...BLANK_DRAFT });
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -90,7 +93,7 @@ export function ItemsBuilder({ onChange, color = 'green' }: ItemsBuilderProps) {
     : inventory.slice(0, 9);
 
   const pick = (inv: any) => {
-    setDraft({ name: inv.name, qty: 1, unit: guessUnit(inv.unit), unitPrice: inv.price });
+    setDraft(prev => ({ ...prev, name: inv.name, unit: guessUnit(inv.unit), unitPrice: inv.price }));
     setQuery(inv.name);
     setOpen(false);
   };
@@ -100,7 +103,7 @@ export function ItemsBuilder({ onChange, color = 'green' }: ItemsBuilderProps) {
     if (!name || draft.qty <= 0) return;
     const newItems: OrderItem[] = [
       ...items,
-      { _id: Date.now(), name, qty: draft.qty, unit: draft.unit, unitPrice: draft.unitPrice },
+      { _id: Date.now(), name, brand: draft.brand.trim(), qty: draft.qty, unit: draft.unit, unitPrice: draft.unitPrice },
     ];
     setItems(newItems);
     onChange(toRawItems(newItems));
@@ -149,7 +152,14 @@ export function ItemsBuilder({ onChange, color = 'green' }: ItemsBuilderProps) {
               className={`${COL} px-3 py-2.5 text-sm ${idx % 2 === 0 ? 'bg-white' : accentRowBg} ${idx < items.length - 1 ? 'border-b border-gray-100' : ''}`}
               style={COLS_TEMPLATE}
             >
-              <span className="font-medium text-gray-800 truncate" title={item.name}>{item.name}</span>
+              <div className="min-w-0">
+                <div className="font-medium text-gray-800 truncate" title={item.name}>{item.name}</div>
+                {item.brand && (
+                  <div className="flex items-center gap-1 text-[11px] text-gray-400 italic truncate mt-0.5">
+                    <Tag size={9} className="shrink-0" />{item.brand}
+                  </div>
+                )}
+              </div>
               <span className="font-mono text-gray-700 text-center">{item.qty}</span>
               <span>
                 <Badge variant="outline" className="text-[11px] font-normal border-gray-200 text-gray-500 px-1.5">
@@ -172,50 +182,71 @@ export function ItemsBuilder({ onChange, color = 'green' }: ItemsBuilderProps) {
 
       {/* ── Add-item panel ───────────────────────────────── */}
       <div className="border border-dashed border-gray-200 rounded-xl bg-gray-50/60 p-3 space-y-3">
-        {/* Search / Name field */}
-        <div className="relative" ref={wrapperRef}>
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <Input
-            placeholder="Search saved inventory or type a custom item name…"
-            className="pl-9 h-9 rounded-lg text-sm bg-white"
-            value={query}
-            onFocus={() => setOpen(true)}
-            onChange={e => {
-              const v = e.target.value;
-              setQuery(v);
-              setDraft(prev => ({ ...prev, name: v }));
-              setOpen(true);
-            }}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
-          />
+        {/* Search + Brand row */}
+        <div className="grid gap-2" style={{ gridTemplateColumns: '3fr 2fr' }} ref={wrapperRef}>
+          {/* Item search / Name */}
+          <div className="space-y-1">
+            <label className="text-[11px] text-gray-500 font-semibold uppercase tracking-wide">Item</label>
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <Input
+                placeholder="Search inventory or type item name…"
+                className="pl-9 h-9 rounded-lg text-sm bg-white"
+                value={query}
+                onFocus={() => setOpen(true)}
+                onChange={e => {
+                  const v = e.target.value;
+                  setQuery(v);
+                  setDraft(prev => ({ ...prev, name: v }));
+                  setOpen(true);
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
+              />
 
-          {/* Suggestions dropdown */}
-          {open && suggestions.length > 0 && (
-            <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
-              <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b bg-gray-50">
-                {query ? 'Matching items' : 'All inventory'}
-              </div>
-              {suggestions.map((inv: any) => (
-                <button
-                  key={inv.id}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 active:bg-gray-100 text-left gap-3 transition-colors"
-                  onMouseDown={e => { e.preventDefault(); pick(inv); }}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Package size={12} className="text-gray-300 shrink-0" />
-                    <span className="font-medium text-gray-800 truncate">{inv.name}</span>
-                    <span className="text-[11px] text-gray-400 shrink-0 bg-gray-100 px-1.5 py-0.5 rounded">
-                      {inv.category}
-                    </span>
+              {/* Suggestions dropdown */}
+              {open && suggestions.length > 0 && (
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b bg-gray-50">
+                    {query ? 'Matching items' : 'All inventory'}
                   </div>
-                  <div className="flex items-center gap-3 shrink-0 text-xs text-gray-400">
-                    <span>{inv.unit}</span>
-                    <span className={`font-semibold ${accentText}`}>₵{inv.price}</span>
-                  </div>
-                </button>
-              ))}
+                  {suggestions.map((inv: any) => (
+                    <button
+                      key={inv.id}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 active:bg-gray-100 text-left gap-3 transition-colors"
+                      onMouseDown={e => { e.preventDefault(); pick(inv); }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Package size={12} className="text-gray-300 shrink-0" />
+                        <span className="font-medium text-gray-800 truncate">{inv.name}</span>
+                        <span className="text-[11px] text-gray-400 shrink-0 bg-gray-100 px-1.5 py-0.5 rounded">
+                          {inv.category}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 text-xs text-gray-400">
+                        <span>{inv.unit}</span>
+                        <span className={`font-semibold ${accentText}`}>₵{inv.price}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Brand / Supplier */}
+          <div className="space-y-1">
+            <label className="text-[11px] text-gray-500 font-semibold uppercase tracking-wide flex items-center gap-1">
+              <Tag size={10} /> Brand / Supplier
+              <span className="font-normal normal-case text-gray-400">(optional)</span>
+            </label>
+            <Input
+              placeholder="e.g. Nescafé, Heinz, Nestle…"
+              className="h-9 rounded-lg text-sm bg-white"
+              value={draft.brand}
+              onChange={e => setDraft(prev => ({ ...prev, brand: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
+            />
+          </div>
         </div>
 
         {/* Qty / Unit / Price / Add row */}
