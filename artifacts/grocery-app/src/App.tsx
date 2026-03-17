@@ -19,6 +19,7 @@ import AdminPricing from "@/pages/admin/Pricing";
 import AdminCallLog from "@/pages/admin/CallLog";
 import AdminRiders from "@/pages/admin/Riders";
 import AdminSubscribers from "@/pages/admin/Subscribers";
+import AdminSettings from "@/pages/admin/Settings";
 import RiderJobs from "@/pages/rider/Jobs";
 
 const queryClient = new QueryClient();
@@ -73,6 +74,7 @@ function RoleBasedRouter() {
         <Route path="/call-log" component={AdminCallLog} />
         <Route path="/riders" component={AdminRiders} />
         <Route path="/subscribers" component={AdminSubscribers} />
+        <Route path="/settings" component={AdminSettings} />
         <Route component={NotFound} />
       </Switch>
     );

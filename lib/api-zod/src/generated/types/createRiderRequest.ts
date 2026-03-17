@@ -6,11 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Vendor {
-  id: number;
+export interface CreateRiderRequest {
   name: string;
-  phone?: string;
-  description?: string;
-  categories: string[];
-  isActive: boolean;
+  phone: string;
+  pin?: string;
 }

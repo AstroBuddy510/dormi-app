@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
-import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings } from 'lucide-react';
 import { cn } from '@/components/ui/StatusBadge';
 
 export function AdminSidebar() {
@@ -13,6 +13,7 @@ export function AdminSidebar() {
     { icon: Truck, label: 'Assign Riders', path: '/riders' },
     { icon: DollarSign, label: 'Pricing', path: '/pricing' },
     { icon: Users, label: 'Subscribers', path: '/subscribers' },
+    { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
   return (

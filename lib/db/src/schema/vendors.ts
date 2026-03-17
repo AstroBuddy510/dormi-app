@@ -5,7 +5,8 @@ import { z } from "zod/v4";
 export const vendorsTable = pgTable("vendors", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  phone: text("phone").notNull().unique(),
+  phone: text("phone"),
+  description: text("description"),
   categories: text("categories").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),

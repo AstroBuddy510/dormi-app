@@ -6,11 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Vendor {
-  id: number;
+export interface CreateVendorRequest {
   name: string;
   phone?: string;
   description?: string;
-  categories: string[];
-  isActive: boolean;
 }

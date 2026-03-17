@@ -389,6 +389,29 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Vendor"
+    post:
+      operationId: createVendor
+      tags: [vendors]
+      summary: Create a new vendor (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVendorRequest"
+      responses:
+        "201":
+          description: Vendor created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /riders:
     get:
@@ -404,6 +427,29 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Rider"
+    post:
+      operationId: createRider
+      tags: [riders]
+      summary: Create a new rider (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRiderRequest"
+      responses:
+        "201":
+          description: Rider created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rider"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /admin/call-log:
     post:
@@ -836,6 +882,8 @@ components:
           type: string
         phone:
           type: string
+        description:
+          type: string
         categories:
           type: array
           items:
@@ -845,7 +893,6 @@ components:
       required:
         - id
         - name
-        - phone
         - categories
         - isActive
 
@@ -865,6 +912,31 @@ components:
         - name
         - phone
         - isAvailable
+
+    CreateRiderRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        pin:
+          type: string
+      required:
+        - name
+        - phone
+
+    CreateVendorRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        description:
+          type: string
+      required:
+        - name
 
     AdminStats:
       type: object

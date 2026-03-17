@@ -11,6 +11,8 @@ export * from "./assignRiderRequest";
 export * from "./callLogOrderRequest";
 export * from "./createOrderRequest";
 export * from "./createOrderRequestPaymentMethod";
+export * from "./createRiderRequest";
+export * from "./createVendorRequest";
 export * from "./errorResponse";
 export * from "./groceryItem";
 export * from "./groceryItemCategory";

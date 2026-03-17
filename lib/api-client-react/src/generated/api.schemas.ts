@@ -232,7 +232,8 @@ export interface CallLogOrderRequest {
 export interface Vendor {
   id: number;
   name: string;
-  phone: string;
+  phone?: string;
+  description?: string;
   categories: string[];
   isActive: boolean;
 }
@@ -242,6 +243,18 @@ export interface Rider {
   name: string;
   phone: string;
   isAvailable: boolean;
+}
+
+export interface CreateRiderRequest {
+  name: string;
+  phone: string;
+  pin?: string;
+}
+
+export interface CreateVendorRequest {
+  name: string;
+  phone?: string;
+  description?: string;
 }
 
 export interface AdminStats {

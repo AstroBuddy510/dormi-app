@@ -21,6 +21,8 @@ import type {
   AssignRiderRequest,
   CallLogOrderRequest,
   CreateOrderRequest,
+  CreateRiderRequest,
+  CreateVendorRequest,
   ErrorResponse,
   GroceryItem,
   HealthStatus,
@@ -1488,6 +1490,92 @@ export function useListVendors<
 }
 
 /**
+ * @summary Create a new vendor (admin only)
+ */
+export const getCreateVendorUrl = () => {
+  return `/api/vendors`;
+};
+
+export const createVendor = async (
+  createVendorRequest: CreateVendorRequest,
+  options?: RequestInit,
+): Promise<Vendor> => {
+  return customFetch<Vendor>(getCreateVendorUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createVendorRequest),
+  });
+};
+
+export const getCreateVendorMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createVendor>>,
+    TError,
+    { data: BodyType<CreateVendorRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createVendor>>,
+  TError,
+  { data: BodyType<CreateVendorRequest> },
+  TContext
+> => {
+  const mutationKey = ["createVendor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createVendor>>,
+    { data: BodyType<CreateVendorRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createVendor(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateVendorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createVendor>>
+>;
+export type CreateVendorMutationBody = BodyType<CreateVendorRequest>;
+export type CreateVendorMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a new vendor (admin only)
+ */
+export const useCreateVendor = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createVendor>>,
+    TError,
+    { data: BodyType<CreateVendorRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createVendor>>,
+  TError,
+  { data: BodyType<CreateVendorRequest> },
+  TContext
+> => {
+  return useMutation(getCreateVendorMutationOptions(options));
+};
+
+/**
  * @summary List all riders
  */
 export const getListRidersUrl = () => {
@@ -1559,6 +1647,92 @@ export function useListRiders<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Create a new rider (admin only)
+ */
+export const getCreateRiderUrl = () => {
+  return `/api/riders`;
+};
+
+export const createRider = async (
+  createRiderRequest: CreateRiderRequest,
+  options?: RequestInit,
+): Promise<Rider> => {
+  return customFetch<Rider>(getCreateRiderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createRiderRequest),
+  });
+};
+
+export const getCreateRiderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRider>>,
+    TError,
+    { data: BodyType<CreateRiderRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRider>>,
+  TError,
+  { data: BodyType<CreateRiderRequest> },
+  TContext
+> => {
+  const mutationKey = ["createRider"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRider>>,
+    { data: BodyType<CreateRiderRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createRider(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateRiderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createRider>>
+>;
+export type CreateRiderMutationBody = BodyType<CreateRiderRequest>;
+export type CreateRiderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a new rider (admin only)
+ */
+export const useCreateRider = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRider>>,
+    TError,
+    { data: BodyType<CreateRiderRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRider>>,
+  TError,
+  { data: BodyType<CreateRiderRequest> },
+  TContext
+> => {
+  return useMutation(getCreateRiderMutationOptions(options));
+};
 
 /**
  * @summary Admin creates order via call log

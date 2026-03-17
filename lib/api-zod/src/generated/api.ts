@@ -506,11 +506,21 @@ export const UploadOrderPhotoResponse = zod.object({
 export const ListVendorsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
-  phone: zod.string(),
+  phone: zod.string().optional(),
+  description: zod.string().optional(),
   categories: zod.array(zod.string()),
   isActive: zod.boolean(),
 });
 export const ListVendorsResponse = zod.array(ListVendorsResponseItem);
+
+/**
+ * @summary Create a new vendor (admin only)
+ */
+export const CreateVendorBody = zod.object({
+  name: zod.string(),
+  phone: zod.string().optional(),
+  description: zod.string().optional(),
+});
 
 /**
  * @summary List all riders
@@ -522,6 +532,15 @@ export const ListRidersResponseItem = zod.object({
   isAvailable: zod.boolean(),
 });
 export const ListRidersResponse = zod.array(ListRidersResponseItem);
+
+/**
+ * @summary Create a new rider (admin only)
+ */
+export const CreateRiderBody = zod.object({
+  name: zod.string(),
+  phone: zod.string(),
+  pin: zod.string().optional(),
+});
 
 /**
  * @summary Admin creates order via call log
