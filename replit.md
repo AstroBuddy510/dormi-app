@@ -57,6 +57,8 @@ lib/
 - Pricing page: set delivery fee (GHS) and service markup (%)
 - Friday subscription queue
 - **User Management** (`/users`): view all residents/vendors/riders, edit details, upload profile photos, reset PINs, suspend/reactivate, delete
+- **Create Order** (`/create-order`): 3 tabs — Single (urgent), Block (estate-wide batch), Third-Party (outsourced delivery)
+- **Delivery Partners** (`/delivery-partners`): register external delivery companies, view commission reports per partner
 - **Settings** (`/settings`): create riders, add residences, add vendors
 
 ### Rider

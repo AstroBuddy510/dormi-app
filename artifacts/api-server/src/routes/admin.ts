@@ -6,8 +6,10 @@ import {
   vendorsTable,
   itemsTable,
   pricingTable,
+  blockOrderGroupsTable,
+  deliveryPartnersTable,
 } from "@workspace/db/schema";
-import { eq, and, count, sum } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { CreateCallLogOrderBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -107,6 +109,217 @@ router.post("/call-log", async (req, res) => {
     }).returning();
 
     res.status(201).json([await enrichOrder(order)]);
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+async function resolveVendor(items: any[]) {
+  const vendors = await db.select().from(vendorsTable);
+  if (vendors.length === 0) return null;
+  const categories = [...new Set(items.map((i: any) => i.category ?? "Staples"))];
+  for (const vendor of vendors) {
+    if (vendor.categories.some((c: string) => categories.includes(c))) return vendor.id;
+  }
+  return vendors[0].id;
+}
+
+router.post("/orders/single", async (req, res) => {
+  try {
+    const { residentId, rawItems, notes, paymentMethod, isUrgent } = req.body;
+    if (!residentId || !rawItems) {
+      res.status(400).json({ error: "bad_request", message: "residentId and rawItems are required" });
+      return;
+    }
+    const [pricing] = await db.select().from(pricingTable).limit(1);
+    const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
+    const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+
+    const rawLines = (rawItems as string).split("\n").filter((l: string) => l.trim());
+    const orderItems = rawLines.map((line: string, idx: number) => {
+      const parts = line.trim().split(",");
+      return {
+        itemId: 0,
+        itemName: parts[0]?.trim() ?? `Item ${idx + 1}`,
+        category: parts[3]?.trim() ?? "Staples",
+        quantity: parseFloat(parts[1]?.trim() ?? "1") || 1,
+        unitPrice: parseFloat(parts[2]?.trim() ?? "10") || 10,
+        totalPrice: Math.round((parseFloat(parts[1]?.trim() ?? "1") || 1) * (parseFloat(parts[2]?.trim() ?? "10") || 10) * 100) / 100,
+      };
+    });
+
+    const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
+    const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
+    const total = subtotal + serviceFee + deliveryFee;
+    const vendorId = await resolveVendor(orderItems);
+
+    const [order] = await db.insert(ordersTable).values({
+      residentId: parseInt(residentId),
+      vendorId,
+      items: orderItems,
+      subtotal: subtotal.toString(),
+      serviceFee: serviceFee.toString(),
+      deliveryFee: deliveryFee.toString(),
+      total: total.toString(),
+      status: "pending",
+      paymentMethod: paymentMethod ?? "cash_on_delivery",
+      isSubscription: false,
+      callOnly: true,
+      callAccepted: false,
+      orderType: "single",
+      isUrgent: !!isUrgent,
+      pickupDeadline: addHours(isUrgent ? 1 : 3),
+      eta: isUrgent ? "30-60 mins" : "2-3 hours",
+      notes: notes ?? null,
+    }).returning();
+
+    res.status(201).json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.post("/orders/block", async (req, res) => {
+  try {
+    const { estate, groupName, scheduledDate, notes: groupNotes, orders: orderList } = req.body;
+    if (!estate || !orderList || !Array.isArray(orderList) || orderList.length === 0) {
+      res.status(400).json({ error: "bad_request", message: "estate and orders[] are required" });
+      return;
+    }
+
+    const [pricing] = await db.select().from(pricingTable).limit(1);
+    const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
+    const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+
+    const name = groupName || `${estate} — ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+    const [group] = await db.insert(blockOrderGroupsTable).values({
+      name,
+      estate,
+      status: "collecting",
+      totalOrders: orderList.length,
+      totalAmount: "0",
+      scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+      notes: groupNotes ?? null,
+    }).returning();
+
+    let groupTotal = 0;
+    const createdOrders = [];
+
+    for (const o of orderList) {
+      const rawLines = (o.rawItems as string).split("\n").filter((l: string) => l.trim());
+      const orderItems = rawLines.map((line: string, idx: number) => {
+        const parts = line.trim().split(",");
+        return {
+          itemId: 0,
+          itemName: parts[0]?.trim() ?? `Item ${idx + 1}`,
+          category: parts[3]?.trim() ?? "Staples",
+          quantity: parseFloat(parts[1]?.trim() ?? "1") || 1,
+          unitPrice: parseFloat(parts[2]?.trim() ?? "10") || 10,
+          totalPrice: Math.round((parseFloat(parts[1]?.trim() ?? "1") || 1) * (parseFloat(parts[2]?.trim() ?? "10") || 10) * 100) / 100,
+        };
+      });
+
+      const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
+      const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
+      const total = subtotal + serviceFee + deliveryFee;
+      const vendorId = await resolveVendor(orderItems);
+      groupTotal += total;
+
+      const [order] = await db.insert(ordersTable).values({
+        residentId: parseInt(o.residentId),
+        vendorId,
+        items: orderItems,
+        subtotal: subtotal.toString(),
+        serviceFee: serviceFee.toString(),
+        deliveryFee: deliveryFee.toString(),
+        total: total.toString(),
+        status: "pending",
+        paymentMethod: o.paymentMethod ?? "cash_on_delivery",
+        isSubscription: false,
+        callOnly: true,
+        callAccepted: false,
+        orderType: "block",
+        blockGroupId: group.id,
+        isUrgent: false,
+        pickupDeadline: addHours(6),
+        eta: "Same day delivery",
+        notes: o.notes ?? null,
+      }).returning();
+      createdOrders.push(order);
+    }
+
+    await db.update(blockOrderGroupsTable)
+      .set({ totalAmount: groupTotal.toFixed(2), totalOrders: createdOrders.length })
+      .where(eq(blockOrderGroupsTable.id, group.id));
+
+    res.status(201).json({ group: { ...group, totalOrders: createdOrders.length, totalAmount: groupTotal }, ordersCreated: createdOrders.length });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.post("/orders/third-party", async (req, res) => {
+  try {
+    const { residentId, deliveryPartnerId, rawItems, notes, paymentMethod } = req.body;
+    if (!residentId || !deliveryPartnerId || !rawItems) {
+      res.status(400).json({ error: "bad_request", message: "residentId, deliveryPartnerId and rawItems are required" });
+      return;
+    }
+
+    const [partner] = await db.select().from(deliveryPartnersTable).where(eq(deliveryPartnersTable.id, parseInt(deliveryPartnerId))).limit(1);
+    if (!partner) {
+      res.status(404).json({ error: "not_found", message: "Delivery partner not found" });
+      return;
+    }
+
+    const [pricing] = await db.select().from(pricingTable).limit(1);
+    const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
+    const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+
+    const rawLines = (rawItems as string).split("\n").filter((l: string) => l.trim());
+    const orderItems = rawLines.map((line: string, idx: number) => {
+      const parts = line.trim().split(",");
+      return {
+        itemId: 0,
+        itemName: parts[0]?.trim() ?? `Item ${idx + 1}`,
+        category: parts[3]?.trim() ?? "Staples",
+        quantity: parseFloat(parts[1]?.trim() ?? "1") || 1,
+        unitPrice: parseFloat(parts[2]?.trim() ?? "10") || 10,
+        totalPrice: Math.round((parseFloat(parts[1]?.trim() ?? "1") || 1) * (parseFloat(parts[2]?.trim() ?? "10") || 10) * 100) / 100,
+      };
+    });
+
+    const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
+    const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
+    const total = subtotal + serviceFee + deliveryFee;
+    const vendorId = await resolveVendor(orderItems);
+
+    const [order] = await db.insert(ordersTable).values({
+      residentId: parseInt(residentId),
+      vendorId,
+      items: orderItems,
+      subtotal: subtotal.toString(),
+      serviceFee: serviceFee.toString(),
+      deliveryFee: deliveryFee.toString(),
+      total: total.toString(),
+      status: "pending",
+      paymentMethod: paymentMethod ?? "cash_on_delivery",
+      isSubscription: false,
+      callOnly: true,
+      callAccepted: false,
+      orderType: "third_party",
+      deliveryPartnerId: parseInt(deliveryPartnerId),
+      isUrgent: false,
+      pickupDeadline: addHours(4),
+      eta: "3-5 hours",
+      notes: notes ?? null,
+    }).returning();
+
+    await db.update(deliveryPartnersTable)
+      .set({ totalDeliveries: partner.totalDeliveries + 1 })
+      .where(eq(deliveryPartnersTable.id, parseInt(deliveryPartnerId)));
+
+    res.status(201).json(await enrichOrder(order));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }

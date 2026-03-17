@@ -4,12 +4,18 @@ import { z } from "zod/v4";
 import { residentsTable } from "./residents";
 import { vendorsTable } from "./vendors";
 import { ridersTable } from "./riders";
+import { blockOrderGroupsTable } from "./blockOrderGroups";
+import { deliveryPartnersTable } from "./deliveryPartners";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
   residentId: integer("resident_id").notNull().references(() => residentsTable.id),
   vendorId: integer("vendor_id").references(() => vendorsTable.id),
   riderId: integer("rider_id").references(() => ridersTable.id),
+  orderType: text("order_type").notNull().default("single"),
+  blockGroupId: integer("block_group_id").references(() => blockOrderGroupsTable.id),
+  deliveryPartnerId: integer("delivery_partner_id").references(() => deliveryPartnersTable.id),
+  isUrgent: boolean("is_urgent").notNull().default(false),
   items: jsonb("items").notNull().default([]),
   subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull(),
   serviceFee: numeric("service_fee", { precision: 10, scale: 2 }).notNull(),

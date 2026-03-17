@@ -21,6 +21,8 @@ import AdminRiders from "@/pages/admin/Riders";
 import AdminSubscribers from "@/pages/admin/Subscribers";
 import AdminSettings from "@/pages/admin/Settings";
 import AdminUsers from "@/pages/admin/Users";
+import AdminCreateOrder from "@/pages/admin/CreateOrder";
+import AdminDeliveryPartners from "@/pages/admin/DeliveryPartners";
 import RiderJobs from "@/pages/rider/Jobs";
 
 const queryClient = new QueryClient();
@@ -76,6 +78,8 @@ function RoleBasedRouter() {
         <Route path="/riders" component={AdminRiders} />
         <Route path="/subscribers" component={AdminSubscribers} />
         <Route path="/users" component={AdminUsers} />
+        <Route path="/create-order" component={AdminCreateOrder} />
+        <Route path="/delivery-partners" component={AdminDeliveryPartners} />
         <Route path="/settings" component={AdminSettings} />
         <Route component={NotFound} />
       </Switch>

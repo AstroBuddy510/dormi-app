@@ -9,6 +9,8 @@ import vendorsRouter from "./vendors";
 import ridersRouter from "./riders";
 import adminRouter from "./admin";
 import storageRouter from "./storage";
+import deliveryPartnersRouter from "./deliveryPartners";
+import blockGroupsRouter from "./blockGroups";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use("/vendors", vendorsRouter);
 router.use("/riders", ridersRouter);
 router.use("/admin", adminRouter);
 router.use("/storage", storageRouter);
+router.use("/delivery-partners", deliveryPartnersRouter);
+router.use("/block-groups", blockGroupsRouter);
 
 export default router;
