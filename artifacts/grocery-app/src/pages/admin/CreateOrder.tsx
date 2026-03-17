@@ -27,6 +27,10 @@ async function fetchDeliveryPartners() {
   const r = await fetch(`${BASE}/api/delivery-partners`);
   return r.json();
 }
+async function fetchVendors() {
+  const r = await fetch(`${BASE}/api/vendors`);
+  return r.json();
+}
 
 function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawItems: string; deliveryFee?: number; markupPct?: number }) {
   const lines = rawItems.split("\n").filter(l => l.trim());
@@ -63,19 +67,23 @@ function SingleOrderTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: residents = [] } = useQuery({ queryKey: ["residents"], queryFn: fetchResidents });
+  const { data: vendors = [] } = useQuery({ queryKey: ["vendors"], queryFn: fetchVendors });
   const [residentId, setResidentId] = useState("");
+  const [vendorId, setVendorId] = useState("");
   const [rawItems, setRawItems] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [isUrgent, setIsUrgent] = useState(true);
   const [resetKey, setResetKey] = useState(0);
 
+  const selectedVendor = (vendors as any[]).find((v: any) => String(v.id) === vendorId);
+
   const mutation = useMutation({
     mutationFn: async () => {
       const r = await fetch(`${BASE}/api/admin/orders/single`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ residentId: parseInt(residentId), rawItems, notes, paymentMethod, isUrgent }),
+        body: JSON.stringify({ residentId: parseInt(residentId), rawItems, notes, paymentMethod, isUrgent, vendorId: vendorId || undefined }),
       });
       if (!r.ok) throw new Error((await r.json()).message);
       return r.json();
@@ -83,7 +91,7 @@ function SingleOrderTab() {
     onSuccess: () => {
       toast({ title: "Single order created!", description: isUrgent ? "Marked URGENT — 30-60 min ETA" : "ETA: 2-3 hours" });
       qc.invalidateQueries({ queryKey: ["orders"] });
-      setResidentId(""); setRawItems(""); setNotes("");
+      setResidentId(""); setRawItems(""); setNotes(""); setVendorId("");
       setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -109,6 +117,20 @@ function SingleOrderTab() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Vendor / Supplier *</Label>
+          <Select value={vendorId} onValueChange={setVendorId}>
+            <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
+            <SelectContent>
+              {(vendors as any[]).filter((v: any) => v.isActive).map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedVendor && (
+            <p className="text-xs text-green-700 font-medium">Order will appear on {selectedVendor.name}'s portal</p>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Payment Method</Label>
@@ -147,7 +169,7 @@ function SingleOrderTab() {
 
       <Button
         className="w-full bg-green-600 hover:bg-green-700"
-        disabled={!residentId || !rawItems.trim() || mutation.isPending}
+        disabled={!residentId || !vendorId || !rawItems.trim() || mutation.isPending}
         onClick={() => mutation.mutate()}
       >
         {mutation.isPending ? "Creating..." : `Create ${isUrgent ? "URGENT " : ""}Single Order`}
@@ -168,12 +190,16 @@ function BulkOrderTab() {
   const qc = useQueryClient();
   const { data: residents = [] } = useQuery({ queryKey: ["residents"], queryFn: fetchResidents });
   const { data: estates = [] } = useQuery({ queryKey: ["estates"], queryFn: fetchEstates });
+  const { data: vendors = [] } = useQuery({ queryKey: ["vendors"], queryFn: fetchVendors });
   const [estate, setEstate] = useState("");
+  const [vendorId, setVendorId] = useState("");
   const [groupName, setGroupName] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [groupNotes, setGroupNotes] = useState("");
   const [entries, setEntries] = useState<BlockOrderEntry[]>([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
   const [resetKey, setResetKey] = useState(0);
+
+  const selectedVendor = (vendors as any[]).find((v: any) => String(v.id) === vendorId);
 
   const addEntry = () => setEntries(prev => [...prev, { _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
   const removeEntry = (eid: number) => setEntries(prev => prev.filter(e => e._eid !== eid));
@@ -195,7 +221,7 @@ function BulkOrderTab() {
       const r = await fetch(`${BASE}/api/admin/orders/block`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estate, groupName, scheduledDate, notes: groupNotes, orders }),
+        body: JSON.stringify({ estate, groupName, scheduledDate, notes: groupNotes, orders, vendorId: vendorId || undefined }),
       });
       if (!r.ok) throw new Error((await r.json()).message);
       return r.json();
@@ -207,14 +233,14 @@ function BulkOrderTab() {
         description: `${data.ordersCreated} orders grouped for ${estate}${bn ? ` — Batch ref: ${bn}` : ""}`,
       });
       qc.invalidateQueries({ queryKey: ["orders"] });
-      setEstate(""); setGroupName("");
+      setEstate(""); setGroupName(""); setVendorId("");
       setEntries([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
       setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const valid = estate.trim() && entries.every(e => e.residentId && e.rawItems.trim());
+  const valid = estate.trim() && vendorId.trim() && entries.every(e => e.residentId && e.rawItems.trim());
 
   return (
     <div className="space-y-5">
@@ -243,6 +269,20 @@ function BulkOrderTab() {
             <p className="text-xs text-blue-600">
               {estateResidents.length} resident{estateResidents.length !== 1 ? "s" : ""} registered in {estate}
             </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label>Vendor / Supplier *</Label>
+          <Select value={vendorId} onValueChange={setVendorId}>
+            <SelectTrigger><SelectValue placeholder="Select vendor…" /></SelectTrigger>
+            <SelectContent>
+              {(vendors as any[]).filter((v: any) => v.isActive).map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedVendor && (
+            <p className="text-xs text-green-700 font-medium">All orders will appear on {selectedVendor.name}'s portal</p>
           )}
         </div>
         <div className="space-y-2">

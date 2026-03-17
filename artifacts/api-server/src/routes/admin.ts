@@ -139,7 +139,7 @@ async function resolveVendor(items: any[]) {
 
 router.post("/orders/single", async (req, res) => {
   try {
-    const { residentId, rawItems, notes, paymentMethod, isUrgent } = req.body;
+    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId } = req.body;
     if (!residentId || !rawItems) {
       res.status(400).json({ error: "bad_request", message: "residentId and rawItems are required" });
       return;
@@ -164,7 +164,7 @@ router.post("/orders/single", async (req, res) => {
     const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
     const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
     const total = subtotal + serviceFee + deliveryFee;
-    const vendorId = await resolveVendor(orderItems);
+    const vendorId = explicitVendorId ? parseInt(explicitVendorId) : await resolveVendor(orderItems);
 
     const [order] = await db.insert(ordersTable).values({
       residentId: parseInt(residentId),
@@ -194,7 +194,7 @@ router.post("/orders/single", async (req, res) => {
 
 router.post("/orders/block", async (req, res) => {
   try {
-    const { estate, groupName, scheduledDate, notes: groupNotes, orders: orderList } = req.body;
+    const { estate, groupName, scheduledDate, notes: groupNotes, orders: orderList, vendorId: bulkVendorId } = req.body;
     if (!estate || !orderList || !Array.isArray(orderList) || orderList.length === 0) {
       res.status(400).json({ error: "bad_request", message: "estate and orders[] are required" });
       return;
@@ -237,7 +237,7 @@ router.post("/orders/block", async (req, res) => {
       const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
       const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
       const total = subtotal + serviceFee + deliveryFee;
-      const vendorId = await resolveVendor(orderItems);
+      const vendorId = bulkVendorId ? parseInt(bulkVendorId) : await resolveVendor(orderItems);
       groupTotal += total;
 
       const [order] = await db.insert(ordersTable).values({

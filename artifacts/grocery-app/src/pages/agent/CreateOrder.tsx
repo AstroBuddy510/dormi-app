@@ -20,6 +20,10 @@ async function fetchResidents() {
   const r = await fetch(`${API}/residents`);
   return r.json();
 }
+async function fetchVendors() {
+  const r = await fetch(`${API}/vendors`);
+  return r.json();
+}
 
 function OrderPreview({ rawItems }: { rawItems: string }) {
   const lines = rawItems.split("\n").filter(l => l.trim());
@@ -62,13 +66,17 @@ export default function AgentCreateOrder() {
   const presetResidentId = params.get("residentId") ?? "";
 
   const { data: residents = [] } = useQuery({ queryKey: ["residents"], queryFn: fetchResidents });
+  const { data: vendors = [] } = useQuery({ queryKey: ["vendors"], queryFn: fetchVendors });
   const [residentId, setResidentId] = useState(presetResidentId);
+  const [vendorId, setVendorId] = useState("");
   const [rawItems, setRawItems] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [isUrgent, setIsUrgent] = useState(false);
   const [success, setSuccess] = useState<any>(null);
   const [resetKey, setResetKey] = useState(0);
+
+  const selectedVendor = (vendors as any[]).find((v: any) => String(v.id) === vendorId);
 
   useEffect(() => {
     if (presetResidentId) setResidentId(presetResidentId);
@@ -88,6 +96,7 @@ export default function AgentCreateOrder() {
           paymentMethod,
           isUrgent,
           agentId: user?.id,
+          vendorId: vendorId || undefined,
         }),
       });
       if (!r.ok) throw new Error((await r.json()).message);
@@ -99,6 +108,7 @@ export default function AgentCreateOrder() {
       setSuccess(data);
       setRawItems("");
       setNotes("");
+      setVendorId("");
       setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -164,10 +174,25 @@ export default function AgentCreateOrder() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Items & Quantities</CardTitle>
-            <CardDescription>Build the order list item by item — search from inventory or type custom items.</CardDescription>
+            <CardTitle className="text-base">Vendor & Items</CardTitle>
+            <CardDescription>Select the vendor who will fulfil this order, then build the item list.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Vendor / Supplier *</Label>
+              <Select value={vendorId} onValueChange={setVendorId}>
+                <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                <SelectContent>
+                  {(vendors as any[]).filter((v: any) => v.isActive).map((v: any) => (
+                    <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedVendor && (
+                <p className="text-xs text-blue-700 font-medium">Order will appear on {selectedVendor.name}'s portal immediately after creation</p>
+              )}
+            </div>
+
             <div className="flex items-center gap-3 p-3 rounded-lg border bg-orange-50">
               <Zap className="w-4 h-4 text-orange-500" />
               <div className="flex-1">
@@ -213,7 +238,7 @@ export default function AgentCreateOrder() {
 
             <Button
               className="w-full bg-blue-600 hover:bg-blue-700 h-11"
-              disabled={!residentId || !rawItems.trim() || mutation.isPending}
+              disabled={!residentId || !vendorId || !rawItems.trim() || mutation.isPending}
               onClick={() => mutation.mutate()}
             >
               {mutation.isPending ? "Submitting..." : `Submit ${isUrgent ? "URGENT " : ""}Order to Admin`}
