@@ -5,7 +5,6 @@ import {
   useCreateRider,
   useResidentSignup,
   useCreateVendor,
-  ResidentSignupRequestEstate,
 } from '@workspace/api-client-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,8 +12,10 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner';
 
@@ -125,7 +126,7 @@ function AddResidenceForm() {
   const initialForm = {
     fullName: '',
     phone: '',
-    estate: ResidentSignupRequestEstate.Airport_Hills,
+    estate: '',
     blockNumber: '',
     houseNumber: '',
     ghanaGpsAddress: '',
@@ -134,9 +135,20 @@ function AddResidenceForm() {
   const [status, setStatus] = useState<{ success?: string; error?: string }>({});
   const mutation = useResidentSignup();
 
+  const [estateOpen, setEstateOpen] = useState(false);
+  const [estateInput, setEstateInput] = useState('');
+  const { data: existingEstates = [] } = useQuery<string[]>({
+    queryKey: ['estates'],
+    queryFn: () => apiFetch('/residents/estates'),
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setStatus({});
+    if (!form.estate.trim()) {
+      setStatus({ error: 'Please select or type an estate name.' });
+      return;
+    }
     mutation.mutate(
       { data: form },
       {
@@ -179,19 +191,77 @@ function AddResidenceForm() {
       </div>
       <div className="space-y-2">
         <Label>Estate</Label>
-        <Select
-          value={form.estate}
-          onValueChange={(val: any) => setForm({ ...form, estate: val })}
-        >
-          <SelectTrigger className="h-12 rounded-xl">
-            <SelectValue placeholder="Select estate" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ResidentSignupRequestEstate.Airport_Hills}>Airport Hills</SelectItem>
-            <SelectItem value={ResidentSignupRequestEstate.East_Legon_Hills}>East Legon Hills</SelectItem>
-            <SelectItem value={ResidentSignupRequestEstate.Trassaco_Valley}>Trassaco Valley</SelectItem>
-          </SelectContent>
-        </Select>
+        <Popover open={estateOpen} onOpenChange={setEstateOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={estateOpen}
+              className="w-full h-12 rounded-xl justify-between font-normal"
+            >
+              <span className={form.estate ? '' : 'text-muted-foreground'}>
+                {form.estate || 'Select or type an estate'}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Search or type new estate..."
+                value={estateInput}
+                onValueChange={setEstateInput}
+              />
+              <CommandList>
+                <CommandEmpty>
+                  {estateInput.trim() ? (
+                    <button
+                      type="button"
+                      className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded-sm"
+                      onClick={() => {
+                        const val = estateInput.trim();
+                        setForm({ ...form, estate: val });
+                        setEstateInput('');
+                        setEstateOpen(false);
+                      }}
+                    >
+                      Use &quot;{estateInput.trim()}&quot;
+                    </button>
+                  ) : (
+                    'No estates found.'
+                  )}
+                </CommandEmpty>
+                <CommandGroup>
+                  {existingEstates.map((estate) => (
+                    <CommandItem
+                      key={estate}
+                      value={estate}
+                      onSelect={(val) => {
+                        setForm({ ...form, estate: val });
+                        setEstateInput('');
+                        setEstateOpen(false);
+                      }}
+                    >
+                      {estate}
+                    </CommandItem>
+                  ))}
+                  {estateInput.trim() && !existingEstates.includes(estateInput.trim()) && (
+                    <CommandItem
+                      value={estateInput.trim()}
+                      onSelect={(val) => {
+                        setForm({ ...form, estate: val });
+                        setEstateInput('');
+                        setEstateOpen(false);
+                      }}
+                    >
+                      Use &quot;{estateInput.trim()}&quot;
+                    </CommandItem>
+                  )}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">

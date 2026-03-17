@@ -55,7 +55,7 @@ export const ResidentSignupRequestEstate = {
 export interface ResidentSignupRequest {
   fullName: string;
   phone: string;
-  estate: ResidentSignupRequestEstate;
+  estate: string;
   blockNumber: string;
   houseNumber: string;
   ghanaGpsAddress?: string;

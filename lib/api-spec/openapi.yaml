@@ -575,7 +575,6 @@ components:
           type: string
         estate:
           type: string
-          enum: [Airport Hills, East Legon Hills, Trassaco Valley]
         blockNumber:
           type: string
         houseNumber:

@@ -5,12 +5,11 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { ResidentSignupRequestEstate } from "./residentSignupRequestEstate";
 
 export interface ResidentSignupRequest {
   fullName: string;
   phone: string;
-  estate: ResidentSignupRequestEstate;
+  estate: string;
   blockNumber: string;
   houseNumber: string;
   ghanaGpsAddress?: string;

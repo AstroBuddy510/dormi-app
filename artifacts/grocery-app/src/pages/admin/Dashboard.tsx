@@ -229,7 +229,7 @@ export default function AdminDashboard() {
                           <TableCell><StatusBadge status={order.status} /></TableCell>
                           <TableCell className="min-w-[160px]">
                             {order.status !== 'delivered' && order.status !== 'cancelled' ? (
-                              (order as any).orderType === 'third-party' ? (
+                              (order as any).orderType === 'third_party' ? (
                                 <div className="space-y-1">
                                   <Select
                                     value={(order as any).deliveryPartnerId?.toString() ?? ''}
@@ -269,7 +269,7 @@ export default function AdminDashboard() {
                               )
                             ) : (
                               <span className="text-sm text-muted-foreground">
-                                {(order as any).orderType === 'third-party'
+                                {(order as any).orderType === 'third_party'
                                   ? ((order as any).deliveryPartnerName || '—')
                                   : (order.riderName || '—')}
                               </span>

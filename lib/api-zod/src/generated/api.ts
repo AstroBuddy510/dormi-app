@@ -40,7 +40,7 @@ export const LoginResponse = zod.object({
 export const ResidentSignupBody = zod.object({
   fullName: zod.string(),
   phone: zod.string(),
-  estate: zod.enum(["Airport Hills", "East Legon Hills", "Trassaco Valley"]),
+  estate: zod.string(),
   blockNumber: zod.string(),
   houseNumber: zod.string(),
   ghanaGpsAddress: zod.string().optional(),
