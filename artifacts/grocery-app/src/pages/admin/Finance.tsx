@@ -15,8 +15,8 @@ function apiFetch(path: string) {
   return fetch(`${BASE}/api${path}`).then(r => r.json());
 }
 
-function fmt(n: number) {
-  return `GH₵ ${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function fmt(n: number | null | undefined) {
+  return `GH₵ ${(n ?? 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 type Period = 'today' | 'week' | 'month' | 'custom';
@@ -40,6 +40,25 @@ function getPeriodDates(period: Period, customFrom: string, customTo: string) {
   return { from: `${customFrom}T00:00:00.000Z`, to: `${customTo}T23:59:59.999Z` };
 }
 
+function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: any) {
+  return (
+    <Card className="rounded-2xl border-0 shadow-sm">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+            <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+          </div>
+          <div className={`p-2.5 rounded-xl bg-secondary ${color}`}>
+            <Icon size={18} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminFinance() {
   const { toast } = useToast();
   const [period, setPeriod] = useState<Period>('month');
@@ -59,23 +78,6 @@ export default function AdminFinance() {
     window.open(url, '_blank');
     toast({ title: 'Downloading CSV report...' });
   };
-
-  const StatCard = ({ icon: Icon, label, value, sub, color = 'text-primary' }: any) => (
-    <Card className="rounded-2xl border-0 shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
-            <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-          </div>
-          <div className={`p-2.5 rounded-xl bg-secondary ${color}`}>
-            <Icon size={18} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="flex min-h-screen bg-background">
