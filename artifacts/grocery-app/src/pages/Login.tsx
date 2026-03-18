@@ -88,13 +88,13 @@ export default function Login() {
                   <SelectTrigger className="h-12 rounded-xl text-base">
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectContent className="rounded-xl" position="popper" sideOffset={4}>
                     <SelectItem value="resident" className="text-base py-3">Resident</SelectItem>
                     <SelectItem value="vendor" className="text-base py-3">Vendor</SelectItem>
                     <SelectItem value="rider" className="text-base py-3">Rider</SelectItem>
-                    <SelectItem value="agent" className="text-base py-3">Call Agent</SelectItem>
                     <SelectItem value="admin" className="text-base py-3">Admin</SelectItem>
                     <SelectItem value="accountant" className="text-base py-3">Accountant</SelectItem>
+                    <SelectItem value="agent" className="text-base py-3">Call Agent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
