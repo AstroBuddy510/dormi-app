@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/select';
 import {
   ShoppingBasket, Plus, Trash2, Search, CheckCircle2, XCircle,
-  PackagePlus, Bell, Boxes, Filter,
+  PackagePlus, Bell, Boxes, Filter, X, Tag,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -63,6 +63,8 @@ const STATUS_BADGE: Record<string, { label: string; variant: any; color: string 
   rejected: { label: 'Rejected', variant: 'outline', color: 'text-red-600 border-red-300 bg-red-50' },
 };
 
+const NEW_CATEGORY_VALUE = '__new__';
+
 // ─── Add Item Dialog ──────────────────────────────────────────────────────────
 function AddItemDialog({
   open, onClose, prefillName = '', onAdded,
@@ -70,30 +72,56 @@ function AddItemDialog({
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
+  const [categorySelect, setCategorySelect] = useState('');
+  const [newCategory, setNewCategory] = useState('');
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('1 unit');
+  const [brands, setBrands] = useState<string[]>([]);
+  const [brandInput, setBrandInput] = useState('');
 
-  // When dialog opens (especially from a request), prefill the name
+  const isCustomCategory = categorySelect === NEW_CATEGORY_VALUE;
+  const resolvedCategory = isCustomCategory ? newCategory.trim() : categorySelect;
+
+  const resetForm = () => {
+    setName('');
+    setCategorySelect('');
+    setNewCategory('');
+    setPrice('');
+    setUnit('1 unit');
+    setBrands([]);
+    setBrandInput('');
+  };
+
   const handleOpenChange = (isOpen: boolean) => {
     if (isOpen) {
+      resetForm();
       setName(prefillName);
-      setCategory('');
-      setPrice('');
-      setUnit('1 unit');
     }
     if (!isOpen) onClose();
   };
 
+  const addBrand = () => {
+    const b = brandInput.trim();
+    if (!b || brands.includes(b)) { setBrandInput(''); return; }
+    setBrands(prev => [...prev, b]);
+    setBrandInput('');
+  };
+
+  const removeBrand = (b: string) => setBrands(prev => prev.filter(x => x !== b));
+
+  const handleBrandKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addBrand(); }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!category) { toast({ title: 'Select a category', variant: 'destructive' }); return; }
+    if (!resolvedCategory) { toast({ title: 'Select or enter a category', variant: 'destructive' }); return; }
     setSaving(true);
     try {
       await apiFetch('/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category, price: parseFloat(price), unit }),
+        body: JSON.stringify({ name, category: resolvedCategory, price: parseFloat(price), unit, brands }),
       });
       toast({ title: 'Item added', description: `"${name}" is now in the catalogue.` });
       onAdded();
@@ -107,20 +135,23 @@ function AddItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="rounded-2xl max-w-sm">
+      <DialogContent className="rounded-2xl max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PackagePlus size={16} className="text-primary" /> Add Catalogue Item
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+          {/* Name */}
           <div className="space-y-1">
             <Label>Item Name *</Label>
             <Input value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Tomatoes" className="rounded-xl" />
           </div>
+
+          {/* Category */}
           <div className="space-y-1">
             <Label>Category *</Label>
-            <Select value={category} onValueChange={setCategory}>
+            <Select value={categorySelect} onValueChange={setCategorySelect}>
               <SelectTrigger className="rounded-xl">
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
@@ -128,9 +159,22 @@ function AddItemDialog({
                 {CATEGORIES.map(c => (
                   <SelectItem key={c} value={c}>{CATEGORY_EMOJI[c] || '📦'} {c}</SelectItem>
                 ))}
+                <SelectItem value={NEW_CATEGORY_VALUE}>➕ Add new category…</SelectItem>
               </SelectContent>
             </Select>
+            {isCustomCategory && (
+              <Input
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                placeholder="Type new category name"
+                className="rounded-xl mt-1.5"
+                autoFocus
+                required={isCustomCategory}
+              />
+            )}
           </div>
+
+          {/* Price + Unit */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Price (GHs) *</Label>
@@ -141,6 +185,37 @@ function AddItemDialog({
               <Input value={unit} onChange={e => setUnit(e.target.value)} placeholder="1 kg" className="rounded-xl" />
             </div>
           </div>
+
+          {/* Brands */}
+          <div className="space-y-1.5">
+            <Label>Available Brands <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <p className="text-xs text-muted-foreground">Customers will pick their preferred brand when ordering.</p>
+            <div className="flex gap-2">
+              <Input
+                value={brandInput}
+                onChange={e => setBrandInput(e.target.value)}
+                onKeyDown={handleBrandKeyDown}
+                placeholder="e.g. Mamador, Gino… press Enter"
+                className="rounded-xl flex-1"
+              />
+              <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0" onClick={addBrand}>
+                <Plus size={14} />
+              </Button>
+            </div>
+            {brands.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {brands.map(b => (
+                  <span key={b} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
+                    {b}
+                    <button type="button" onClick={() => removeBrand(b)} className="hover:text-destructive transition-colors ml-0.5">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <DialogFooter className="gap-2 pt-2">
             <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
             <Button type="submit" className="rounded-xl bg-primary hover:bg-primary/90" disabled={saving}>
@@ -238,6 +313,7 @@ function CatalogueTab() {
               <tr className="bg-secondary/50 text-left">
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Item</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Category</th>
+                <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Brands</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Unit</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide text-right">Price</th>
                 <th className="px-4 py-3 w-12"></th>
@@ -250,6 +326,22 @@ function CatalogueTab() {
                     <span className="mr-2">{CATEGORY_EMOJI[item.category] || '📦'}</span>{item.name}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
+                  <td className="px-4 py-3">
+                    {item.brands && item.brands.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 max-w-[180px]">
+                        {item.brands.slice(0, 3).map((b: string) => (
+                          <span key={b} className="inline-flex items-center gap-0.5 bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-full">
+                            <Tag size={9} className="shrink-0" /> {b}
+                          </span>
+                        ))}
+                        {item.brands.length > 3 && (
+                          <span className="text-xs text-muted-foreground">+{item.brands.length - 3} more</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/50 italic">None</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">{item.unit}</td>
                   <td className="px-4 py-3 font-mono text-right font-semibold">GHs {item.price.toFixed(2)}</td>
                   <td className="px-4 py-3">

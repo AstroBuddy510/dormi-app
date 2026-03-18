@@ -14,4 +14,5 @@ export interface GroceryItem {
   price: number;
   unit: string;
   vendorCategory?: string;
+  brands?: string[];
 }

@@ -41,6 +41,32 @@ export default function OrderPage() {
   const totalCartItems = Object.values(cartItems).reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = getCartTotal();
 
+  // Brand picker state
+  const [brandPickerItem, setBrandPickerItem] = useState<any>(null);
+
+  const getItemQuantity = (itemId: number) =>
+    Object.entries(cartItems)
+      .filter(([key]) => key === String(itemId) || key.startsWith(`${itemId}::`))
+      .reduce((sum, [, ci]) => sum + ci.quantity, 0);
+
+  const getBrandQuantity = (itemId: number, brand?: string) => {
+    const key = brand ? `${itemId}::${brand}` : String(itemId);
+    return (cartItems as any)[key]?.quantity || 0;
+  };
+
+  const handleAddItem = (item: any, qty: number, brand?: string) => {
+    addItem(item, qty, brand);
+  };
+
+  const handlePlusClick = (item: any) => {
+    const hasBrands = item.brands && item.brands.length > 0;
+    if (hasBrands) {
+      setBrandPickerItem(item);
+    } else {
+      addItem(item, 1);
+    }
+  };
+
   const handleSubmitRequest = async () => {
     if (!search.trim()) return;
     setSubmittingRequest(true);
@@ -170,13 +196,13 @@ export default function OrderPage() {
           </div>
         ) : (
           filteredItems.map(item => {
-            const quantity = cartItems[item.id]?.quantity || 0;
+            const quantity = getItemQuantity(item.id);
+            const hasBrands = item.brands && item.brands.length > 0;
             return (
               <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <Card className="p-3 border-0 shadow-sm rounded-2xl h-full flex flex-col justify-between bg-white hover:shadow-md transition-shadow">
                   <div>
                     <div className="aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
-                      {/* Placeholder for item image, fallback to emoji/icon based on category */}
                       <span className="text-4xl">
                         {item.category === 'Vegetables' ? '🥦' : 
                          item.category === 'Fruits' ? '🍎' : 
@@ -186,12 +212,17 @@ export default function OrderPage() {
                     </div>
                     <h3 className="font-semibold text-foreground text-sm leading-tight line-clamp-2">{item.name}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{item.unit}</p>
+                    {hasBrands && (
+                      <p className="text-xs text-primary/70 mt-0.5 font-medium">
+                        {item.brands.length} brand{item.brands.length > 1 ? 's' : ''} available
+                      </p>
+                    )}
                   </div>
                   
-                  <div className="mt-4 flex items-center justify-between">
+                  <div className="mt-3 flex items-center justify-between">
                     <span className="font-bold text-primary">₵{item.price.toFixed(2)}</span>
                     
-                    {quantity > 0 ? (
+                    {!hasBrands && quantity > 0 ? (
                       <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                         <button onClick={() => addItem(item, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-foreground hover:bg-gray-50">
                           <Minus size={14} />
@@ -201,9 +232,16 @@ export default function OrderPage() {
                           <Plus size={14} />
                         </button>
                       </div>
+                    ) : hasBrands && quantity > 0 ? (
+                      <button
+                        onClick={() => setBrandPickerItem(item)}
+                        className="flex items-center gap-1 bg-primary text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 hover:bg-primary/90 transition-colors"
+                      >
+                        <Plus size={12} /> {quantity} in cart
+                      </button>
                     ) : (
                       <button 
-                        onClick={() => addItem(item, 1)}
+                        onClick={() => handlePlusClick(item)}
                         className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
                       >
                         <Plus size={18} />
@@ -217,11 +255,75 @@ export default function OrderPage() {
         )}
       </div>
 
+      {/* Brand Picker Bottom Sheet */}
+      <AnimatePresence>
+        {brandPickerItem && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-50"
+              onClick={() => setBrandPickerItem(null)}
+            />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
+            >
+              <div className="px-5 pt-4 pb-2 border-b border-border">
+                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3" />
+                <h3 className="font-bold text-foreground text-base">{brandPickerItem.name}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Choose your preferred brand</p>
+              </div>
+              <div className="px-5 py-4 space-y-2.5 max-h-72 overflow-y-auto">
+                {brandPickerItem.brands.map((brand: string) => {
+                  const bQty = getBrandQuantity(brandPickerItem.id, brand);
+                  return (
+                    <div key={brand} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                      <div>
+                        <p className="font-medium text-sm text-foreground">{brand}</p>
+                        <p className="text-xs text-muted-foreground">₵{brandPickerItem.price.toFixed(2)} · {brandPickerItem.unit}</p>
+                      </div>
+                      {bQty > 0 ? (
+                        <div className="flex items-center gap-2 bg-white rounded-xl p-1 border border-border">
+                          <button onClick={() => handleAddItem(brandPickerItem, -1, brand)} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-lg text-foreground hover:bg-gray-200">
+                            <Minus size={13} />
+                          </button>
+                          <span className="font-semibold text-sm w-5 text-center">{bQty}</span>
+                          <button onClick={() => handleAddItem(brandPickerItem, 1, brand)} className="w-7 h-7 flex items-center justify-center bg-primary text-white rounded-lg hover:bg-primary/90">
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleAddItem(brandPickerItem, 1, brand)}
+                          className="bg-primary text-white text-xs font-semibold rounded-xl px-3 py-2 hover:bg-primary/90 transition-colors flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Add
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-5 pb-6 pt-2">
+                <Button
+                  variant="outline"
+                  className="w-full rounded-2xl"
+                  onClick={() => setBrandPickerItem(null)}
+                >
+                  Done
+                </Button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Floating Cart Bar */}
       {totalCartItems > 0 && (
         <motion.div 
           initial={{ y: 100 }} animate={{ y: 0 }}
-          className="fixed bottom-20 left-4 right-4 z-50 max-w-md mx-auto"
+          className="fixed bottom-20 left-4 right-4 z-40 max-w-md mx-auto"
         >
           <Button 
             className="w-full h-14 bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-between px-6"

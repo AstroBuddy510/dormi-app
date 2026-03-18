@@ -27,41 +27,48 @@ export const useAuth = create<AuthState>()(
 
 export interface CartItem extends GroceryItem {
   quantity: number;
+  selectedBrand?: string;
 }
 
 interface CartState {
-  items: Record<number, CartItem>;
-  addItem: (item: GroceryItem, quantity: number) => void;
-  removeItem: (itemId: number) => void;
+  items: Record<string, CartItem>;
+  addItem: (item: GroceryItem, quantity: number, brand?: string) => void;
+  removeItem: (itemId: number, brand?: string) => void;
   clearCart: () => void;
   getCartTotal: () => number;
   getCartItems: () => CartItem[];
+}
+
+function cartKey(itemId: number, brand?: string) {
+  return brand ? `${itemId}::${brand}` : `${itemId}`;
 }
 
 export const useCart = create<CartState>()(
   persist(
     (set, get) => ({
       items: {},
-      addItem: (item, quantity) => set((state) => {
-        const existing = state.items[item.id];
+      addItem: (item, quantity, brand) => set((state) => {
+        const key = cartKey(item.id, brand);
+        const existing = state.items[key];
         const newQuantity = existing ? existing.quantity + quantity : quantity;
-        
+
         if (newQuantity <= 0) {
           const newItems = { ...state.items };
-          delete newItems[item.id];
+          delete newItems[key];
           return { items: newItems };
         }
-        
+
         return {
           items: {
             ...state.items,
-            [item.id]: { ...item, quantity: newQuantity }
+            [key]: { ...item, quantity: newQuantity, selectedBrand: brand }
           }
         };
       }),
-      removeItem: (itemId) => set((state) => {
+      removeItem: (itemId, brand) => set((state) => {
+        const key = cartKey(itemId, brand);
         const newItems = { ...state.items };
-        delete newItems[itemId];
+        delete newItems[key];
         return { items: newItems };
       }),
       clearCart: () => set({ items: {} }),

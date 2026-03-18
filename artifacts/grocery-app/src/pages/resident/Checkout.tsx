@@ -95,10 +95,13 @@ export default function CheckoutPage() {
           </div>
           <CardContent className="p-0">
             <div className="max-h-60 overflow-y-auto p-4 space-y-4">
-              {cartItems.map(item => (
-                <div key={item.id} className="flex justify-between items-start">
+              {cartItems.map((item, idx) => (
+                <div key={`${item.id}-${idx}`} className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-sm text-foreground">{item.quantity}x {item.name}</p>
+                    {item.selectedBrand && (
+                      <p className="text-xs font-medium text-primary/80">Brand: {item.selectedBrand}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">₵{item.price.toFixed(2)} each</p>
                   </div>
                   <p className="font-bold text-sm">₵{(item.price * item.quantity).toFixed(2)}</p>
