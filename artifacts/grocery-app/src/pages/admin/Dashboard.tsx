@@ -13,9 +13,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { Activity, ShoppingCart, Users, DollarSign, RefreshCcw, CheckCircle, Package } from 'lucide-react';
+import { Activity, ShoppingCart, Users, DollarSign, RefreshCcw, CheckCircle, Package, Eye } from 'lucide-react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { OrderDetailModal } from '@/components/ui/OrderDetailModal';
 
 interface DeliveryPartner { id: number; name: string; isActive: boolean; }
 
@@ -25,6 +26,7 @@ export default function AdminDashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
   const { data: stats } = useGetAdminStats();
   const { data: allOrders = [], isLoading: ordersLoading } = useListOrders();
@@ -186,6 +188,7 @@ export default function AdminDashboard() {
                   <TableHeader className="bg-gray-50">
                     <TableRow>
                       <TableHead className="w-16">ID</TableHead>
+                      <TableHead className="w-10"></TableHead>
                       <TableHead>Resident</TableHead>
                       <TableHead>Address</TableHead>
                       <TableHead>Items</TableHead>
@@ -202,7 +205,15 @@ export default function AdminDashboard() {
                       const next = nextStatus[order.status];
                       return (
                         <TableRow key={order.id} className="hover:bg-gray-50/50">
-                          <TableCell className="font-medium text-primary">#{order.id}</TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="font-bold text-primary hover:underline hover:text-primary/80 transition-colors"
+                              title="View order details"
+                            >
+                              #{order.id}
+                            </button>
+                          </TableCell>
                           <TableCell>
                             <div>
                               <p className="font-medium">{order.residentName || '—'}</p>
@@ -293,6 +304,15 @@ export default function AdminDashboard() {
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {format(new Date(order.createdAt), 'dd MMM HH:mm')}
                           </TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              title="View order details"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                            >
+                              <Eye size={15} />
+                            </button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -303,6 +323,12 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <OrderDetailModal
+        order={selectedOrder}
+        open={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+      />
     </div>
   );
 }
