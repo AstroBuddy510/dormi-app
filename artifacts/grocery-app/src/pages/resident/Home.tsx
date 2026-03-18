@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { ShoppingBag, CalendarClock, ChevronRight, UserCircle } from 'lucide-react';
+import { ShoppingBag, CalendarClock, ChevronRight, UserCircle, ListOrdered } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 
