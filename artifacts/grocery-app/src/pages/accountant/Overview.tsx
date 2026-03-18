@@ -70,160 +70,227 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: any
   );
 }
 
-function exportPDF(stats: any, periodLabel: string) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+function sectionHeader(doc: jsPDF, title: string, y: number, pageW: number) {
   const GREEN = [22, 163, 74] as [number, number, number];
-  const GREEN_LIGHT = [240, 253, 244] as [number, number, number];
   const DARK = [17, 24, 39] as [number, number, number];
-  const GRAY = [107, 114, 128] as [number, number, number];
-  const pageW = doc.internal.pageSize.getWidth();
-
-  // ── Header bar ────────────────────────────────────────────────────────
   doc.setFillColor(...GREEN);
-  doc.rect(0, 0, pageW, 28, 'F');
-
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('GrocerEase Accra', 14, 12);
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Fresh groceries delivered to your estate.', 14, 18);
-
-  doc.setFontSize(8);
-  doc.text(`Generated: ${new Date().toLocaleString('en-GH')}`, pageW - 14, 12, { align: 'right' });
-  doc.text('Finance & Payouts Report', pageW - 14, 18, { align: 'right' });
-
-  // ── Title ─────────────────────────────────────────────────────────────
-  doc.setFontSize(15);
+  doc.rect(14, y - 4, 3, 6, 'F');
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...DARK);
-  doc.text('Financial Statement', 14, 40);
+  doc.text(title, 19, y);
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.line(19, y + 2, pageW - 14, y + 2);
+}
 
-  doc.setFontSize(10);
+function metricTile(
+  doc: jsPDF,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  accent: [number, number, number],
+) {
+  const BG = [248, 250, 252] as [number, number, number];
+  const DARK = [17, 24, 39] as [number, number, number];
+  const GRAY = [100, 116, 139] as [number, number, number];
+  doc.setFillColor(...BG);
+  doc.roundedRect(x, y, w, h, 2, 2, 'F');
+  doc.setFillColor(...accent);
+  doc.rect(x, y, 3, h, 'F');
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GRAY);
-  doc.text(`Period: ${periodLabel}`, 14, 47);
-
-  // ── Divider ───────────────────────────────────────────────────────────
-  doc.setDrawColor(...GREEN);
-  doc.setLineWidth(0.5);
-  doc.line(14, 51, pageW - 14, 51);
-
-  // ── Performance Summary ───────────────────────────────────────────────
+  doc.text(label.toUpperCase(), x + 6, y + 5.5);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...DARK);
-  doc.text('Performance Summary', 14, 59);
+  doc.text(value, x + 6, y + 12);
+}
 
-  autoTable(doc, {
-    startY: 63,
-    head: [['Metric', 'Value']],
-    body: [
-      ['Total Revenue', `GH\u20B5 ${fmtRaw(stats.totalRevenue)}`],
-      ['Total Expenses', `GH\u20B5 ${fmtRaw(stats.totalExpenses)}`],
-      ['Total Payroll Paid', `GH\u20B5 ${fmtRaw(stats.totalPayroll)}`],
-      ['Net Profit', `GH\u20B5 ${fmtRaw(stats.netProfit)}`],
-      ['Orders Delivered', `${stats.ordersCount ?? 0}`],
-    ],
-    headStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: DARK },
-    alternateRowStyles: { fillColor: GREEN_LIGHT },
-    columnStyles: { 0: { cellWidth: 90 }, 1: { halign: 'right', fontStyle: 'bold' } },
-    margin: { left: 14, right: 14 },
-  });
+function exportPDF(stats: any, periodLabel: string) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const GREEN  = [22, 163, 74]   as [number, number, number];
+  const GREEN2 = [20, 83, 45]    as [number, number, number];
+  const GREEN_LIGHT = [240, 253, 244] as [number, number, number];
+  const BLUE   = [37, 99, 235]   as [number, number, number];
+  const RED    = [220, 38, 38]   as [number, number, number];
+  const DARK   = [17, 24, 39]    as [number, number, number];
+  const GRAY   = [100, 116, 139] as [number, number, number];
+  const WHITE  = [255, 255, 255] as [number, number, number];
+  const BORDER = [226, 232, 240] as [number, number, number];
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const C = 'GHs';
+
+  // ── Outer border ──────────────────────────────────────────────────────
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.4);
+  doc.rect(8, 8, pageW - 16, pageH - 16);
+
+  // ── Header: green band + white band ───────────────────────────────────
+  doc.setFillColor(...GREEN);
+  doc.rect(8, 8, pageW - 16, 22, 'F');
+
+  doc.setFillColor(...GREEN2);
+  doc.rect(8, 8, pageW - 16, 8, 'F');
+
+  // Logo text
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...WHITE);
+  doc.text('GrocerEase', 16, 15);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Accra', 16 + doc.getTextWidth('GrocerEase') + 1.5, 15);
+
+  // Right side header info
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('FINANCIAL STATEMENT', pageW - 16, 14, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.text('Finance & Payouts  |  Confidential', pageW - 16, 18.5, { align: 'right' });
+  doc.text(`Generated: ${new Date().toLocaleString('en-GH')}`, pageW - 16, 23, { align: 'right' });
+
+  // Tagline strip
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(187, 247, 208);
+  doc.text('Fresh groceries delivered to your estate.', 16, 26.5);
+
+  // ── Period info box ───────────────────────────────────────────────────
+  doc.setFillColor(243, 244, 246);
+  doc.roundedRect(14, 33, pageW - 28, 11, 2, 2, 'F');
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(14, 33, pageW - 28, 11, 2, 2, 'S');
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...DARK);
+  doc.text('Reporting Period:', 19, 39.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text(periodLabel, 19 + doc.getTextWidth('Reporting Period:') + 2, 39.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...DARK);
+  doc.text('Orders Delivered:', pageW / 2 + 5, 39.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text(`${stats.ordersCount ?? 0}`, pageW / 2 + 5 + doc.getTextWidth('Orders Delivered:') + 2, 39.5);
+
+  // ── Key Metric Tiles (2 rows x 2 cols) ────────────────────────────────
+  const tileW = (pageW - 28 - 4) / 2;
+  const tileH = 18;
+  const tileGap = 4;
+  const tileY = 48;
+
+  metricTile(doc, 'Total Revenue', `${C} ${fmtRaw(stats.totalRevenue)}`,
+    14, tileY, tileW, tileH, GREEN);
+  metricTile(doc, 'Net Profit', `${C} ${fmtRaw(stats.netProfit)}`,
+    14 + tileW + tileGap, tileY, tileW, tileH,
+    (stats.netProfit ?? 0) >= 0 ? BLUE : RED);
+  metricTile(doc, 'Total Expenses', `${C} ${fmtRaw(stats.totalExpenses)}`,
+    14, tileY + tileH + tileGap, tileW, tileH, [234, 88, 12]);
+  metricTile(doc, 'Payroll Paid', `${C} ${fmtRaw(stats.totalPayroll)}`,
+    14 + tileW + tileGap, tileY + tileH + tileGap, tileW, tileH, [99, 102, 241]);
 
   // ── Revenue Breakdown ──────────────────────────────────────────────────
-  const afterSummary = (doc as any).lastAutoTable.finalY + 8;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...DARK);
-  doc.text('Revenue Breakdown', 14, afterSummary);
+  let cursor = tileY + tileH * 2 + tileGap * 2 + 10;
+  sectionHeader(doc, 'Revenue Breakdown', cursor, pageW);
 
   autoTable(doc, {
-    startY: afterSummary + 4,
-    head: [['Revenue Source', 'Amount (GH\u20B5)']],
+    startY: cursor + 4,
+    head: [['Revenue Source', `Amount (${C})`]],
     body: [
       ['Service Charge', fmtRaw(stats.serviceChargeRevenue)],
       ['Delivery Fees', fmtRaw(stats.deliveryFeeRevenue)],
       ['Vendor Commission', fmtRaw(stats.vendorCommissionRevenue)],
       ['Courier Commission', fmtRaw(stats.courierCommissionRevenue)],
     ],
-    foot: [['Total Revenue', fmtRaw(stats.totalRevenue)]],
-    headStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: DARK },
-    footStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+    foot: [['TOTAL REVENUE', fmtRaw(stats.totalRevenue)]],
+    headStyles: { fillColor: GREEN, textColor: WHITE, fontStyle: 'bold', fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
+    bodyStyles: { fontSize: 8.5, textColor: DARK, cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 } },
+    footStyles: { fillColor: GREEN2, textColor: WHITE, fontStyle: 'bold', fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
     alternateRowStyles: { fillColor: GREEN_LIGHT },
-    columnStyles: { 1: { halign: 'right' } },
+    columnStyles: { 0: { cellWidth: 'auto' }, 1: { halign: 'right', cellWidth: 45 } },
     margin: { left: 14, right: 14 },
+    tableLineColor: BORDER,
+    tableLineWidth: 0.2,
   });
 
   // ── Collections ────────────────────────────────────────────────────────
-  const afterRevenue = (doc as any).lastAutoTable.finalY + 8;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...DARK);
-  doc.text('Collections by Payment Method', 14, afterRevenue);
+  cursor = (doc as any).lastAutoTable.finalY + 10;
+  sectionHeader(doc, 'Collections by Payment Method', cursor, pageW);
 
   autoTable(doc, {
-    startY: afterRevenue + 4,
-    head: [['Payment Method', 'Amount (GH\u20B5)']],
+    startY: cursor + 4,
+    head: [['Payment Method', `Amount (${C})`]],
     body: [
       ['Cash Collected', fmtRaw(stats.cashBalance)],
-      ['Paystack (Online)', fmtRaw(stats.paystackBalance)],
+      ['Paystack Online', fmtRaw(stats.paystackBalance)],
     ],
-    headStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: DARK },
+    headStyles: { fillColor: GREEN, textColor: WHITE, fontStyle: 'bold', fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
+    bodyStyles: { fontSize: 8.5, textColor: DARK, cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 } },
     alternateRowStyles: { fillColor: GREEN_LIGHT },
-    columnStyles: { 1: { halign: 'right' } },
+    columnStyles: { 0: { cellWidth: 'auto' }, 1: { halign: 'right', cellWidth: 45 } },
     margin: { left: 14, right: 14 },
+    tableLineColor: BORDER,
+    tableLineWidth: 0.2,
   });
 
   // ── Costs & Payroll ───────────────────────────────────────────────────
-  const afterCollections = (doc as any).lastAutoTable.finalY + 8;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...DARK);
-  doc.text('Costs & Payroll', 14, afterCollections);
+  cursor = (doc as any).lastAutoTable.finalY + 10;
+  sectionHeader(doc, 'Costs & Payroll', cursor, pageW);
 
   const expenseRows = stats.expenseByType
     ? Object.entries(stats.expenseByType as Record<string, number>).map(([type, amt]) => [type, fmtRaw(amt)])
     : [];
 
+  const profitColor: [number, number, number] = (stats.netProfit ?? 0) >= 0 ? [4, 120, 87] : RED;
+
   autoTable(doc, {
-    startY: afterCollections + 4,
-    head: [['Item', 'Amount (GH\u20B5)']],
+    startY: cursor + 4,
+    head: [['Item', `Amount (${C})`]],
     body: [
       ...expenseRows,
       ['Total Expenses', fmtRaw(stats.totalExpenses)],
       ['Payroll Paid', fmtRaw(stats.totalPayroll)],
     ],
-    foot: [['Net Profit', fmtRaw(stats.netProfit)]],
-    headStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: DARK },
-    footStyles: {
-      fillColor: stats.netProfit >= 0 ? [37, 99, 235] : [220, 38, 38],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: 9,
-    },
+    foot: [['NET PROFIT', fmtRaw(stats.netProfit)]],
+    headStyles: { fillColor: GREEN, textColor: WHITE, fontStyle: 'bold', fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
+    bodyStyles: { fontSize: 8.5, textColor: DARK, cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 } },
+    footStyles: { fillColor: profitColor, textColor: WHITE, fontStyle: 'bold', fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
     alternateRowStyles: { fillColor: GREEN_LIGHT },
-    columnStyles: { 1: { halign: 'right' } },
+    columnStyles: { 0: { cellWidth: 'auto' }, 1: { halign: 'right', cellWidth: 45 } },
     margin: { left: 14, right: 14 },
+    tableLineColor: BORDER,
+    tableLineWidth: 0.2,
   });
 
   // ── Footer ─────────────────────────────────────────────────────────────
-  const pageH = doc.internal.pageSize.getHeight();
   doc.setFillColor(...GREEN);
-  doc.rect(0, pageH - 14, pageW, 14, 'F');
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(255, 255, 255);
-  doc.text('GrocerEase Accra  |  Confidential – For Internal Use Only', 14, pageH - 5);
-  doc.text('Page 1 of 1', pageW - 14, pageH - 5, { align: 'right' });
+  doc.rect(8, pageH - 18, pageW - 16, 10, 'F');
 
-  doc.save(`GrocerEase_Finance_Report_${periodLabel.replace(/\s+/g, '_')}.pdf`);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...WHITE);
+  doc.text('GrocerEase Accra', 16, pageH - 11.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(187, 247, 208);
+  doc.text('Confidential – For Internal Use Only', 16 + doc.getTextWidth('GrocerEase Accra') + 3, pageH - 11.5);
+
+  doc.setTextColor(...WHITE);
+  doc.text('Page 1 of 1', pageW - 16, pageH - 11.5, { align: 'right' });
+
+  doc.save(`GrocerEase_Finance_Report_${periodLabel.replace(/[\s–]+/g, '_')}.pdf`);
 }
 
 export default function AccountantOverview() {
