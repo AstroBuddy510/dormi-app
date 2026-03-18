@@ -10,6 +10,7 @@ export const residentsTable = pgTable("residents", {
   blockNumber: text("block_number").notNull(),
   houseNumber: text("house_number").notNull(),
   ghanaGpsAddress: text("ghana_gps_address"),
+  zone: text("zone"),
   subscribeWeekly: boolean("subscribe_weekly").notNull().default(false),
   subscriptionDay: text("subscription_day").default("Friday"),
   photoUrl: text("photo_url"),

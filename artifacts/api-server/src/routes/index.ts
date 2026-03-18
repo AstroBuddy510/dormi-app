@@ -13,6 +13,11 @@ import deliveryPartnersRouter from "./deliveryPartners";
 import blockGroupsRouter from "./blockGroups";
 import agentsRouter from "./agents";
 import complaintsRouter from "./complaints";
+import financeRouter from "./finance";
+import employeesRouter from "./employees";
+import expensesRouter from "./expenses";
+import floatRouter from "./float";
+import payrollRouter from "./payroll";
 
 const router: IRouter = Router();
 
@@ -30,5 +35,10 @@ router.use("/delivery-partners", deliveryPartnersRouter);
 router.use("/block-groups", blockGroupsRouter);
 router.use("/agents", agentsRouter);
 router.use("/complaints", complaintsRouter);
+router.use("/finance", financeRouter);
+router.use("/employees", employeesRouter);
+router.use("/expenses", expensesRouter);
+router.use("/float", floatRouter);
+router.use("/payroll", payrollRouter);
 
 export default router;

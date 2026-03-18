@@ -22,6 +22,8 @@ export const LoginRequestRole = {
   vendor: "vendor",
   admin: "admin",
   rider: "rider",
+  agent: "agent",
+  accountant: "accountant",
 } as const;
 
 export interface LoginRequest {

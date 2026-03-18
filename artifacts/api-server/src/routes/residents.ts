@@ -6,6 +6,23 @@ import { ResidentSignupBody, UpdateSubscriptionBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// ── Ghana GPS Address → Delivery Zone ────────────────────────────────────────
+// Ghana GPS format: XX-NNN-NNNN  (first 2 chars = district code)
+const INNER_ACCRA_PREFIXES = new Set([
+  "GA", "AD", "AY", "LA", "KW", "LD", "AK",
+]);
+const OUTER_ACCRA_PREFIXES = new Set([
+  "TM", "TN", "AS", "SH", "NI", "WA", "DN", "SA",
+]);
+
+function detectZoneFromGPS(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const prefix = address.trim().toUpperCase().slice(0, 2);
+  if (INNER_ACCRA_PREFIXES.has(prefix)) return "Inner Accra";
+  if (OUTER_ACCRA_PREFIXES.has(prefix)) return "Outer Accra";
+  return "Far";
+}
+
 function mapResident(r: typeof residentsTable.$inferSelect) {
   return {
     id: r.id,
@@ -15,6 +32,7 @@ function mapResident(r: typeof residentsTable.$inferSelect) {
     blockNumber: r.blockNumber,
     houseNumber: r.houseNumber,
     ghanaGpsAddress: r.ghanaGpsAddress,
+    zone: r.zone,
     subscribeWeekly: r.subscribeWeekly,
     subscriptionDay: r.subscriptionDay,
     photoUrl: r.photoUrl,
@@ -31,6 +49,7 @@ router.post("/signup", async (req, res) => {
       res.status(400).json({ error: "phone_exists", message: "Phone already registered" });
       return;
     }
+    const autoZone = detectZoneFromGPS(body.ghanaGpsAddress);
     const [resident] = await db.insert(residentsTable).values({
       fullName: body.fullName,
       phone: body.phone,
@@ -38,6 +57,7 @@ router.post("/signup", async (req, res) => {
       blockNumber: body.blockNumber,
       houseNumber: body.houseNumber,
       ghanaGpsAddress: body.ghanaGpsAddress ?? null,
+      zone: autoZone,
       subscribeWeekly: false,
     }).returning();
     res.status(201).json(mapResident(resident));
@@ -71,15 +91,20 @@ router.put("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { fullName, phone, estate, blockNumber, houseNumber, ghanaGpsAddress } = req.body;
+    const updates: Partial<typeof residentsTable.$inferInsert> = {
+      ...(fullName && { fullName }),
+      ...(phone && { phone }),
+      ...(estate && { estate }),
+      ...(blockNumber && { blockNumber }),
+      ...(houseNumber && { houseNumber }),
+      ...(ghanaGpsAddress !== undefined && { ghanaGpsAddress }),
+    };
+    if (ghanaGpsAddress) {
+      const detected = detectZoneFromGPS(ghanaGpsAddress);
+      if (detected) updates.zone = detected;
+    }
     const [resident] = await db.update(residentsTable)
-      .set({
-        ...(fullName && { fullName }),
-        ...(phone && { phone }),
-        ...(estate && { estate }),
-        ...(blockNumber && { blockNumber }),
-        ...(houseNumber && { houseNumber }),
-        ...(ghanaGpsAddress !== undefined && { ghanaGpsAddress }),
-      })
+      .set(updates)
       .where(eq(residentsTable.id, id))
       .returning();
     if (!resident) {
@@ -87,6 +112,63 @@ router.put("/:id", async (req, res) => {
       return;
     }
     res.json(mapResident(resident));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// Auto-detect zone from stored Ghana GPS address
+router.post("/:id/detect-zone", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, id)).limit(1);
+    if (!resident) {
+      res.status(404).json({ error: "not_found", message: "Resident not found" });
+      return;
+    }
+    const zone = detectZoneFromGPS(resident.ghanaGpsAddress);
+    if (!zone) {
+      res.status(422).json({ error: "no_address", message: "Resident has no Ghana GPS address set" });
+      return;
+    }
+    const [updated] = await db.update(residentsTable).set({ zone }).where(eq(residentsTable.id, id)).returning();
+    res.json({ zone: updated.zone, resident: mapResident(updated) });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// Manually assign zone
+router.patch("/:id/zone", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { zone } = req.body;
+    const [resident] = await db.update(residentsTable).set({ zone: zone || null }).where(eq(residentsTable.id, id)).returning();
+    if (!resident) {
+      res.status(404).json({ error: "not_found", message: "Resident not found" });
+      return;
+    }
+    res.json(mapResident(resident));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// Bulk auto-tag all residents that have GPS but no zone
+router.post("/bulk-detect-zones", async (_req, res) => {
+  try {
+    const all = await db.select().from(residentsTable);
+    let updated = 0;
+    for (const r of all) {
+      if (!r.zone && r.ghanaGpsAddress) {
+        const zone = detectZoneFromGPS(r.ghanaGpsAddress);
+        if (zone) {
+          await db.update(residentsTable).set({ zone }).where(eq(residentsTable.id, r.id));
+          updated++;
+        }
+      }
+    }
+    res.json({ updated, message: `Auto-tagged ${updated} residents` });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }

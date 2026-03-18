@@ -11,6 +11,7 @@ const ADMIN_PIN = "1234";
 const VENDOR_PIN = "5678";
 const RIDER_PIN = "9012";
 const AGENT_PIN = "3456";
+const ACCOUNTANT_PIN = "2468";
 
 function hashPin(pin: string): string {
   return createHash("sha256").update(pin).digest("hex");
@@ -109,6 +110,19 @@ router.post("/login", async (req, res) => {
         user: { id: agent.id, name: agent.name, phone: agent.phone, role: "agent", photoUrl: agent.photoUrl },
         role: "agent",
         token: `agent-${agent.id}`,
+      });
+      return;
+    }
+
+    if (role === "accountant") {
+      if (pin !== ACCOUNTANT_PIN) {
+        res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
+        return;
+      }
+      res.json({
+        user: { id: 0, name: "Accountant", phone, role: "accountant" },
+        role: "accountant",
+        token: "accountant-token",
       });
       return;
     }

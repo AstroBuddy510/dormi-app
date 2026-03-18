@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
-import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings, UsersRound, PackagePlus, Building2, MessageSquareWarning } from 'lucide-react';
+import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings, UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp, Briefcase } from 'lucide-react';
 import { cn } from '@/components/ui/StatusBadge';
 
 export function AdminSidebar() {
@@ -15,6 +15,8 @@ export function AdminSidebar() {
     { icon: Building2, label: 'Delivery Partners', path: '/delivery-partners' },
     { icon: MessageSquareWarning, label: 'Complaints', path: '/complaints' },
     { icon: DollarSign, label: 'Pricing', path: '/pricing' },
+    { icon: TrendingUp, label: 'Finance', path: '/finance' },
+    { icon: Briefcase, label: 'Employees', path: '/employees' },
     { icon: Users, label: 'Subscribers', path: '/subscribers' },
     { icon: UsersRound, label: 'Users', path: '/users' },
     { icon: Settings, label: 'Settings', path: '/settings' },

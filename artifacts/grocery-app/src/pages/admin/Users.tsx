@@ -48,7 +48,16 @@ import {
   EyeOff,
   Headset,
   Plus,
+  Zap,
+  Navigation2,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format } from 'date-fns';
 
 const API_BASE = '/api';
@@ -222,6 +231,19 @@ function PinResetDialog({
   );
 }
 
+// ─── Zone badge helper ─────────────────────────────────────────────────────────
+function ZoneBadge({ zone }: { zone?: string | null }) {
+  if (!zone) return <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">No zone</span>;
+  const colors: Record<string, string> = {
+    'Inner Accra': 'bg-green-100 text-green-700',
+    'Outer Accra': 'bg-blue-100 text-blue-700',
+    'Far': 'bg-orange-100 text-orange-700',
+  };
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[zone] ?? 'bg-gray-100 text-gray-600'}`}>{zone}</span>;
+}
+
+const ZONES = ['Inner Accra', 'Outer Accra', 'Far'];
+
 // ─── Residents Tab ────────────────────────────────────────────────────────────
 function ResidentsTab() {
   const { toast } = useToast();
@@ -229,8 +251,11 @@ function ResidentsTab() {
   const { data: residents = [], isLoading } = useListResidents();
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<any>(null);
+  const [editZone, setEditZone] = useState<string>('none');
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [detectingId, setDetectingId] = useState<number | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   const filtered = residents.filter(
     (r) => r.fullName.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search) || r.estate.toLowerCase().includes(search.toLowerCase())
@@ -263,6 +288,31 @@ function ResidentsTab() {
     } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
   };
 
+  const handleDetectZone = async (r: any) => {
+    setDetectingId(r.id);
+    try {
+      const result = await apiFetch(`/residents/${r.id}/detect-zone`, { method: 'POST' });
+      queryClient.invalidateQueries();
+      toast({ title: 'Zone Detected', description: `${r.fullName} tagged as ${result.zone}` });
+    } catch (e: any) { toast({ title: 'Cannot detect zone', description: e.message, variant: 'destructive' }); }
+    finally { setDetectingId(null); }
+  };
+
+  const handleBulkDetect = async () => {
+    setBulkRunning(true);
+    try {
+      const result = await apiFetch('/residents/bulk-detect-zones', { method: 'POST' });
+      queryClient.invalidateQueries();
+      toast({ title: 'Bulk Zone Detection', description: result.message });
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setBulkRunning(false); }
+  };
+
+  const openEdit = (r: any) => {
+    setEditTarget({ ...r });
+    setEditZone(r.zone ?? 'none');
+  };
+
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSaving(true);
@@ -276,6 +326,9 @@ function ResidentsTab() {
           ghanaGpsAddress: fd.get('ghanaGpsAddress') || undefined,
         }),
       });
+      if (editZone !== 'none') {
+        await apiFetch(`/residents/${editTarget.id}/zone`, { method: 'PATCH', body: JSON.stringify({ zone: editZone === 'clear' ? null : editZone }) });
+      }
       queryClient.invalidateQueries();
       toast({ title: 'Resident Updated' });
       setEditTarget(null);
@@ -285,12 +338,16 @@ function ResidentsTab() {
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search by name, phone or estate…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} residents</span>
+        <Button size="sm" variant="outline" className="rounded-xl h-9 gap-1.5 text-xs ml-auto" onClick={handleBulkDetect} disabled={bulkRunning}>
+          {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+          Auto-tag All Zones
+        </Button>
       </div>
 
       {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
@@ -321,7 +378,30 @@ function ResidentsTab() {
                     <MapPin size={11} className="text-primary" />
                     <span>{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</span>
                   </div>
-                  {r.ghanaGpsAddress && <p className="text-xs text-muted-foreground pl-4 font-mono">{r.ghanaGpsAddress}</p>}
+                  {r.ghanaGpsAddress && (
+                    <div className="flex items-center gap-2 pl-4">
+                      <span className="text-xs text-muted-foreground font-mono">{r.ghanaGpsAddress}</span>
+                      {!(r as any).zone && (
+                        <button
+                          className="text-xs text-blue-600 hover:underline flex items-center gap-0.5"
+                          onClick={() => handleDetectZone(r)}
+                          disabled={detectingId === r.id}
+                        >
+                          {detectingId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Navigation2 size={10} />}
+                          Auto-tag
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <ZoneBadge zone={(r as any).zone} />
+                    {(r as any).zone && r.ghanaGpsAddress && (
+                      <button className="text-xs text-muted-foreground hover:text-blue-600 flex items-center gap-0.5" onClick={() => handleDetectZone(r)} disabled={detectingId === r.id}>
+                        {detectingId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Navigation2 size={10} />}
+                        Re-detect
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Calendar size={11} className="text-primary" />
                     <span>Joined {format(new Date(r.createdAt), 'dd MMM yyyy')}</span>
@@ -335,7 +415,7 @@ function ResidentsTab() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...r })}>
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => openEdit(r)}>
                     <Pencil size={12} /> Edit
                   </Button>
                   <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
@@ -366,6 +446,20 @@ function ResidentsTab() {
                 <div className="space-y-1"><Label>Block</Label><Input name="blockNumber" defaultValue={editTarget.blockNumber} required className="rounded-xl" /></div>
                 <div className="space-y-1"><Label>House</Label><Input name="houseNumber" defaultValue={editTarget.houseNumber} required className="rounded-xl" /></div>
                 <div className="col-span-2 space-y-1"><Label>Ghana GPS (optional)</Label><Input name="ghanaGpsAddress" defaultValue={editTarget.ghanaGpsAddress ?? ''} className="rounded-xl" /></div>
+                <div className="col-span-2 space-y-1">
+                  <Label>Delivery Zone</Label>
+                  <Select value={editZone} onValueChange={setEditZone}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Select zone…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Keep current —</SelectItem>
+                      {ZONES.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}
+                      <SelectItem value="clear">Clear zone</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Override the zone manually, or use the Auto-tag button on the card.</p>
+                </div>
               </div>
               <DialogFooter className="gap-2 pt-2">
                 <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>

@@ -24,10 +24,16 @@ import AdminUsers from "@/pages/admin/Users";
 import AdminCreateOrder from "@/pages/admin/CreateOrder";
 import AdminDeliveryPartners from "@/pages/admin/DeliveryPartners";
 import AdminComplaints from "@/pages/admin/Complaints";
+import AdminFinance from "@/pages/admin/Finance";
+import AdminEmployees from "@/pages/admin/Employees";
 import AgentDashboard from "@/pages/agent/Dashboard";
 import AgentCreateOrder from "@/pages/agent/CreateOrder";
 import AgentComplaints from "@/pages/agent/Complaints";
 import RiderJobs from "@/pages/rider/Jobs";
+import AccountantOverview from "@/pages/accountant/Overview";
+import AccountantPayroll from "@/pages/accountant/Payroll";
+import AccountantExpenses from "@/pages/accountant/Expenses";
+import AccountantFloat from "@/pages/accountant/Float";
 
 const queryClient = new QueryClient();
 
@@ -86,6 +92,8 @@ function RoleBasedRouter() {
         <Route path="/delivery-partners" component={AdminDeliveryPartners} />
         <Route path="/complaints" component={AdminComplaints} />
         <Route path="/settings" component={AdminSettings} />
+        <Route path="/finance" component={AdminFinance} />
+        <Route path="/employees" component={AdminEmployees} />
         <Route component={NotFound} />
       </Switch>
     );
@@ -95,6 +103,18 @@ function RoleBasedRouter() {
     return (
       <Switch>
         <Route path="/" component={RiderJobs} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+
+  if (role === 'accountant') {
+    return (
+      <Switch>
+        <Route path="/" component={AccountantOverview} />
+        <Route path="/payroll" component={AccountantPayroll} />
+        <Route path="/expenses" component={AccountantExpenses} />
+        <Route path="/float" component={AccountantFloat} />
         <Route component={NotFound} />
       </Switch>
     );

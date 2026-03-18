@@ -2,7 +2,7 @@
 
 ## Overview
 
-Full-stack grocery delivery app for gated estates in Accra, Ghana. Supports 4 user roles: Resident, Vendor, Admin, and Rider.
+Full-stack grocery delivery app for gated estates in Accra, Ghana. Supports 6 user roles: Resident, Vendor, Admin, Rider, Call Agent, and Accountant.
 
 ## Stack
 
@@ -60,6 +60,22 @@ lib/
 - **Create Order** (`/create-order`): 3 tabs — Single (urgent), Block (estate-wide batch), Third-Party (outsourced delivery)
 - **Delivery Partners** (`/delivery-partners`): register external delivery companies, view commission reports per partner
 - **Settings** (`/settings`): create riders, add residences, add vendors
+- **Finance** (`/finance`): daily/weekly/monthly revenue breakdown, expenses, net profit, CSV export, utilities toggle
+- **Employees** (`/employees`): staff CRUD (salary types: monthly/daily/per_trip), float tracking for riders
+- **Pricing** (`/pricing`): zone delivery fees, vendor commission %, courier commission fixed, distance rate/threshold + legacy global fee
+
+### Call Agent
+- Login with PIN: **3456** (any phone)
+- Blue-themed portal (`/agent`)
+- Place orders on behalf of residents via phone
+
+### Accountant
+- Login with PIN: **2468** (any phone)
+- Blue-themed portal (`/accountant`)
+- Overview: net profit, revenue, expenses summary
+- Payroll management (pay employees, track salary history)
+- Expense tracking (upload receipts/photos)
+- Float management (issue float to riders, record reconciliation)
 
 ### Rider
 - Login with PIN: **9012** (phone must exist in riders table)
@@ -68,10 +84,32 @@ lib/
 - Upload delivery photo proof
 
 ## Pricing Logic
-- Delivery fee: flat amount (default GHS 30)
-- Service markup: percentage of subtotal (default 18%)
-- Total = subtotal + (subtotal × markup%) + delivery fee
-- Admin can change fees live — checkout recalculates instantly
+- **Delivery fee**: zone-based (Inner Accra GH₵25, Outer Accra GH₵35, Far GH₵50) or fallback flat fee
+- **Service markup**: percentage of subtotal (default 18%)
+- **Vendor commission**: % of order value (default 5%, configurable per vendor)
+- **Courier commission**: fixed per outsourced delivery (default GH₵10)
+- **Distance rate**: GH₵5/km beyond a free threshold (default 5km)
+- Total = subtotal + (subtotal × markup%) + zone delivery fee
+
+## Finance DB Tables
+- `delivery_zones`: Inner Accra, Outer Accra, Far with fee per zone
+- `employees`: staff with salary type (monthly/daily/per_trip) and float tracking
+- `expenses`: operational costs with receipt photo support
+- `float_issues`: float issued to riders and reconciliation records
+- `payroll_payments`: salary payment history
+- `finance_settings`: global commission and distance rate settings
+- `residents.zone`: text column (auto-tagged from Ghana GPS prefix)
+- `residents.ghana_gps_address`: Ghana digital address (XX-NNN-NNNN format)
+
+## Zone Auto-Detection
+- Ghana GPS prefix → delivery zone mapping:
+  - Inner Accra: GA, AD, AY, LA, KW, LD, AK
+  - Outer Accra: TM, TN, AS, SH, NI, WA, DN, SA
+  - Far: any other prefix
+- Auto-assigned on resident signup if GPS address provided
+- Auto-updates when GPS address is edited
+- Admin can trigger per-resident or bulk detection
+- Manual override available via zone dropdown in edit dialog
 
 ## Demo Data
 
