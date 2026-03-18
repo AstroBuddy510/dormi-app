@@ -2,19 +2,31 @@ import { useState, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useListItems, GroceryItemCategory } from '@workspace/api-client-react';
 import { useCart } from '@/store';
+import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ShoppingBag, ArrowLeft, Plus, Minus, Search } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, Plus, Minus, Search, PackagePlus, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { motion } from 'framer-motion';
+import { Textarea } from '@/components/ui/textarea';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export default function OrderPage() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const { data: items = [], isLoading } = useListItems();
   const { items: cartItems, addItem, removeItem, getCartTotal } = useCart();
   
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [search, setSearch] = useState('');
+
+  // Item request state
+  const [requestDesc, setRequestDesc] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   const categories = ['All', ...Object.values(GroceryItemCategory)];
 
@@ -28,6 +40,30 @@ export default function OrderPage() {
 
   const totalCartItems = Object.values(cartItems).reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = getCartTotal();
+
+  const handleSubmitRequest = async () => {
+    if (!search.trim()) return;
+    setSubmittingRequest(true);
+    try {
+      await fetch(`${BASE}/api/items/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          residentId: (user as any)?.id,
+          residentName: (user as any)?.name || (user as any)?.phone || 'Resident',
+          itemName: search.trim(),
+          description: requestDesc.trim() || undefined,
+        }),
+      });
+      toast({ title: 'Request sent!', description: `We'll try to add "${search.trim()}" to the catalogue soon.` });
+      setRequestSent(true);
+      setRequestDesc('');
+    } catch {
+      toast({ title: 'Failed to send request', variant: 'destructive' });
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-32">
@@ -75,7 +111,63 @@ export default function OrderPage() {
         {isLoading ? (
           <div className="col-span-2 text-center py-12 text-muted-foreground">Loading fresh items...</div>
         ) : filteredItems.length === 0 ? (
-          <div className="col-span-2 text-center py-12 text-muted-foreground">No items found.</div>
+          <div className="col-span-2 py-6">
+            <div className="text-center mb-5">
+              <PackagePlus size={36} className="mx-auto mb-2 text-muted-foreground/40" />
+              <p className="font-semibold text-foreground">
+                {search ? `"${search}" not in catalogue` : 'No items found.'}
+              </p>
+              {search && <p className="text-xs text-muted-foreground mt-1">Can't find what you need? Request it below.</p>}
+            </div>
+
+            <AnimatePresence>
+              {search && !requestSent && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-sm border border-border/50 p-4 space-y-3"
+                >
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <PackagePlus size={16} className="text-primary" /> Request this item
+                  </div>
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 text-sm font-semibold text-primary">
+                    {search}
+                  </div>
+                  <Textarea
+                    placeholder="Any details? (brand, size, quantity…) — optional"
+                    className="rounded-xl text-sm resize-none h-20"
+                    value={requestDesc}
+                    onChange={e => setRequestDesc(e.target.value)}
+                  />
+                  <Button
+                    className="w-full rounded-xl bg-primary hover:bg-primary/90 gap-2"
+                    onClick={handleSubmitRequest}
+                    disabled={submittingRequest}
+                  >
+                    <Send size={15} /> {submittingRequest ? 'Sending…' : 'Send Request'}
+                  </Button>
+                </motion.div>
+              )}
+              {search && requestSent && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center"
+                >
+                  <p className="text-2xl mb-2">✅</p>
+                  <p className="font-semibold text-green-800">Request sent!</p>
+                  <p className="text-xs text-green-700 mt-1">We'll notify you when it's available.</p>
+                  <button
+                    onClick={() => { setRequestSent(false); setSearch(''); setRequestDesc(''); }}
+                    className="mt-3 text-xs underline text-green-700"
+                  >
+                    Browse more items
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         ) : (
           filteredItems.map(item => {
             const quantity = cartItems[item.id]?.quantity || 0;

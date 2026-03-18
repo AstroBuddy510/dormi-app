@@ -26,6 +26,7 @@ import AdminDeliveryPartners from "@/pages/admin/DeliveryPartners";
 import AdminComplaints from "@/pages/admin/Complaints";
 import AdminFinance from "@/pages/admin/Finance";
 import AdminEmployees from "@/pages/admin/Employees";
+import AdminCatalogue from "@/pages/admin/Catalogue";
 import AgentDashboard from "@/pages/agent/Dashboard";
 import AgentCreateOrder from "@/pages/agent/CreateOrder";
 import AgentComplaints from "@/pages/agent/Complaints";
@@ -94,6 +95,7 @@ function RoleBasedRouter() {
         <Route path="/settings" component={AdminSettings} />
         <Route path="/finance" component={AdminFinance} />
         <Route path="/employees" component={AdminEmployees} />
+        <Route path="/catalogue" component={AdminCatalogue} />
         <Route component={NotFound} />
       </Switch>
     );

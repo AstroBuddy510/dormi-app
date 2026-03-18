@@ -1,11 +1,22 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
-import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings, UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp, Briefcase } from 'lucide-react';
+import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings, UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp, Briefcase, ShoppingBasket, Bell } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/components/ui/StatusBadge';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export function AdminSidebar() {
   const [location] = useLocation();
   const { logout } = useAuth();
+
+  const { data: requests = [] } = useQuery<any[]>({
+    queryKey: ['item-requests'],
+    queryFn: () => fetch(`${BASE}/api/items/requests`).then(r => r.json()),
+    refetchInterval: 30000,
+    select: (data) => data.filter((r: any) => r.status === 'pending'),
+  });
+  const pendingCount = (requests as any[]).length;
 
   const links = [
     { icon: LayoutDashboard, label: 'Live Orders', path: '/' },
@@ -19,6 +30,7 @@ export function AdminSidebar() {
     { icon: Briefcase, label: 'Employees', path: '/employees' },
     { icon: Users, label: 'Subscribers', path: '/subscribers' },
     { icon: UsersRound, label: 'Users', path: '/users' },
+    { icon: ShoppingBasket, label: 'Catalogue', path: '/catalogue', badge: pendingCount },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
@@ -35,6 +47,7 @@ export function AdminSidebar() {
         {links.map((link) => {
           const isActive = location === link.path;
           const Icon = link.icon;
+          const badge = (link as any).badge;
           return (
             <Link 
               key={link.path} 
@@ -47,7 +60,15 @@ export function AdminSidebar() {
               )}
             >
               <Icon size={20} className={cn("transition-transform duration-200", !isActive && "group-hover:scale-110")} />
-              {link.label}
+              <span className="flex-1">{link.label}</span>
+              {badge > 0 && (
+                <span className={cn(
+                  "text-xs font-bold rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center",
+                  isActive ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"
+                )}>
+                  {badge}
+                </span>
+              )}
             </Link>
           );
         })}

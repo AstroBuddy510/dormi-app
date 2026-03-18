@@ -1,10 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { itemsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { itemsTable, itemRequestsTable } from "@workspace/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { UpdateItemPriceBody } from "@workspace/api-zod";
+import { z } from "zod/v4";
 
 const router: IRouter = Router();
+
+// ─── Items CRUD ───────────────────────────────────────────────────────────────
 
 router.get("/", async (req, res) => {
   const category = req.query.category as string | undefined;
@@ -12,6 +15,30 @@ router.get("/", async (req, res) => {
     ? await db.select().from(itemsTable).where(eq(itemsTable.category, category)).orderBy(itemsTable.name)
     : await db.select().from(itemsTable).orderBy(itemsTable.category, itemsTable.name);
   res.json(rows.map(mapItem));
+});
+
+const AddItemBody = z.object({
+  name: z.string().min(1),
+  category: z.string().min(1),
+  price: z.number().positive(),
+  unit: z.string().min(1).default("1 unit"),
+  vendorCategory: z.string().optional(),
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const body = AddItemBody.parse(req.body);
+    const [item] = await db.insert(itemsTable).values({
+      name: body.name,
+      category: body.category,
+      price: body.price.toString(),
+      unit: body.unit,
+      vendorCategory: body.vendorCategory ?? null,
+    }).returning();
+    res.status(201).json(mapItem(item));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
 });
 
 router.put("/:id/price", async (req, res) => {
@@ -27,6 +54,72 @@ router.put("/:id/price", async (req, res) => {
       return;
     }
     res.json(mapItem(item));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [item] = await db.delete(itemsTable).where(eq(itemsTable.id, id)).returning();
+    if (!item) {
+      res.status(404).json({ error: "not_found", message: "Item not found" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// ─── Item Requests ────────────────────────────────────────────────────────────
+
+router.get("/requests", async (req, res) => {
+  const rows = await db.select().from(itemRequestsTable).orderBy(desc(itemRequestsTable.createdAt));
+  res.json(rows);
+});
+
+const RequestItemBody = z.object({
+  residentId: z.number().optional(),
+  residentName: z.string().default("Anonymous"),
+  itemName: z.string().min(1),
+  description: z.string().optional(),
+});
+
+router.post("/requests", async (req, res) => {
+  try {
+    const body = RequestItemBody.parse(req.body);
+    const [row] = await db.insert(itemRequestsTable).values({
+      residentId: body.residentId ?? null,
+      residentName: body.residentName,
+      itemName: body.itemName,
+      description: body.description ?? null,
+      status: "pending",
+    }).returning();
+    res.status(201).json(row);
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+const UpdateRequestBody = z.object({
+  status: z.enum(["pending", "added", "rejected"]),
+});
+
+router.patch("/requests/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = UpdateRequestBody.parse(req.body);
+    const [row] = await db.update(itemRequestsTable)
+      .set({ status: body.status })
+      .where(eq(itemRequestsTable.id, id))
+      .returning();
+    if (!row) {
+      res.status(404).json({ error: "not_found", message: "Request not found" });
+      return;
+    }
+    res.json(row);
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }
