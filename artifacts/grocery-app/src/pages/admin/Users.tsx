@@ -50,6 +50,8 @@ import {
   Plus,
   Zap,
   Navigation2,
+  Calculator,
+  Info,
 } from 'lucide-react';
 import {
   Select,
@@ -1054,6 +1056,85 @@ function AgentsTab() {
   );
 }
 
+// ─── Accountant Tab ───────────────────────────────────────────────────────────
+function AccountantTab() {
+  const { toast } = useToast();
+  const [pinOpen, setPinOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handlePinReset(pin: string) {
+    setIsSaving(true);
+    try {
+      const res = await apiFetch('/auth/reset-accountant-pin', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      toast({ title: 'PIN Updated', description: 'Accountant PIN has been reset successfully.' });
+      setPinOpen(false);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="max-w-md">
+        <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden">
+          <div className="h-1.5 bg-blue-600 w-full" />
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700">
+                <Calculator size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm text-foreground">Accountant</p>
+                <p className="text-xs text-muted-foreground">Finance &amp; Payouts Portal</p>
+              </div>
+            </div>
+
+            <div className="mb-4 pb-4 border-b border-border/50 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Phone size={11} className="text-blue-500" />
+                <span>Login: <span className="text-foreground font-medium">Any phone number</span></span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Key size={11} className="text-blue-500" />
+                  <span>Login PIN: <span className="font-mono font-medium text-foreground">••••</span></span>
+                </div>
+                <button
+                  onClick={() => setPinOpen(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium flex items-center gap-1"
+                >
+                  <ShieldCheck size={11} /> Reset PIN
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-xl bg-blue-50/60 border border-blue-100 p-3">
+              <Info size={13} className="text-blue-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-700 leading-relaxed">
+                The accountant role uses a single shared PIN. After resetting, share the new PIN directly with your accountant. The default PIN is <span className="font-mono font-semibold">2468</span>.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <PinResetDialog
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        name="Accountant"
+        onSave={handlePinReset}
+      />
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminUsers() {
   const { data: residents = [] } = useListResidents();
@@ -1072,12 +1153,13 @@ export default function AdminUsers() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           {[
             { icon: Users, label: 'Residents', count: residents.length, color: 'bg-green-50 text-green-700' },
             { icon: Store, label: 'Vendors', count: vendors.length, color: 'bg-amber-50 text-amber-700' },
             { icon: Truck, label: 'Riders', count: riders.length, color: 'bg-blue-50 text-blue-700' },
             { icon: Headset, label: 'Agents', count: agents.length, color: 'bg-indigo-50 text-indigo-700' },
+            { icon: Calculator, label: 'Accountant', count: 1, color: 'bg-blue-50 text-blue-700' },
           ].map(({ icon: Icon, label, count, color }) => (
             <Card key={label} className="rounded-2xl shadow-sm border-border/50">
               <CardContent className="p-4 flex items-center gap-3">
@@ -1097,11 +1179,13 @@ export default function AdminUsers() {
             <TabsTrigger value="vendors" className="rounded-lg gap-2"><Store size={15} /> Vendors ({vendors.length})</TabsTrigger>
             <TabsTrigger value="riders" className="rounded-lg gap-2"><Truck size={15} /> Riders ({riders.length})</TabsTrigger>
             <TabsTrigger value="agents" className="rounded-lg gap-2"><Headset size={15} /> Agents ({agents.length})</TabsTrigger>
+            <TabsTrigger value="accountant" className="rounded-lg gap-2"><Calculator size={15} /> Accountant</TabsTrigger>
           </TabsList>
           <TabsContent value="residents"><ResidentsTab /></TabsContent>
           <TabsContent value="vendors"><VendorsTab /></TabsContent>
           <TabsContent value="riders"><RidersTab /></TabsContent>
           <TabsContent value="agents"><AgentsTab /></TabsContent>
+          <TabsContent value="accountant"><AccountantTab /></TabsContent>
         </Tabs>
       </div>
     </div>

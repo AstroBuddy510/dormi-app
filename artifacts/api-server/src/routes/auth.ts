@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { residentsTable, vendorsTable, ridersTable, agentsTable } from "@workspace/db/schema";
+import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { LoginBody } from "@workspace/api-zod";
 import { createHash } from "crypto";
@@ -22,6 +22,11 @@ function verifyPin(input: string, stored: string | null, fallback: string): bool
     return hashPin(input) === stored;
   }
   return input === fallback;
+}
+
+async function getAccountantPin(): Promise<string | null> {
+  const [settings] = await db.select({ accountantPin: financeSettingsTable.accountantPin }).from(financeSettingsTable).limit(1);
+  return settings?.accountantPin ?? null;
 }
 
 router.post("/login", async (req, res) => {
@@ -115,7 +120,8 @@ router.post("/login", async (req, res) => {
     }
 
     if (role === "accountant") {
-      if (pin !== ACCOUNTANT_PIN) {
+      const storedPin = await getAccountantPin();
+      if (!verifyPin(pin ?? "", storedPin, ACCOUNTANT_PIN)) {
         res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
         return;
       }
@@ -128,6 +134,30 @@ router.post("/login", async (req, res) => {
     }
 
     res.status(400).json({ error: "bad_request", message: "Invalid role" });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// Admin: reset accountant PIN
+router.put("/reset-accountant-pin", async (req, res) => {
+  try {
+    const { pin } = req.body;
+    if (!pin || pin.length < 4) {
+      res.status(400).json({ error: "bad_request", message: "PIN must be at least 4 digits" });
+      return;
+    }
+    const hashed = hashPin(pin);
+    let [settings] = await db.select().from(financeSettingsTable).limit(1);
+    if (!settings) {
+      [settings] = await db.insert(financeSettingsTable).values({ accountantPin: hashed }).returning();
+    } else {
+      [settings] = await db.update(financeSettingsTable)
+        .set({ accountantPin: hashed, updatedAt: new Date() })
+        .where(eq(financeSettingsTable.id, settings.id))
+        .returning();
+    }
+    res.json({ success: true, message: "Accountant PIN updated" });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }
