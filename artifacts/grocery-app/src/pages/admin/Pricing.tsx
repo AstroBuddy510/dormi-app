@@ -14,6 +14,9 @@ import { Save, MapPin, Percent, Plus, Trash2, Pencil, Check, X } from 'lucide-re
 interface Zone { id: number; name: string; feeCedis: number; }
 interface Town { id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null; }
 
+const EMPTY_ZONES: Zone[] = [];
+const EMPTY_TOWNS: Town[] = [];
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function apiFetch(path: string, opts?: RequestInit) {
@@ -70,7 +73,7 @@ export default function AdminPricing() {
   };
 
   // ── Delivery Zones ─────────────────────────────────────────────────────────
-  const { data: zones = [] } = useQuery<any[]>({
+  const { data: zones = EMPTY_ZONES } = useQuery<Zone[]>({
     queryKey: ['delivery-zones'],
     queryFn: () => apiFetch('/finance/zones'),
   });
@@ -78,8 +81,9 @@ export default function AdminPricing() {
   const [zoneFees, setZoneFees] = useState<Record<number, string>>({});
 
   useEffect(() => {
+    if (zones.length === 0) return;
     const init: Record<number, string> = {};
-    (zones as any[]).forEach(z => { init[z.id] = z.feeCedis.toFixed(2); });
+    zones.forEach(z => { init[z.id] = z.feeCedis.toFixed(2); });
     setZoneFees(init);
   }, [zones]);
 
@@ -97,7 +101,7 @@ export default function AdminPricing() {
   };
 
   // ── Delivery Towns ─────────────────────────────────────────────────────────
-  const { data: towns = [] } = useQuery<Town[]>({
+  const { data: towns = EMPTY_TOWNS } = useQuery<Town[]>({
     queryKey: ['delivery-towns'],
     queryFn: () => apiFetch('/finance/towns'),
   });
