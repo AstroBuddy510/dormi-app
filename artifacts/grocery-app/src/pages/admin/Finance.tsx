@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, DollarSign, ShoppingBag, Truck, Users, AlertTriangle, Download, RefreshCcw } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingBag, Truck, Users, AlertTriangle, Download, RefreshCcw, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -79,6 +81,158 @@ export default function AdminFinance() {
     toast({ title: 'Downloading CSV report...' });
   };
 
+  const handleExportPDF = () => {
+    if (!stats) return;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const green = [22, 163, 74] as [number, number, number];
+    const dark  = [30, 30, 30]  as [number, number, number];
+    const grey  = [100, 100, 100] as [number, number, number];
+
+    const periodLabel =
+      period === 'today' ? 'Today' :
+      period === 'week'  ? 'This Week' :
+      period === 'month' ? 'This Month' :
+      `${customFrom} – ${customTo}`;
+
+    const fmtP = (n: number) =>
+      `GHs ${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // Header bar
+    doc.setFillColor(...green);
+    doc.rect(0, 0, 210, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('GrocerEase Accra — Finance Report', 14, 14);
+
+    // Sub-header
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Period: ${periodLabel}   |   ${from.slice(0, 10)} to ${to.slice(0, 10)}   |   Generated: ${new Date().toLocaleString()}`, 14, 20);
+
+    let y = 32;
+
+    // KPI summary row
+    const kpis = [
+      { label: 'Total Revenue',  value: fmtP(stats.totalRevenue),  note: `${stats.ordersCount} orders` },
+      { label: 'Net Profit',     value: fmtP(stats.netProfit),     note: stats.netProfit >= 0 ? 'Positive' : 'Deficit' },
+      { label: 'Cash Collected', value: fmtP(stats.cashBalance),   note: 'Cash on delivery' },
+      { label: 'Online Payments',value: fmtP(stats.paystackBalance), note: 'Paystack' },
+    ];
+    const colW = (210 - 28) / kpis.length;
+    kpis.forEach((kpi, i) => {
+      const x = 14 + i * colW;
+      doc.setFillColor(245, 247, 250);
+      doc.roundedRect(x, y, colW - 3, 18, 2, 2, 'F');
+      doc.setTextColor(...grey);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(kpi.label.toUpperCase(), x + 3, y + 5);
+      doc.setTextColor(...dark);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(kpi.value, x + 3, y + 11);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...grey);
+      doc.text(kpi.note, x + 3, y + 16);
+    });
+    y += 25;
+
+    // Revenue breakdown table
+    doc.setTextColor(...dark);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Revenue Breakdown', 14, y);
+    y += 3;
+    autoTable(doc, {
+      startY: y,
+      head: [['Revenue Stream', 'Amount (GHs)']],
+      body: [
+        ['Service Charge',      fmtP(stats.serviceChargeRevenue)],
+        ['Delivery Fees',       fmtP(stats.deliveryFeeRevenue)],
+        ['Vendor Commission',   fmtP(stats.vendorCommissionRevenue)],
+        ['Courier Commission',  fmtP(stats.courierCommissionRevenue)],
+        ['TOTAL REVENUE',       fmtP(stats.totalRevenue)],
+      ],
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: green, textColor: 255, fontStyle: 'bold' },
+      bodyStyles: { textColor: dark },
+      columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index === 4) {
+          data.cell.styles.fillColor = [220, 252, 231];
+          data.cell.styles.textColor = [21, 128, 61] as any;
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+
+    // Costs & payouts table
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Costs & Payouts', 14, y);
+    y += 3;
+    autoTable(doc, {
+      startY: y,
+      head: [['Item', 'Amount (GHs)']],
+      body: [
+        ['Total Expenses',  fmtP(stats.totalExpenses)],
+        ['  of which: Utilities', fmtP(stats.utilitiesExpenses)],
+        ['Total Payroll',   fmtP(stats.totalPayroll)],
+        ['NET PROFIT',      fmtP(stats.netProfit)],
+      ],
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [239, 68, 68] as [number,number,number], textColor: 255, fontStyle: 'bold' },
+      bodyStyles: { textColor: dark },
+      columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index === 3) {
+          const color: [number,number,number] = stats.netProfit >= 0 ? [219, 234, 254] : [254, 226, 226];
+          const textColor: [number,number,number] = stats.netProfit >= 0 ? [29, 78, 216] : [185, 28, 28];
+          data.cell.styles.fillColor = color;
+          data.cell.styles.textColor = textColor as any;
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+
+    // Expenses by type (if any)
+    if (stats.expenseByType && Object.keys(stats.expenseByType).length > 0) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Expenses by Type', 14, y);
+      y += 3;
+      autoTable(doc, {
+        startY: y,
+        head: [['Expense Type', 'Amount (GHs)']],
+        body: Object.entries(stats.expenseByType as Record<string, number>).map(
+          ([type, amt]) => [type, fmtP(amt)]
+        ),
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [107, 114, 128] as [number,number,number], textColor: 255, fontStyle: 'bold' },
+        bodyStyles: { textColor: dark },
+        columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+      });
+      y = (doc as any).lastAutoTable.finalY + 8;
+    }
+
+    // Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(...grey);
+      doc.text(`GrocerEase Accra — Confidential   |   Page ${i} of ${pageCount}`, 14, 290);
+    }
+
+    const tag = period === 'custom' ? `${customFrom}_${customTo}` : period;
+    doc.save(`finance_report_${tag}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast({ title: 'PDF report downloaded' });
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar />
@@ -106,6 +260,9 @@ export default function AdminFinance() {
               </Button>
               <Button size="sm" className="rounded-xl bg-green-600 hover:bg-green-700" onClick={handleExportCSV}>
                 <Download size={14} className="mr-1" /> CSV
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-xl border-red-200 text-red-700 hover:bg-red-50" onClick={handleExportPDF} disabled={!stats}>
+                <FileText size={14} className="mr-1" /> PDF
               </Button>
             </div>
           </div>
