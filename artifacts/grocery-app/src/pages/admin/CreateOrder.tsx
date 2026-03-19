@@ -31,6 +31,10 @@ async function fetchVendors() {
   const r = await fetch(`${BASE}/api/vendors`);
   return r.json();
 }
+async function fetchZones() {
+  const r = await fetch(`${BASE}/api/finance/zones`);
+  return r.json() as Promise<{ id: number; name: string; feeCedis: string }[]>;
+}
 
 function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawItems: string; deliveryFee?: number; markupPct?: number }) {
   const lines = rawItems.split("\n").filter(l => l.trim());
@@ -68,8 +72,10 @@ function SingleOrderTab() {
   const qc = useQueryClient();
   const { data: residents = [] } = useQuery({ queryKey: ["residents"], queryFn: fetchResidents });
   const { data: vendors = [] } = useQuery({ queryKey: ["vendors"], queryFn: fetchVendors });
+  const { data: zones = [] } = useQuery({ queryKey: ["delivery-zones"], queryFn: fetchZones });
   const [residentId, setResidentId] = useState("");
   const [vendorId, setVendorId] = useState("");
+  const [deliveryZoneId, setDeliveryZoneId] = useState("");
   const [rawItems, setRawItems] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
@@ -77,13 +83,23 @@ function SingleOrderTab() {
   const [resetKey, setResetKey] = useState(0);
 
   const selectedVendor = (vendors as any[]).find((v: any) => String(v.id) === vendorId);
+  const selectedZone = (zones as any[]).find((z: any) => String(z.id) === deliveryZoneId);
+  const zoneFee = selectedZone ? parseFloat(selectedZone.feeCedis) : 30;
 
   const mutation = useMutation({
     mutationFn: async () => {
       const r = await fetch(`${BASE}/api/admin/orders/single`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ residentId: parseInt(residentId), rawItems, notes, paymentMethod, isUrgent, vendorId: vendorId || undefined }),
+        body: JSON.stringify({
+          residentId: parseInt(residentId),
+          rawItems,
+          notes,
+          paymentMethod,
+          isUrgent,
+          vendorId: vendorId || undefined,
+          deliveryZoneId: deliveryZoneId ? parseInt(deliveryZoneId) : undefined,
+        }),
       });
       if (!r.ok) throw new Error((await r.json()).message);
       return r.json();
@@ -91,7 +107,7 @@ function SingleOrderTab() {
     onSuccess: () => {
       toast({ title: "Single order created!", description: isUrgent ? "Marked URGENT — 30-60 min ETA" : "ETA: 2-3 hours" });
       qc.invalidateQueries({ queryKey: ["orders"] });
-      setResidentId(""); setRawItems(""); setNotes(""); setVendorId("");
+      setResidentId(""); setRawItems(""); setNotes(""); setVendorId(""); setDeliveryZoneId("");
       setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -133,6 +149,25 @@ function SingleOrderTab() {
           )}
         </div>
         <div className="space-y-2">
+          <Label>Delivery Zone</Label>
+          <Select value={deliveryZoneId} onValueChange={setDeliveryZoneId}>
+            <SelectTrigger><SelectValue placeholder="Select zone…" /></SelectTrigger>
+            <SelectContent position="popper">
+              {(zones as any[]).length === 0 && (
+                <SelectItem value="__none__" disabled>No zones configured</SelectItem>
+              )}
+              {(zones as any[]).map((z: any) => (
+                <SelectItem key={z.id} value={String(z.id)}>
+                  {z.name} — GH₵{parseFloat(z.feeCedis).toFixed(2)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedZone && (
+            <p className="text-xs text-green-700 font-medium">Delivery fee: GH₵{zoneFee.toFixed(2)}</p>
+          )}
+        </div>
+        <div className="space-y-2">
           <Label>Payment Method</Label>
           <Select value={paymentMethod} onValueChange={setPaymentMethod}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -160,7 +195,7 @@ function SingleOrderTab() {
         <ItemsBuilder key={resetKey} onChange={setRawItems} color="green" />
       </div>
 
-      {rawItems.trim() && <OrderSummaryBox rawItems={rawItems} />}
+      {rawItems.trim() && <OrderSummaryBox rawItems={rawItems} deliveryFee={zoneFee} />}
 
       <div className="space-y-2">
         <Label>Notes (optional)</Label>

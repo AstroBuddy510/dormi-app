@@ -8,6 +8,7 @@ import {
   pricingTable,
   blockOrderGroupsTable,
   deliveryPartnersTable,
+  deliveryZonesTable,
 } from "@workspace/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { CreateCallLogOrderBody } from "@workspace/api-zod";
@@ -139,14 +140,18 @@ async function resolveVendor(items: any[]) {
 
 router.post("/orders/single", async (req, res) => {
   try {
-    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId } = req.body;
+    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId, deliveryZoneId } = req.body;
     if (!residentId || !rawItems) {
       res.status(400).json({ error: "bad_request", message: "residentId and rawItems are required" });
       return;
     }
     const [pricing] = await db.select().from(pricingTable).limit(1);
-    const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
+    let deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
     const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+    if (deliveryZoneId) {
+      const [zone] = await db.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, parseInt(deliveryZoneId))).limit(1);
+      if (zone) deliveryFee = parseFloat(zone.feeCedis);
+    }
 
     const rawLines = (rawItems as string).split("\n").filter((l: string) => l.trim());
     const orderItems = rawLines.map((line: string, idx: number) => {

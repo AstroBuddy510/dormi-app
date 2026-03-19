@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable } from "@workspace/db/schema";
+import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
   CreateOrderBody,
@@ -108,9 +108,14 @@ router.post("/", async (req, res) => {
   try {
     const body = CreateOrderBody.parse(req.body);
     const paystackReference: string | undefined = req.body.paystackReference;
+    const deliveryZoneId: number | undefined = req.body.deliveryZoneId ? parseInt(req.body.deliveryZoneId) : undefined;
     const [pricing] = await db.select().from(pricingTable).limit(1);
-    const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
     const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+    let deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
+    if (deliveryZoneId) {
+      const [zone] = await db.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, deliveryZoneId)).limit(1);
+      if (zone) deliveryFee = parseFloat(zone.feeCedis);
+    }
 
     const subtotal = body.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
