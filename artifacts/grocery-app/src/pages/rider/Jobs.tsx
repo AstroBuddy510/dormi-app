@@ -5,8 +5,23 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon } from 'lucide-react';
+import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+const GHANA_POST_RE = /\b([A-Z]{2,3}-\d{3,4}-\d{3,4})\b/i;
+
+function extractGhanaPostCode(address: string): string | null {
+  const match = address?.match(GHANA_POST_RE);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function googleMapsNavUrl(address: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+}
+
+function ghanaPostUrl(code: string): string {
+  return `https://ghanapostgps.com/map?address=${encodeURIComponent(code)}`;
+}
 
 async function uploadFileToStorage(file: File): Promise<string> {
   const urlRes = await fetch('/api/storage/uploads/request-url', {
@@ -127,22 +142,57 @@ export default function RiderJobs() {
                     </div>
 
                     <CardContent className="p-4 space-y-4 bg-gray-50/50">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-1 text-primary"><MapPin size={20} /></div>
-                        <div>
-                          <p className="font-bold text-foreground">{job.residentName}</p>
-                          <p className="text-sm text-muted-foreground">{job.residentAddress}</p>
-                          <p className="text-sm font-medium mt-1">{job.residentPhone}</p>
+                      {/* Delivery address block */}
+                      <div className="bg-white rounded-xl border border-border p-3.5 flex items-start gap-3">
+                        <div className="mt-0.5 p-1.5 bg-primary/10 rounded-lg">
+                          <MapPin size={18} className="text-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-foreground leading-tight">{job.residentName}</p>
+                          <p className="text-sm text-muted-foreground mt-0.5 leading-snug">{job.residentAddress}</p>
+                          {extractGhanaPostCode(job.residentAddress || '') && (
+                            <span className="inline-flex items-center mt-1.5 text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5 font-mono font-semibold">
+                              📍 {extractGhanaPostCode(job.residentAddress || '')}
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      <a
-                        href={`https://maps.google.com/?q=${encodeURIComponent(job.residentAddress || '')}`}
-                        target="_blank" rel="noreferrer"
-                        className="flex items-center justify-center gap-2 w-full py-3 bg-white border border-gray-200 rounded-xl text-blue-600 font-bold hover:bg-blue-50 transition-colors"
-                      >
-                        <Navigation size={18} /> Open in Maps
-                      </a>
+                      {/* Navigation buttons */}
+                      <div className="space-y-2">
+                        {/* Primary: Google Maps direct navigation */}
+                        <a
+                          href={googleMapsNavUrl(job.residentAddress || job.residentName || '')}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-2.5 w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl text-white font-bold text-sm transition-colors shadow-sm"
+                        >
+                          <Navigation size={18} />
+                          Navigate with Google Maps
+                        </a>
+
+                        {/* Secondary row: GhanaPost GPS (if code found) + Call */}
+                        <div className="flex gap-2">
+                          {extractGhanaPostCode(job.residentAddress || '') ? (
+                            <a
+                              href={ghanaPostUrl(extractGhanaPostCode(job.residentAddress || '')!)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 rounded-xl text-white font-bold text-sm transition-colors shadow-sm"
+                            >
+                              <span className="text-base leading-none">📍</span>
+                              GhanaPost GPS
+                            </a>
+                          ) : null}
+                          <a
+                            href={`tel:${job.residentPhone}`}
+                            className={`${extractGhanaPostCode(job.residentAddress || '') ? 'flex-1' : 'w-full'} flex items-center justify-center gap-2 py-3 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 rounded-xl text-gray-700 font-bold text-sm transition-colors shadow-sm`}
+                          >
+                            <Phone size={16} className="text-green-600" />
+                            Call Customer
+                          </a>
+                        </div>
+                      </div>
 
                       {job.status === 'ready' && (
                         <Button
