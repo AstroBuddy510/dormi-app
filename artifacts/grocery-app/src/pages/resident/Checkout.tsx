@@ -5,54 +5,116 @@ import { useGetPricing, useCreateOrder, CreateOrderRequestPaymentMethod } from '
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, MapPin, Receipt, CheckCircle, Smartphone } from 'lucide-react';
+import { ArrowLeft, MapPin, Receipt, CheckCircle, Smartphone, Loader2, ShieldCheck, Banknote } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
+
+declare global {
+  interface Window {
+    PaystackPop?: {
+      setup: (opts: any) => { openIframe: () => void };
+    };
+  }
+}
+
+const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string | undefined;
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export default function CheckoutPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { items: cartItemsMap, getCartTotal, getCartItems, clearCart } = useCart();
-  
+  const { getCartTotal, getCartItems, clearCart } = useCart();
+
   const { data: pricing, isLoading: isPricingLoading } = useGetPricing();
-  
-  const [paymentMethod, setPaymentMethod] = useState<CreateOrderRequestPaymentMethod>(CreateOrderRequestPaymentMethod.cash_on_delivery);
-  
+
+  const [paymentMethod, setPaymentMethod] = useState<CreateOrderRequestPaymentMethod>(
+    CreateOrderRequestPaymentMethod.cash_on_delivery,
+  );
+  const [paystackLoading, setPaystackLoading] = useState(false);
+
   const cartItems = getCartItems();
   const subtotal = getCartTotal();
   const serviceFee = pricing ? (subtotal * (pricing.serviceMarkupPercent / 100)) : 0;
   const deliveryFee = pricing ? pricing.deliveryFee : 0;
   const total = subtotal + serviceFee + deliveryFee;
+  const totalPesewas = Math.round(total * 100);
 
   const createOrderMutation = useCreateOrder({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-        toast({ title: "Order Placed Successfully!", description: "We are preparing your fresh groceries." });
+        toast({ title: 'Order Placed!', description: 'We are preparing your fresh groceries.' });
         clearCart();
         setLocation('/history');
       },
-      onError: () => {
-        toast({ variant: "destructive", title: "Order Failed", description: "Something went wrong. Please try again." });
-      }
-    }
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message ?? 'Something went wrong. Please try again.';
+        toast({ variant: 'destructive', title: 'Order Failed', description: msg });
+      },
+    },
   });
 
-  const handlePlaceOrder = () => {
+  const submitOrder = (paystackReference?: string) => {
     if (!user) return;
-    createOrderMutation.mutate({
-      data: {
-        residentId: user.id,
-        paymentMethod: paymentMethod,
-        isSubscription: false,
-        items: cartItems.map(i => ({
-          itemId: i.id,
-          quantity: i.quantity,
-          unitPrice: i.price
-        }))
-      }
+    const payload: any = {
+      residentId: user.id,
+      paymentMethod,
+      isSubscription: false,
+      items: cartItems.map(i => ({ itemId: i.id, quantity: i.quantity, unitPrice: i.price })),
+    };
+    if (paystackReference) payload.paystackReference = paystackReference;
+    createOrderMutation.mutate({ data: payload });
+  };
+
+  const openPaystackPopup = () => {
+    if (!PAYSTACK_PUBLIC_KEY) {
+      toast({ variant: 'destructive', title: 'Payment not configured', description: 'Paystack public key is missing.' });
+      return;
+    }
+    if (!window.PaystackPop) {
+      toast({ variant: 'destructive', title: 'Payment unavailable', description: 'Paystack could not load. Please check your internet.' });
+      return;
+    }
+
+    setPaystackLoading(true);
+
+    const email = `${user?.phone?.replace(/\D/g, '')}@grocerease.com`;
+    const reference = `GE-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_PUBLIC_KEY,
+      email,
+      amount: totalPesewas,
+      currency: 'GHS',
+      ref: reference,
+      label: `GrocerEase — ${user?.name}`,
+      channels: ['mobile_money', 'card', 'bank'],
+      metadata: {
+        resident_name: user?.name,
+        resident_phone: user?.phone,
+        items_count: cartItems.length,
+      },
+      onClose: () => {
+        setPaystackLoading(false);
+        toast({ title: 'Payment cancelled', description: 'You closed the payment window.' });
+      },
+      callback: (response: { reference: string }) => {
+        setPaystackLoading(false);
+        submitOrder(response.reference);
+      },
     });
+
+    handler.openIframe();
+  };
+
+  const handlePlaceOrder = () => {
+    if (paymentMethod === CreateOrderRequestPaymentMethod.paystack) {
+      openPaystackPopup();
+    } else {
+      submitOrder();
+    }
   };
 
   if (cartItems.length === 0) {
@@ -65,6 +127,8 @@ export default function CheckoutPage() {
     );
   }
 
+  const isProcessing = createOrderMutation.isPending || paystackLoading;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="bg-white px-4 h-16 flex items-center gap-4 sticky top-0 z-40 border-b border-border shadow-sm">
@@ -74,7 +138,8 @@ export default function CheckoutPage() {
         <h1 className="text-xl font-display font-bold">Checkout</h1>
       </div>
 
-      <div className="p-4 max-w-md mx-auto space-y-6 mt-2">
+      <div className="p-4 max-w-md mx-auto space-y-5 mt-2">
+
         {/* Delivery Details */}
         <Card className="rounded-2xl border-0 shadow-sm overflow-hidden">
           <div className="bg-primary/10 px-4 py-3 border-b border-primary/10 flex items-center gap-2">
@@ -91,40 +156,37 @@ export default function CheckoutPage() {
         {/* Order Summary */}
         <Card className="rounded-2xl border-0 shadow-sm">
           <div className="px-4 py-4 border-b border-border">
-            <h3 className="font-bold text-foreground">Order Summary ({cartItems.length} items)</h3>
+            <h3 className="font-bold text-foreground">Order Summary ({cartItems.length} item{cartItems.length !== 1 ? 's' : ''})</h3>
           </div>
           <CardContent className="p-0">
-            <div className="max-h-60 overflow-y-auto p-4 space-y-4">
+            <div className="max-h-52 overflow-y-auto p-4 space-y-3">
               {cartItems.map((item, idx) => (
                 <div key={`${item.id}-${idx}`} className="flex justify-between items-start">
                   <div>
-                    <p className="font-medium text-sm text-foreground">{item.quantity}x {item.name}</p>
-                    {item.selectedBrand && (
-                      <p className="text-xs font-medium text-primary/80">Brand: {item.selectedBrand}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">₵{item.price.toFixed(2)} each</p>
+                    <p className="font-medium text-sm text-foreground">{item.quantity}× {item.name}</p>
+                    {item.selectedBrand && <p className="text-xs font-medium text-primary/80">Brand: {item.selectedBrand}</p>}
+                    <p className="text-xs text-muted-foreground">GH₵{item.price.toFixed(2)} each</p>
                   </div>
-                  <p className="font-bold text-sm">₵{(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="font-bold text-sm">GH₵{(item.price * item.quantity).toFixed(2)}</p>
                 </div>
               ))}
             </div>
-            
             <div className="bg-gray-50 p-4 space-y-2 border-t border-border">
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Subtotal</span>
-                <span>₵{subtotal.toFixed(2)}</span>
+                <span>GH₵{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Service Fee ({pricing?.serviceMarkupPercent || 0}%)</span>
-                <span>₵{serviceFee.toFixed(2)}</span>
+                <span>GH₵{serviceFee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Delivery Fee</span>
-                <span>₵{deliveryFee.toFixed(2)}</span>
+                <span>GH₵{deliveryFee.toFixed(2)}</span>
               </div>
               <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between items-center">
                 <span className="font-bold text-lg text-foreground">Total</span>
-                <span className="font-bold text-xl text-primary tracking-tight">₵{total.toFixed(2)}</span>
+                <span className="font-bold text-xl text-primary tracking-tight">GH₵{total.toFixed(2)}</span>
               </div>
             </div>
           </CardContent>
@@ -136,39 +198,88 @@ export default function CheckoutPage() {
             <h3 className="font-bold text-foreground">Payment Method</h3>
           </div>
           <CardContent className="p-4 space-y-3">
-            <div 
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'paystack' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+
+            {/* Paystack — Mobile Money / Card */}
+            <div
+              className={cn(
+                'p-4 rounded-xl border-2 cursor-pointer transition-all',
+                paymentMethod === 'paystack'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/40',
+              )}
               onClick={() => setPaymentMethod(CreateOrderRequestPaymentMethod.paystack)}
             >
-              <Smartphone className={paymentMethod === 'paystack' ? 'text-primary' : 'text-muted-foreground'} />
-              <div className="flex-1">
-                <p className="font-bold text-sm">Mobile Money (Paystack)</p>
-                <p className="text-xs text-muted-foreground">Pay securely online</p>
+              <div className="flex items-center gap-3">
+                <div className={cn('p-2 rounded-xl', paymentMethod === 'paystack' ? 'bg-primary/15' : 'bg-gray-100')}>
+                  <Smartphone size={20} className={paymentMethod === 'paystack' ? 'text-primary' : 'text-muted-foreground'} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-sm">Mobile Money / Card</p>
+                  <p className="text-xs text-muted-foreground">MTN, Vodafone, AirtelTigo, Visa, Mastercard</p>
+                </div>
+                {paymentMethod === 'paystack' && <CheckCircle className="text-primary w-5 h-5 shrink-0" />}
               </div>
-              {paymentMethod === 'paystack' && <CheckCircle className="text-primary w-5 h-5" />}
+              {paymentMethod === 'paystack' && (
+                <div className="mt-3 pt-3 border-t border-primary/20 flex items-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck size={13} className="text-green-600" />
+                  <span>Secured & verified by <span className="font-bold text-green-700">Paystack</span></span>
+                </div>
+              )}
             </div>
-            
-            <div 
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'cash_on_delivery' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+
+            {/* Cash on Delivery */}
+            <div
+              className={cn(
+                'p-4 rounded-xl border-2 cursor-pointer transition-all',
+                paymentMethod === 'cash_on_delivery'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/40',
+              )}
               onClick={() => setPaymentMethod(CreateOrderRequestPaymentMethod.cash_on_delivery)}
             >
-              <Receipt className={paymentMethod === 'cash_on_delivery' ? 'text-primary' : 'text-muted-foreground'} />
-              <div className="flex-1">
-                <p className="font-bold text-sm">Cash on Delivery</p>
-                <p className="text-xs text-muted-foreground">Pay when it arrives</p>
+              <div className="flex items-center gap-3">
+                <div className={cn('p-2 rounded-xl', paymentMethod === 'cash_on_delivery' ? 'bg-primary/15' : 'bg-gray-100')}>
+                  <Banknote size={20} className={paymentMethod === 'cash_on_delivery' ? 'text-primary' : 'text-muted-foreground'} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-sm">Cash on Delivery</p>
+                  <p className="text-xs text-muted-foreground">Pay cash when your order arrives</p>
+                </div>
+                {paymentMethod === 'cash_on_delivery' && <CheckCircle className="text-primary w-5 h-5 shrink-0" />}
               </div>
-              {paymentMethod === 'cash_on_delivery' && <CheckCircle className="text-primary w-5 h-5" />}
             </div>
           </CardContent>
         </Card>
 
-        <Button 
-          className="w-full h-14 rounded-xl text-lg font-bold shadow-lg shadow-primary/25 mt-4"
+        {/* Place Order Button */}
+        <Button
+          className="w-full h-14 rounded-xl text-base font-bold shadow-lg shadow-primary/25 mt-2 gap-2"
           onClick={handlePlaceOrder}
-          disabled={createOrderMutation.isPending || isPricingLoading}
+          disabled={isProcessing || isPricingLoading}
         >
-          {createOrderMutation.isPending ? "Processing..." : `Place Order (₵${total.toFixed(2)})`}
+          {isProcessing ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              {paystackLoading ? 'Opening payment…' : 'Verifying payment…'}
+            </>
+          ) : paymentMethod === 'paystack' ? (
+            <>
+              <ShieldCheck size={18} />
+              Pay GH₵{total.toFixed(2)} with Paystack
+            </>
+          ) : (
+            <>
+              <Banknote size={18} />
+              Place Order · GH₵{total.toFixed(2)}
+            </>
+          )}
         </Button>
+
+        <p className="text-xs text-center text-muted-foreground pb-2">
+          {paymentMethod === 'paystack'
+            ? 'You will be taken to a secure Paystack page to complete payment.'
+            : 'Your rider will collect payment on delivery.'}
+        </p>
       </div>
     </div>
   );

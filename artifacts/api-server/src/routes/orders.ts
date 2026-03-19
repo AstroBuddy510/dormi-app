@@ -11,6 +11,22 @@ import {
 
 const router: IRouter = Router();
 
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY ?? "";
+
+async function verifyPaystackRef(reference: string): Promise<boolean> {
+  if (!PAYSTACK_SECRET_KEY) return false;
+  try {
+    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as any;
+    return data.status === true && data.data?.status === "success";
+  } catch {
+    return false;
+  }
+}
+
 function addHours(h: number) {
   const d = new Date();
   d.setHours(d.getHours() + h);
@@ -90,6 +106,7 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const body = CreateOrderBody.parse(req.body);
+    const paystackReference: string | undefined = req.body.paystackReference;
     const [pricing] = await db.select().from(pricingTable).limit(1);
     const deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
     const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
@@ -129,6 +146,18 @@ router.post("/", async (req, res) => {
     }
     if (!assignedVendorId && vendors.length > 0) assignedVendorId = vendors[0].id;
 
+    let paymentStatus = "pending";
+    if (body.paymentMethod === "paystack") {
+      if (!paystackReference) {
+        return res.status(400).json({ error: "missing_payment_reference", message: "A Paystack payment reference is required for online payment." });
+      }
+      const verified = await verifyPaystackRef(paystackReference);
+      if (!verified) {
+        return res.status(402).json({ error: "payment_not_verified", message: "Payment could not be verified. Please try again." });
+      }
+      paymentStatus = "paid";
+    }
+
     const [order] = await db.insert(ordersTable).values({
       residentId: body.residentId,
       vendorId: assignedVendorId,
@@ -139,6 +168,8 @@ router.post("/", async (req, res) => {
       total: total.toString(),
       status: "pending",
       paymentMethod: body.paymentMethod,
+      paymentStatus,
+      paystackReference: paystackReference ?? null,
       isSubscription: body.isSubscription ?? false,
       callOnly: false,
       callAccepted: false,

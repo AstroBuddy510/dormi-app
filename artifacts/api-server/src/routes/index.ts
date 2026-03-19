@@ -18,6 +18,7 @@ import employeesRouter from "./employees";
 import expensesRouter from "./expenses";
 import floatRouter from "./float";
 import payrollRouter from "./payroll";
+import paymentsRouter from "./payments";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use("/employees", employeesRouter);
 router.use("/expenses", expensesRouter);
 router.use("/float", floatRouter);
 router.use("/payroll", payrollRouter);
+router.use("/payments", paymentsRouter);
 
 export default router;

@@ -33,6 +33,8 @@ export const ordersTable = pgTable("orders", {
   pickupDeadline: timestamp("pickup_deadline"),
   eta: text("eta"),
   notes: text("notes"),
+  paystackReference: text("paystack_reference"),
+  paymentStatus: text("payment_status").notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
