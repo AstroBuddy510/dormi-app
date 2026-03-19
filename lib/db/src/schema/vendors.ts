@@ -10,7 +10,7 @@ export const vendorsTable = pgTable("vendors", {
   categories: text("categories").array().notNull().default([]),
   pin: text("pin"),
   photoUrl: text("photo_url"),
-  commissionPercent: numeric("commission_percent", { precision: 5, scale: 2 }),
+  commissionPercent: numeric("commission_percent", { precision: 5, scale: 2 }).notNull().default("5"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

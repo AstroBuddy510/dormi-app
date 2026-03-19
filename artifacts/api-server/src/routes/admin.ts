@@ -42,7 +42,7 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
   if (order.vendorId) {
     const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, order.vendorId)).limit(1);
     vendorName = v?.name;
-    vendorCommissionPercent = parseFloat(v?.commissionPercent ?? "0");
+    vendorCommissionPercent = parseFloat(v?.commissionPercent ?? "5");
   }
   const address = resident
     ? `${resident.estate}, Block ${resident.blockNumber}, House ${resident.houseNumber}`
@@ -412,7 +412,7 @@ router.get("/stats", async (_req, res) => {
   let vendorCommissionEarnings = 0;
   if (vendorIds.length > 0) {
     const vendors = await db.select().from(vendorsTable);
-    const vendorMap = new Map(vendors.map(v => [v.id, parseFloat(v.commissionPercent ?? "0")]));
+    const vendorMap = new Map(vendors.map(v => [v.id, parseFloat(v.commissionPercent ?? "5")]));
     vendorCommissionEarnings = delivered
       .filter(o => o.vendorId !== null)
       .reduce((s, o) => {

@@ -37,11 +37,13 @@ function addHours(h: number) {
 async function enrichOrder(order: typeof ordersTable.$inferSelect) {
   const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, order.residentId)).limit(1);
   let vendorName: string | undefined;
+  let vendorCommissionPercent = 5;
   let riderName: string | undefined;
   let deliveryPartnerName: string | undefined;
   if (order.vendorId) {
     const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, order.vendorId)).limit(1);
     vendorName = v?.name;
+    vendorCommissionPercent = parseFloat(v?.commissionPercent ?? "5");
   }
   if (order.riderId) {
     const [r] = await db.select().from(ridersTable).where(eq(ridersTable.id, order.riderId)).limit(1);
@@ -62,6 +64,7 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     residentAddress: address,
     vendorId: order.vendorId,
     vendorName: vendorName ?? null,
+    vendorCommissionPercent,
     riderId: order.riderId,
     riderName: riderName ?? null,
     deliveryPartnerId: order.deliveryPartnerId ?? null,
