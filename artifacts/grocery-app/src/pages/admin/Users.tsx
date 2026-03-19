@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useListResidents, useListVendors, useListRiders } from '@workspace/api-client-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,6 +52,10 @@ import {
   Navigation2,
   Calculator,
   Info,
+  LayoutGrid,
+  List,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   Select,
@@ -105,13 +109,14 @@ function StatusPill({ active, suspended }: { active?: boolean; suspended?: boole
   );
 }
 
-function Avatar({ name, photoUrl, color }: { name: string; photoUrl?: string | null; color: string }) {
+function Avatar({ name, photoUrl, color, size = 'md' }: { name: string; photoUrl?: string | null; color: string; size?: 'sm' | 'md' }) {
+  const sz = size === 'sm' ? 'w-9 h-9 text-sm' : 'w-12 h-12 text-base';
   if (photoUrl) {
     const src = `/api/storage${photoUrl}`;
-    return <img src={src} alt={name} className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-white shadow" />;
+    return <img src={src} alt={name} className={`${sz} rounded-full object-cover shrink-0 ring-2 ring-white shadow`} />;
   }
   return (
-    <div className={`w-12 h-12 ${color} rounded-full flex items-center justify-center font-bold text-base shrink-0 ring-2 ring-white shadow`}>
+    <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold shrink-0 ring-2 ring-white shadow`}>
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -245,6 +250,82 @@ function ZoneBadge({ zone }: { zone?: string | null }) {
 }
 
 const ZONES = ['Inner Accra', 'Outer Accra', 'Far'];
+const PAGE_SIZE_GRID = 12;
+const PAGE_SIZE_LIST = 15;
+
+type ViewMode = 'grid' | 'list';
+
+function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
+  return (
+    <div className="flex items-center gap-0.5 bg-muted rounded-xl p-1 border border-border/40">
+      <button
+        onClick={() => onChange('grid')}
+        title="Grid view"
+        className={`p-1.5 rounded-lg transition-colors ${view === 'grid' ? 'bg-white shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+      >
+        <LayoutGrid size={14} />
+      </button>
+      <button
+        onClick={() => onChange('list')}
+        title="List view"
+        className={`p-1.5 rounded-lg transition-colors ${view === 'list' ? 'bg-white shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+      >
+        <List size={14} />
+      </button>
+    </div>
+  );
+}
+
+function Paginator({ page, total, pageSize, onChange }: { page: number; total: number; pageSize: number; onChange: (p: number) => void }) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+
+  const pages: (number | '...')[] = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== '...') {
+      pages.push('...');
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between mt-6 pt-4 border-t border-border/50">
+      <p className="text-xs text-muted-foreground">
+        {total} total · page {page} of {totalPages}
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed text-muted-foreground"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {pages.map((p, i) =>
+          p === '...' ? (
+            <span key={`ellipsis-${i}`} className="w-8 text-center text-xs text-muted-foreground">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p as number)}
+              className={`w-8 h-8 text-xs font-medium rounded-lg transition-colors ${p === page ? 'bg-primary text-white' : 'hover:bg-muted text-foreground'}`}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed text-muted-foreground"
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Residents Tab ────────────────────────────────────────────────────────────
 function ResidentsTab() {
@@ -258,10 +339,14 @@ function ResidentsTab() {
   const [isSaving, setIsSaving] = useState(false);
   const [detectingId, setDetectingId] = useState<number | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [page, setPage] = useState(1);
 
   const filtered = residents.filter(
     (r) => r.fullName.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search) || r.estate.toLowerCase().includes(search.toLowerCase())
   );
+
+  useEffect(() => { setPage(1); }, [search, viewMode]);
 
   const handlePhotoUpload = async (r: any, file: File) => {
     try {
@@ -338,6 +423,9 @@ function ResidentsTab() {
     finally { setIsSaving(false); }
   };
 
+  const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   return (
     <>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -346,95 +434,146 @@ function ResidentsTab() {
           <Input placeholder="Search by name, phone or estate…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} residents</span>
-        <Button size="sm" variant="outline" className="rounded-xl h-9 gap-1.5 text-xs ml-auto" onClick={handleBulkDetect} disabled={bulkRunning}>
+        <ViewToggle view={viewMode} onChange={(v) => { setViewMode(v); setPage(1); }} />
+        <Button size="sm" variant="outline" className="rounded-xl h-9 gap-1.5 text-xs" onClick={handleBulkDetect} disabled={bulkRunning}>
           {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
           Auto-tag All Zones
         </Button>
       </div>
 
       {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((r) => (
-            <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${(r as any).suspended ? 'opacity-60' : ''}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" />
-                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {paged.map((r) => (
+              <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${(r as any).suspended ? 'opacity-60' : ''}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" />
+                        <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm leading-tight">{r.fullName}</p>
+                        <p className="text-xs text-muted-foreground">ID #{r.id}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm leading-tight">{r.fullName}</p>
-                      <p className="text-xs text-muted-foreground">ID #{r.id}</p>
+                    <StatusPill suspended={(r as any).suspended} />
+                  </div>
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Phone size={11} className="text-primary" />
+                      <span className="font-mono font-medium text-foreground">{r.phone}</span>
                     </div>
-                  </div>
-                  <StatusPill suspended={(r as any).suspended} />
-                </div>
-
-                <div className="space-y-1.5 mb-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Phone size={11} className="text-primary" />
-                    <span className="font-mono font-medium text-foreground">{r.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin size={11} className="text-primary" />
-                    <span>{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</span>
-                  </div>
-                  {r.ghanaGpsAddress && (
-                    <div className="flex items-center gap-2 pl-4">
-                      <span className="text-xs text-muted-foreground font-mono">{r.ghanaGpsAddress}</span>
-                      {!(r as any).zone && (
-                        <button
-                          className="text-xs text-blue-600 hover:underline flex items-center gap-0.5"
-                          onClick={() => handleDetectZone(r)}
-                          disabled={detectingId === r.id}
-                        >
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <MapPin size={11} className="text-primary" />
+                      <span>{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</span>
+                    </div>
+                    {r.ghanaGpsAddress && (
+                      <div className="flex items-center gap-2 pl-4">
+                        <span className="text-xs text-muted-foreground font-mono">{r.ghanaGpsAddress}</span>
+                        {!(r as any).zone && (
+                          <button className="text-xs text-blue-600 hover:underline flex items-center gap-0.5" onClick={() => handleDetectZone(r)} disabled={detectingId === r.id}>
+                            {detectingId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Navigation2 size={10} />}
+                            Auto-tag
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <ZoneBadge zone={(r as any).zone} />
+                      {(r as any).zone && r.ghanaGpsAddress && (
+                        <button className="text-xs text-muted-foreground hover:text-blue-600 flex items-center gap-0.5" onClick={() => handleDetectZone(r)} disabled={detectingId === r.id}>
                           {detectingId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Navigation2 size={10} />}
-                          Auto-tag
+                          Re-detect
                         </button>
                       )}
                     </div>
-                  )}
-                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Calendar size={11} className="text-primary" />
+                      <span>Joined {format(new Date(r.createdAt), 'dd MMM yyyy')}</span>
+                    </div>
+                    {r.subscribeWeekly && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📅 Friday Subscriber</span>}
+                  </div>
+                  <div className="mb-3 pb-3 border-b border-border/50 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Key size={11} className="text-primary" />
+                    <span>Login: <span className="font-medium text-foreground">Phone only</span></span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => openEdit(r)}>
+                      <Pencil size={12} /> Edit
+                    </Button>
+                    <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
+                      className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!(r as any).suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
+                      onClick={() => handleSuspend(r)}>
+                      {(r as any).suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
+                      {(r as any).suspended ? 'Reactivate' : 'Suspend'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
+                      <Trash2 size={12} />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          /* ── List view ── */
+          <div className="space-y-1.5">
+            {/* Header row */}
+            <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+              <span />
+              <span>Name</span>
+              <span>Contact & Address</span>
+              <span>Zone</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+            {paged.map((r) => (
+              <div key={r.id} className={`flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+                <div className="relative shrink-0">
+                  <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" size="sm" />
+                  <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
+                </div>
+                <div className="flex-1 min-w-0 hidden md:grid grid-cols-[1fr_1fr_auto_auto] gap-x-4 items-center">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{r.fullName}</p>
+                    <p className="text-[11px] text-muted-foreground">ID #{r.id} · {format(new Date(r.createdAt), 'dd MMM yy')}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-mono truncate">{r.phone}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</p>
+                  </div>
+                  <ZoneBadge zone={(r as any).zone} />
+                  <StatusPill suspended={(r as any).suspended} />
+                </div>
+                {/* Mobile fallback */}
+                <div className="flex-1 min-w-0 md:hidden">
+                  <p className="font-semibold text-sm truncate">{r.fullName}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{r.phone} · {r.estate}</p>
+                  <div className="flex gap-1.5 mt-1">
                     <ZoneBadge zone={(r as any).zone} />
-                    {(r as any).zone && r.ghanaGpsAddress && (
-                      <button className="text-xs text-muted-foreground hover:text-blue-600 flex items-center gap-0.5" onClick={() => handleDetectZone(r)} disabled={detectingId === r.id}>
-                        {detectingId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Navigation2 size={10} />}
-                        Re-detect
-                      </button>
-                    )}
+                    <StatusPill suspended={(r as any).suspended} />
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar size={11} className="text-primary" />
-                    <span>Joined {format(new Date(r.createdAt), 'dd MMM yyyy')}</span>
-                  </div>
-                  {r.subscribeWeekly && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📅 Friday Subscriber</span>}
                 </div>
-
-                <div className="mb-3 pb-3 border-b border-border/50 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Key size={11} className="text-primary" />
-                  <span>Login: <span className="font-medium text-foreground">Phone only</span></span>
+                <div className="flex gap-1 shrink-0">
+                  <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" onClick={() => openEdit(r)} title="Edit">
+                    <Pencil size={14} />
+                  </button>
+                  <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" onClick={() => handleSuspend(r)} title={(r as any).suspended ? 'Reactivate' : 'Suspend'}>
+                    {(r as any).suspended ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
+                  </button>
+                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive transition-colors" onClick={() => setDeleteTarget(r)} title="Delete">
+                    <Trash2 size={14} />
+                  </button>
                 </div>
-
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => openEdit(r)}>
-                    <Pencil size={12} /> Edit
-                  </Button>
-                  <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
-                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!(r as any).suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
-                    onClick={() => handleSuspend(r)}>
-                    {(r as any).suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
-                    {(r as any).suspended ? 'Reactivate' : 'Suspend'}
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
-                    <Trash2 size={12} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
+
+      <Paginator page={page} total={filtered.length} pageSize={pageSize} onChange={setPage} />
 
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
         <DialogContent className="rounded-2xl max-w-md">
@@ -498,10 +637,14 @@ function VendorsTab() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [pinTarget, setPinTarget] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [page, setPage] = useState(1);
 
   const filtered = vendors.filter(
     (v) => v.name.toLowerCase().includes(search.toLowerCase()) || (v.phone && v.phone.includes(search))
   );
+
+  useEffect(() => { setPage(1); }, [search, viewMode]);
 
   const handlePhotoUpload = async (v: any, file: File) => {
     try {
@@ -549,6 +692,9 @@ function VendorsTab() {
     finally { setIsSaving(false); }
   };
 
+  const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   return (
     <>
       <div className="flex items-center gap-3 mb-4">
@@ -557,69 +703,119 @@ function VendorsTab() {
           <Input placeholder="Search vendors…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} vendors</span>
+        <ViewToggle view={viewMode} onChange={(v) => { setViewMode(v); setPage(1); }} />
       </div>
 
       {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((v) => (
-            <Card key={v.id} className={`rounded-2xl shadow-sm border-border/50 ${!v.isActive ? 'opacity-60' : ''}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" />
-                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {paged.map((v) => (
+              <Card key={v.id} className={`rounded-2xl shadow-sm border-border/50 ${!v.isActive ? 'opacity-60' : ''}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" />
+                        <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm leading-tight">{v.name}</p>
+                        <p className="text-xs text-muted-foreground">Vendor #{v.id}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm leading-tight">{v.name}</p>
-                      <p className="text-xs text-muted-foreground">Vendor #{v.id}</p>
+                    <StatusPill active={v.isActive} />
+                  </div>
+                  <div className="space-y-1.5 mb-3">
+                    {v.phone && <div className="flex items-center gap-1.5 text-xs"><Phone size={11} className="text-primary" /><span className="font-mono font-medium">{v.phone}</span></div>}
+                    {(v as any).description && <p className="text-xs text-muted-foreground">{(v as any).description}</p>}
+                    {v.categories && v.categories.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {v.categories.map((cat) => <span key={cat} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{cat}</span>)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mb-3 pb-3 border-b border-border/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Key size={11} className="text-primary" />
+                        <span>Login PIN: <span className="font-mono font-medium text-foreground">{(v as any).hasCustomPin ? '••••' : '5678 (default)'}</span></span>
+                      </div>
+                      <button onClick={() => setPinTarget(v)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
+                        <ShieldCheck size={11} /> Reset
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 pl-4">Phone: {v.phone || 'not set'}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...v })}>
+                      <Pencil size={12} /> Edit
+                    </Button>
+                    <Button size="sm" variant={!v.isActive ? 'default' : 'outline'}
+                      className={`flex-1 h-8 text-xs rounded-xl gap-1 ${v.isActive ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
+                      onClick={() => handleSuspend(v)}>
+                      {!v.isActive ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
+                      {!v.isActive ? 'Reactivate' : 'Suspend'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(v)}>
+                      <Trash2 size={12} />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          /* ── List view ── */
+          <div className="space-y-1.5">
+            <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+              <span />
+              <span>Name</span>
+              <span>Phone & Categories</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+            {paged.map((v) => (
+              <div key={v.id} className={`flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
+                <div className="relative shrink-0">
+                  <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" size="sm" />
+                  <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
+                </div>
+                <div className="flex-1 min-w-0 hidden md:grid grid-cols-[1fr_1fr_auto] gap-x-4 items-center">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{v.name}</p>
+                    <p className="text-[11px] text-muted-foreground">Vendor #{v.id}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-mono truncate">{v.phone || '—'}</p>
+                    <div className="flex flex-wrap gap-0.5 mt-0.5">
+                      {(v.categories || []).slice(0, 3).map(c => (
+                        <span key={c} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{c}</span>
+                      ))}
                     </div>
                   </div>
                   <StatusPill active={v.isActive} />
                 </div>
-
-                <div className="space-y-1.5 mb-3">
-                  {v.phone && <div className="flex items-center gap-1.5 text-xs"><Phone size={11} className="text-primary" /><span className="font-mono font-medium">{v.phone}</span></div>}
-                  {(v as any).description && <p className="text-xs text-muted-foreground">{(v as any).description}</p>}
-                  {v.categories && v.categories.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {v.categories.map((cat) => <span key={cat} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{cat}</span>)}
-                    </div>
-                  )}
+                {/* Mobile fallback */}
+                <div className="flex-1 min-w-0 md:hidden">
+                  <p className="font-semibold text-sm truncate">{v.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{v.phone || 'No phone'}</p>
+                  <StatusPill active={v.isActive} />
                 </div>
-
-                <div className="mb-3 pb-3 border-b border-border/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Key size={11} className="text-primary" />
-                      <span>Login PIN: <span className="font-mono font-medium text-foreground">{(v as any).hasCustomPin ? '••••' : '5678 (default)'}</span></span>
-                    </div>
-                    <button onClick={() => setPinTarget(v)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
-                      <ShieldCheck size={11} /> Reset
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">Phone: {v.phone || 'not set'}</p>
+                <div className="flex gap-1 shrink-0">
+                  <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" onClick={() => setEditTarget({ ...v })} title="Edit"><Pencil size={14} /></button>
+                  <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => setPinTarget(v)} title="Reset PIN"><ShieldCheck size={14} /></button>
+                  <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => handleSuspend(v)} title={v.isActive ? 'Suspend' : 'Reactivate'}>
+                    {!v.isActive ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
+                  </button>
+                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive" onClick={() => setDeleteTarget(v)} title="Delete"><Trash2 size={14} /></button>
                 </div>
-
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...v })}>
-                    <Pencil size={12} /> Edit
-                  </Button>
-                  <Button size="sm" variant={!v.isActive ? 'default' : 'outline'}
-                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${v.isActive ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
-                    onClick={() => handleSuspend(v)}>
-                    {!v.isActive ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
-                    {!v.isActive ? 'Reactivate' : 'Suspend'}
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(v)}>
-                    <Trash2 size={12} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
+
+      <Paginator page={page} total={filtered.length} pageSize={pageSize} onChange={setPage} />
 
       <PinResetDialog
         open={!!pinTarget} onClose={() => setPinTarget(null)} name={pinTarget?.name ?? ''}
@@ -670,10 +866,14 @@ function RidersTab() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [pinTarget, setPinTarget] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [page, setPage] = useState(1);
 
   const filtered = riders.filter(
     (r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search)
   );
+
+  useEffect(() => { setPage(1); }, [search, viewMode]);
 
   const handlePhotoUpload = async (r: any, file: File) => {
     try {
@@ -720,6 +920,9 @@ function RidersTab() {
     finally { setIsSaving(false); }
   };
 
+  const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   return (
     <>
       <div className="flex items-center gap-3 mb-4">
@@ -728,73 +931,128 @@ function RidersTab() {
           <Input placeholder="Search riders…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} riders</span>
+        <ViewToggle view={viewMode} onChange={(v) => { setViewMode(v); setPage(1); }} />
       </div>
 
       {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((r) => (
-            <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${(r as any).suspended ? 'opacity-60' : ''}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" />
-                      <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {paged.map((r) => (
+              <Card key={r.id} className={`rounded-2xl shadow-sm border-border/50 ${(r as any).suspended ? 'opacity-60' : ''}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" />
+                        <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm leading-tight">{r.name}</p>
+                        <p className="text-xs text-muted-foreground">Rider #{r.id}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm leading-tight">{r.name}</p>
-                      <p className="text-xs text-muted-foreground">Rider #{r.id}</p>
+                    <StatusPill suspended={(r as any).suspended} />
+                  </div>
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center gap-1.5 text-xs"><Phone size={11} className="text-primary" /><span className="font-mono font-medium">{r.phone}</span></div>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
+                      <span className="text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
+                    </div>
+                    {(r as any).createdAt && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar size={11} className="text-primary" />
+                        <span>Joined {format(new Date((r as any).createdAt), 'dd MMM yyyy')}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mb-3 pb-3 border-b border-border/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Key size={11} className="text-primary" />
+                        <span>Login PIN: <span className="font-mono font-medium text-foreground">{(r as any).hasCustomPin ? '••••' : '9012 (default)'}</span></span>
+                      </div>
+                      <button onClick={() => setPinTarget(r)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
+                        <ShieldCheck size={11} /> Reset
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 pl-4">Phone: {r.phone}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...r })}>
+                      <Pencil size={12} /> Edit
+                    </Button>
+                    <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
+                      className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!(r as any).suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
+                      onClick={() => handleSuspend(r)}>
+                      {(r as any).suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
+                      {(r as any).suspended ? 'Reactivate' : 'Suspend'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
+                      <Trash2 size={12} />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          /* ── List view ── */
+          <div className="space-y-1.5">
+            <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+              <span />
+              <span>Name</span>
+              <span>Phone & Availability</span>
+              <span>PIN</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+            {paged.map((r) => (
+              <div key={r.id} className={`flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+                <div className="relative shrink-0">
+                  <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" size="sm" />
+                  <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
+                </div>
+                <div className="flex-1 min-w-0 hidden md:grid grid-cols-[1fr_1fr_auto_auto] gap-x-4 items-center">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{r.name}</p>
+                    <p className="text-[11px] text-muted-foreground">Rider #{r.id} · {(r as any).createdAt ? format(new Date((r as any).createdAt), 'dd MMM yy') : ''}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-mono truncate">{r.phone}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
+                      <span className="text-[11px] text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
                     </div>
                   </div>
+                  <button onClick={() => setPinTarget(r)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1 whitespace-nowrap">
+                    <ShieldCheck size={11} /> {(r as any).hasCustomPin ? 'Reset PIN' : 'Set PIN'}
+                  </button>
                   <StatusPill suspended={(r as any).suspended} />
                 </div>
-
-                <div className="space-y-1.5 mb-3">
-                  <div className="flex items-center gap-1.5 text-xs"><Phone size={11} className="text-primary" /><span className="font-mono font-medium">{r.phone}</span></div>
-                  <div className="flex items-center gap-1.5 text-xs">
+                {/* Mobile fallback */}
+                <div className="flex-1 min-w-0 md:hidden">
+                  <p className="font-semibold text-sm truncate">{r.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{r.phone}</p>
+                  <div className="flex items-center gap-1.5 mt-1">
                     <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
-                    <span className="text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
+                    <StatusPill suspended={(r as any).suspended} />
                   </div>
-                  {(r as any).createdAt && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Calendar size={11} className="text-primary" />
-                      <span>Joined {format(new Date((r as any).createdAt), 'dd MMM yyyy')}</span>
-                    </div>
-                  )}
                 </div>
-
-                <div className="mb-3 pb-3 border-b border-border/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Key size={11} className="text-primary" />
-                      <span>Login PIN: <span className="font-mono font-medium text-foreground">{(r as any).hasCustomPin ? '••••' : '9012 (default)'}</span></span>
-                    </div>
-                    <button onClick={() => setPinTarget(r)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
-                      <ShieldCheck size={11} /> Reset
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 pl-4">Phone: {r.phone}</p>
+                <div className="flex gap-1 shrink-0">
+                  <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" onClick={() => setEditTarget({ ...r })} title="Edit"><Pencil size={14} /></button>
+                  <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => handleSuspend(r)} title={(r as any).suspended ? 'Reactivate' : 'Suspend'}>
+                    {(r as any).suspended ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
+                  </button>
+                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive" onClick={() => setDeleteTarget(r)} title="Delete"><Trash2 size={14} /></button>
                 </div>
-
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-xl gap-1" onClick={() => setEditTarget({ ...r })}>
-                    <Pencil size={12} /> Edit
-                  </Button>
-                  <Button size="sm" variant={(r as any).suspended ? 'default' : 'outline'}
-                    className={`flex-1 h-8 text-xs rounded-xl gap-1 ${!(r as any).suspended ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''}`}
-                    onClick={() => handleSuspend(r)}>
-                    {(r as any).suspended ? <PlayCircle size={12} /> : <PauseCircle size={12} />}
-                    {(r as any).suspended ? 'Reactivate' : 'Suspend'}
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(r)}>
-                    <Trash2 size={12} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
+
+      <Paginator page={page} total={filtered.length} pageSize={pageSize} onChange={setPage} />
 
       <PinResetDialog
         open={!!pinTarget} onClose={() => setPinTarget(null)} name={pinTarget?.name ?? ''}
