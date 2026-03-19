@@ -13,6 +13,55 @@ import { useToast } from '@/hooks/use-toast';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+function EmployeeCard({ emp, paid, thisPay, lastPay, onPay }: {
+  emp: any; paid: boolean; thisPay: any; lastPay: any; monthLabel: string; onPay: (emp: any) => void;
+}) {
+  const calcSalary = emp.salaryType === 'daily' ? emp.salaryAmount * 26 : emp.salaryAmount;
+  const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  return (
+    <Card className={`rounded-2xl border-0 shadow-sm ${paid ? 'opacity-70' : ''}`}>
+      <CardContent className="p-4 flex items-center gap-4">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${paid ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-600'}`}>
+          {emp.name.charAt(0)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold">{emp.name}</span>
+            <Badge variant="secondary" className="text-xs">{emp.role}</Badge>
+            {paid && (
+              <Badge className="text-xs bg-green-100 text-green-700 border-green-200">
+                <CheckCircle size={10} className="mr-1" /> Paid {monthLabel}
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">{emp.phone}</p>
+          {emp.bankMomoDetails && <p className="text-xs text-muted-foreground">{emp.bankMomoDetails}</p>}
+          {paid && thisPay && (
+            <p className="text-xs text-green-600 mt-0.5">
+              {fmt(thisPay.amount)} paid on {thisPay.paidAt.slice(0, 10)} via {thisPay.paymentMethod}
+              {thisPay.reference ? ` · Ref: ${thisPay.reference}` : ''}
+            </p>
+          )}
+          {!paid && lastPay && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Last paid {fmt(lastPay.amount)} on {lastPay.paidAt.slice(0, 10)}
+            </p>
+          )}
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-semibold">{fmt(calcSalary)}</p>
+          <p className="text-xs text-muted-foreground">{emp.salaryType === 'daily' ? `GH₵${emp.salaryAmount}/day × 26` : 'Monthly'}</p>
+        </div>
+        {!paid && (
+          <Button size="sm" className="rounded-xl shrink-0" onClick={() => onPay(emp)}>
+            <CreditCard size={14} className="mr-1.5" /> Pay Now
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function apiFetch(path: string, opts?: RequestInit) {
   return fetch(`${BASE}/api${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts }).then(async r => {
     if (!r.ok) throw new Error((await r.json()).message ?? 'Request failed');
@@ -74,6 +123,51 @@ export default function AccountantPayroll() {
 
   const activeEmployees = employees.filter((e: any) => e.isActive);
 
+  // Determine the current month/year to know who's already been paid this cycle
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  function paidThisMonth(emp: any) {
+    return payroll.some((p: any) => {
+      if (p.employeeId !== emp.id) return false;
+      const d = new Date(p.paidAt);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+  }
+
+  function lastPayThisMonth(emp: any) {
+    return [...payroll]
+      .reverse()
+      .find((p: any) => {
+        if (p.employeeId !== emp.id) return false;
+        const d = new Date(p.paidAt);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      });
+  }
+
+  const unpaidEmployees = activeEmployees.filter(e => !paidThisMonth(e));
+  const paidEmployees = activeEmployees.filter(e => paidThisMonth(e));
+
+  const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  function renderCard(emp: any, paid: boolean) {
+    const thisPay = paid ? lastPayThisMonth(emp) : null;
+    const allPays = payroll.filter((p: any) => p.employeeId === emp.id);
+    const lastPay = allPays.length > 0 ? allPays[allPays.length - 1] : null;
+    return (
+      <EmployeeCard
+        key={emp.id}
+        emp={emp}
+        paid={paid}
+        thisPay={thisPay}
+        lastPay={lastPay}
+        monthLabel={monthLabel}
+        onPay={openPay}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       <AccountantSidebar />
@@ -84,48 +178,45 @@ export default function AccountantPayroll() {
             <p className="text-muted-foreground text-sm mt-0.5">Pay staff and log payment records</p>
           </div>
 
-          <div className="grid gap-3">
+          {/* Unpaid this month */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Unpaid — {monthLabel}</h2>
+              {unpaidEmployees.length > 0 && (
+                <Badge variant="destructive" className="text-xs">{unpaidEmployees.length} pending</Badge>
+              )}
+            </div>
             {activeEmployees.length === 0 ? (
               <Card className="rounded-2xl border-0 shadow-sm">
                 <CardContent className="text-center py-16 text-muted-foreground">
                   No employees found. Ask admin to add staff first.
                 </CardContent>
               </Card>
-            ) : activeEmployees.map((emp: any) => {
-              const recentPays = payroll.filter((p: any) => p.employeeId === emp.id);
-              const lastPaid = recentPays[recentPays.length - 1];
-              const calcSalary = emp.salaryType === 'daily' ? emp.salaryAmount * 26 : emp.salaryAmount;
-              return (
-                <Card key={emp.id} className="rounded-2xl border-0 shadow-sm">
-                  <CardContent className="p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600 text-sm shrink-0">
-                      {emp.name.charAt(0)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold">{emp.name}</span>
-                        <Badge variant="secondary" className="text-xs">{emp.role}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{emp.phone}</p>
-                      {emp.bankMomoDetails && <p className="text-xs text-muted-foreground">{emp.bankMomoDetails}</p>}
-                      {lastPaid && (
-                        <p className="text-xs text-green-600 mt-0.5 flex items-center gap-1">
-                          <CheckCircle size={10} /> Last paid {fmt(lastPaid.amount)} on {lastPaid.paidAt.slice(0, 10)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold">{fmt(calcSalary)}</p>
-                      <p className="text-xs text-muted-foreground">{emp.salaryType === 'daily' ? `GH₵${emp.salaryAmount}/day × 26` : 'Monthly'}</p>
-                    </div>
-                    <Button size="sm" className="rounded-xl shrink-0" onClick={() => openPay(emp)}>
-                      <CreditCard size={14} className="mr-1.5" /> Pay Now
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            ) : unpaidEmployees.length === 0 ? (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardContent className="flex flex-col items-center py-10 gap-2 text-center">
+                  <CheckCircle size={32} className="text-green-500" />
+                  <p className="font-semibold text-green-700">All staff paid for {monthLabel}!</p>
+                  <p className="text-xs text-muted-foreground">They will reappear here on 1st of next month.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-3">
+                {unpaidEmployees.map(emp => renderCard(emp, false))}
+              </div>
+            )}
           </div>
+
+          {/* Already paid this month */}
+          {paidEmployees.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-foreground">Already Paid — {monthLabel}</h2>
+              <div className="grid gap-3">
+                {paidEmployees.map(emp => renderCard(emp, true))}
+              </div>
+            </div>
+          )}
+
 
           {payroll.length > 0 && (
             <Card className="rounded-2xl border-0 shadow-sm">
