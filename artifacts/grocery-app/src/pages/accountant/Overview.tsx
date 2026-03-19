@@ -40,11 +40,11 @@ function getPeriodDates(period: Period, customFrom: string, customTo: string) {
   if (period === 'week') {
     const d = new Date(now);
     d.setDate(d.getDate() - 6);
-    return { from: `${pad(d)}T00:00:00.000Z`, to: now.toISOString(), label: 'Last 7 Days' };
+    return { from: `${pad(d)}T00:00:00.000Z`, to: `${pad(now)}T23:59:59.999Z`, label: 'Last 7 Days' };
   }
   if (period === 'month') {
     const d = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { from: `${pad(d)}T00:00:00.000Z`, to: now.toISOString(), label: 'This Month' };
+    return { from: `${pad(d)}T00:00:00.000Z`, to: `${pad(now)}T23:59:59.999Z`, label: 'This Month' };
   }
   return {
     from: `${customFrom}T00:00:00.000Z`,
