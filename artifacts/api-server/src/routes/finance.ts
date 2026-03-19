@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   financeSettingsTable,
   deliveryZonesTable,
+  deliveryTownsTable,
   ordersTable,
   vendorsTable,
   expensesTable,
@@ -94,6 +95,65 @@ router.post("/zones", async (req, res) => {
       feeCedis: body.feeCedis.toString(),
     }).returning();
     res.status(201).json({ id: zone.id, name: zone.name, feeCedis: parseFloat(zone.feeCedis) });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// ─── Delivery Towns ───────────────────────────────────────────────────────────
+
+const TownBody = z.object({
+  name: z.string().min(1),
+  zoneId: z.number().int().nullable().optional(),
+});
+
+router.get("/towns", async (_req, res) => {
+  const towns = await db.select().from(deliveryTownsTable).orderBy(deliveryTownsTable.name);
+  const zones = await db.select().from(deliveryZonesTable);
+  const zoneMap: Record<number, { name: string; feeCedis: number }> = {};
+  zones.forEach(z => { zoneMap[z.id] = { name: z.name, feeCedis: parseFloat(z.feeCedis) }; });
+  res.json(towns.map(t => ({
+    id: t.id,
+    name: t.name,
+    zoneId: t.zoneId,
+    zoneName: t.zoneId ? (zoneMap[t.zoneId]?.name ?? null) : null,
+    feeCedis: t.zoneId ? (zoneMap[t.zoneId]?.feeCedis ?? null) : null,
+  })));
+});
+
+router.post("/towns", async (req, res) => {
+  try {
+    const body = TownBody.parse(req.body);
+    const [town] = await db.insert(deliveryTownsTable).values({
+      name: body.name,
+      zoneId: body.zoneId ?? null,
+    }).returning();
+    res.status(201).json({ id: town.id, name: town.name, zoneId: town.zoneId });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/towns/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = TownBody.partial().parse(req.body);
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (body.name !== undefined) updates.name = body.name;
+    if ("zoneId" in body) updates.zoneId = body.zoneId ?? null;
+    const [town] = await db.update(deliveryTownsTable).set(updates).where(eq(deliveryTownsTable.id, id)).returning();
+    if (!town) { res.status(404).json({ error: "not_found" }); return; }
+    res.json({ id: town.id, name: town.name, zoneId: town.zoneId });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.delete("/towns/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(deliveryTownsTable).where(eq(deliveryTownsTable.id, id));
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }

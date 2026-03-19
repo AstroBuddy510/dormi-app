@@ -10,7 +10,7 @@ import { ArrowLeft, MapPin, Receipt, CheckCircle, Smartphone, Loader2, ShieldChe
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
-interface DeliveryZone { id: number; name: string; feeCedis: string; }
+interface DeliveryTown { id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null; }
 
 declare global {
   interface Window {
@@ -35,9 +35,9 @@ export default function CheckoutPage() {
     queryFn: () => fetch(`${BASE}/api/settings/gateway`).then(r => r.json()),
     staleTime: 5 * 60 * 1000,
   });
-  const { data: zones = [] } = useQuery<DeliveryZone[]>({
-    queryKey: ['/api/finance/zones'],
-    queryFn: () => fetch(`${BASE}/api/finance/zones`).then(r => r.json()),
+  const { data: towns = [] } = useQuery<DeliveryTown[]>({
+    queryKey: ['/api/finance/towns'],
+    queryFn: () => fetch(`${BASE}/api/finance/towns`).then(r => r.json()),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -45,14 +45,14 @@ export default function CheckoutPage() {
     CreateOrderRequestPaymentMethod.cash_on_delivery,
   );
   const [paystackLoading, setPaystackLoading] = useState(false);
-  const [selectedZoneId, setSelectedZoneId] = useState<string>('');
+  const [selectedTownId, setSelectedTownId] = useState<string>('');
 
   const cartItems = getCartItems();
   const subtotal = getCartTotal();
   const serviceFee = pricing ? (subtotal * (pricing.serviceMarkupPercent / 100)) : 0;
-  const selectedZone = zones.find(z => String(z.id) === selectedZoneId);
-  const deliveryFee = selectedZone
-    ? parseFloat(selectedZone.feeCedis)
+  const selectedTown = towns.find(t => String(t.id) === selectedTownId);
+  const deliveryFee = selectedTown?.feeCedis != null
+    ? selectedTown.feeCedis
     : pricing ? pricing.deliveryFee : 0;
   const total = subtotal + serviceFee + deliveryFee;
   const totalPesewas = Math.round(total * 100);
@@ -81,7 +81,7 @@ export default function CheckoutPage() {
       items: cartItems.map(i => ({ itemId: i.id, quantity: i.quantity, unitPrice: i.price })),
     };
     if (paystackReference) payload.paystackReference = paystackReference;
-    if (selectedZoneId) payload.deliveryZoneId = parseInt(selectedZoneId);
+    if (selectedTownId) payload.deliveryTownId = parseInt(selectedTownId);
     createOrderMutation.mutate({ data: payload });
   };
 
@@ -170,26 +170,28 @@ export default function CheckoutPage() {
               <p className="text-muted-foreground text-sm mt-0.5">{user?.phone}</p>
               <p className="text-muted-foreground text-sm mt-0.5">To your registered estate address.</p>
             </div>
-            {zones.length > 0 && (
+            {towns.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-sm font-semibold text-foreground">Delivery Zone</p>
-                <Select value={selectedZoneId} onValueChange={setSelectedZoneId}>
+                <p className="text-sm font-semibold text-foreground">Your Town / Area</p>
+                <Select value={selectedTownId} onValueChange={setSelectedTownId}>
                   <SelectTrigger className="rounded-xl border-border">
-                    <SelectValue placeholder="Select your delivery zone…" />
+                    <SelectValue placeholder="Select your town or area…" />
                   </SelectTrigger>
                   <SelectContent position="popper">
-                    {zones.map(z => (
-                      <SelectItem key={z.id} value={String(z.id)}>
-                        {z.name} — GH₵{parseFloat(z.feeCedis).toFixed(2)}
+                    {towns.map(t => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name}{t.zoneName ? ` (${t.zoneName})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {!selectedZoneId && (
-                  <p className="text-xs text-amber-600">Please select your zone — delivery fee varies by area.</p>
+                {!selectedTownId && (
+                  <p className="text-xs text-amber-600">Select your town so we can apply the correct delivery fee.</p>
                 )}
-                {selectedZone && (
-                  <p className="text-xs text-green-700 font-medium">Delivery fee for {selectedZone.name}: GH₵{parseFloat(selectedZone.feeCedis).toFixed(2)}</p>
+                {selectedTown && (
+                  <p className="text-xs text-green-700 font-medium">
+                    {selectedTown.zoneName ? `${selectedTown.zoneName} zone` : selectedTown.name} · Delivery: GH₵{deliveryFee.toFixed(2)}
+                  </p>
                 )}
               </div>
             )}
@@ -224,7 +226,7 @@ export default function CheckoutPage() {
                 <span>GH₵{serviceFee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Delivery Fee{selectedZone ? ` (${selectedZone.name})` : ''}</span>
+                <span>Delivery Fee{selectedTown ? ` (${selectedTown.name})` : ''}</span>
                 <span>GH₵{deliveryFee.toFixed(2)}</span>
               </div>
               <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between items-center">

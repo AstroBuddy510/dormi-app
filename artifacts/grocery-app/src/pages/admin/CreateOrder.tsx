@@ -31,9 +31,9 @@ async function fetchVendors() {
   const r = await fetch(`${BASE}/api/vendors`);
   return r.json();
 }
-async function fetchZones() {
-  const r = await fetch(`${BASE}/api/finance/zones`);
-  return r.json() as Promise<{ id: number; name: string; feeCedis: string }[]>;
+async function fetchTowns() {
+  const r = await fetch(`${BASE}/api/finance/towns`);
+  return r.json() as Promise<{ id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null }[]>;
 }
 
 function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawItems: string; deliveryFee?: number; markupPct?: number }) {
@@ -72,10 +72,10 @@ function SingleOrderTab() {
   const qc = useQueryClient();
   const { data: residents = [] } = useQuery({ queryKey: ["residents"], queryFn: fetchResidents });
   const { data: vendors = [] } = useQuery({ queryKey: ["vendors"], queryFn: fetchVendors });
-  const { data: zones = [] } = useQuery({ queryKey: ["delivery-zones"], queryFn: fetchZones });
+  const { data: towns = [] } = useQuery({ queryKey: ["delivery-towns"], queryFn: fetchTowns });
   const [residentId, setResidentId] = useState("");
   const [vendorId, setVendorId] = useState("");
-  const [deliveryZoneId, setDeliveryZoneId] = useState("");
+  const [deliveryTownId, setDeliveryTownId] = useState("");
   const [rawItems, setRawItems] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
@@ -83,8 +83,8 @@ function SingleOrderTab() {
   const [resetKey, setResetKey] = useState(0);
 
   const selectedVendor = (vendors as any[]).find((v: any) => String(v.id) === vendorId);
-  const selectedZone = (zones as any[]).find((z: any) => String(z.id) === deliveryZoneId);
-  const zoneFee = selectedZone ? parseFloat(selectedZone.feeCedis) : 30;
+  const selectedTown = (towns as any[]).find((t: any) => String(t.id) === deliveryTownId);
+  const townFee = selectedTown?.feeCedis != null ? selectedTown.feeCedis : 30;
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -98,7 +98,7 @@ function SingleOrderTab() {
           paymentMethod,
           isUrgent,
           vendorId: vendorId || undefined,
-          deliveryZoneId: deliveryZoneId ? parseInt(deliveryZoneId) : undefined,
+          deliveryTownId: deliveryTownId ? parseInt(deliveryTownId) : undefined,
         }),
       });
       if (!r.ok) throw new Error((await r.json()).message);
@@ -107,7 +107,7 @@ function SingleOrderTab() {
     onSuccess: () => {
       toast({ title: "Single order created!", description: isUrgent ? "Marked URGENT — 30-60 min ETA" : "ETA: 2-3 hours" });
       qc.invalidateQueries({ queryKey: ["orders"] });
-      setResidentId(""); setRawItems(""); setNotes(""); setVendorId(""); setDeliveryZoneId("");
+      setResidentId(""); setRawItems(""); setNotes(""); setVendorId(""); setDeliveryTownId("");
       setResetKey(k => k + 1);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -149,22 +149,24 @@ function SingleOrderTab() {
           )}
         </div>
         <div className="space-y-2">
-          <Label>Delivery Zone</Label>
-          <Select value={deliveryZoneId} onValueChange={setDeliveryZoneId}>
-            <SelectTrigger><SelectValue placeholder="Select zone…" /></SelectTrigger>
+          <Label>Town / Area</Label>
+          <Select value={deliveryTownId} onValueChange={setDeliveryTownId}>
+            <SelectTrigger><SelectValue placeholder="Select town or area…" /></SelectTrigger>
             <SelectContent position="popper">
-              {(zones as any[]).length === 0 && (
-                <SelectItem value="__none__" disabled>No zones configured</SelectItem>
+              {(towns as any[]).length === 0 && (
+                <SelectItem value="__none__" disabled>No towns configured — add them in Pricing</SelectItem>
               )}
-              {(zones as any[]).map((z: any) => (
-                <SelectItem key={z.id} value={String(z.id)}>
-                  {z.name} — GH₵{parseFloat(z.feeCedis).toFixed(2)}
+              {(towns as any[]).map((t: any) => (
+                <SelectItem key={t.id} value={String(t.id)}>
+                  {t.name}{t.zoneName ? ` — ${t.zoneName}` : ''}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {selectedZone && (
-            <p className="text-xs text-green-700 font-medium">Delivery fee: GH₵{zoneFee.toFixed(2)}</p>
+          {selectedTown && (
+            <p className="text-xs text-green-700 font-medium">
+              {selectedTown.zoneName ?? 'Unknown zone'} · Delivery fee: GH₵{townFee.toFixed(2)}
+            </p>
           )}
         </div>
         <div className="space-y-2">
@@ -195,7 +197,7 @@ function SingleOrderTab() {
         <ItemsBuilder key={resetKey} onChange={setRawItems} color="green" />
       </div>
 
-      {rawItems.trim() && <OrderSummaryBox rawItems={rawItems} deliveryFee={zoneFee} />}
+      {rawItems.trim() && <OrderSummaryBox rawItems={rawItems} deliveryFee={townFee} />}
 
       <div className="space-y-2">
         <Label>Notes (optional)</Label>

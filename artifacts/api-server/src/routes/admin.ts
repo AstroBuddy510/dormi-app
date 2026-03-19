@@ -9,6 +9,7 @@ import {
   blockOrderGroupsTable,
   deliveryPartnersTable,
   deliveryZonesTable,
+  deliveryTownsTable,
 } from "@workspace/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { CreateCallLogOrderBody } from "@workspace/api-zod";
@@ -140,7 +141,7 @@ async function resolveVendor(items: any[]) {
 
 router.post("/orders/single", async (req, res) => {
   try {
-    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId, deliveryZoneId } = req.body;
+    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId, deliveryZoneId, deliveryTownId } = req.body;
     if (!residentId || !rawItems) {
       res.status(400).json({ error: "bad_request", message: "residentId and rawItems are required" });
       return;
@@ -148,7 +149,13 @@ router.post("/orders/single", async (req, res) => {
     const [pricing] = await db.select().from(pricingTable).limit(1);
     let deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
     const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
-    if (deliveryZoneId) {
+    if (deliveryTownId) {
+      const [town] = await db.select().from(deliveryTownsTable).where(eq(deliveryTownsTable.id, parseInt(deliveryTownId))).limit(1);
+      if (town?.zoneId) {
+        const [zone] = await db.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, town.zoneId)).limit(1);
+        if (zone) deliveryFee = parseFloat(zone.feeCedis);
+      }
+    } else if (deliveryZoneId) {
       const [zone] = await db.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, parseInt(deliveryZoneId))).limit(1);
       if (zone) deliveryFee = parseFloat(zone.feeCedis);
     }

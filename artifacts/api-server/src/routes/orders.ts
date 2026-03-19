@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable } from "@workspace/db/schema";
+import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
   CreateOrderBody,
@@ -109,10 +109,17 @@ router.post("/", async (req, res) => {
     const body = CreateOrderBody.parse(req.body);
     const paystackReference: string | undefined = req.body.paystackReference;
     const deliveryZoneId: number | undefined = req.body.deliveryZoneId ? parseInt(req.body.deliveryZoneId) : undefined;
+    const deliveryTownId: number | undefined = req.body.deliveryTownId ? parseInt(req.body.deliveryTownId) : undefined;
     const [pricing] = await db.select().from(pricingTable).limit(1);
     const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
     let deliveryFee = pricing ? parseFloat(pricing.deliveryFee) : 30;
-    if (deliveryZoneId) {
+    if (deliveryTownId) {
+      const [town] = await db.select().from(deliveryTownsTable).where(eq(deliveryTownsTable.id, deliveryTownId)).limit(1);
+      if (town?.zoneId) {
+        const [zone] = await db.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, town.zoneId)).limit(1);
+        if (zone) deliveryFee = parseFloat(zone.feeCedis);
+      }
+    } else if (deliveryZoneId) {
       const [zone] = await db.select().from(deliveryZonesTable).where(eq(deliveryZonesTable.id, deliveryZoneId)).limit(1);
       if (zone) deliveryFee = parseFloat(zone.feeCedis);
     }

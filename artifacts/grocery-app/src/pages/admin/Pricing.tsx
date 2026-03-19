@@ -6,8 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, MapPin, Percent, Truck, Settings2 } from 'lucide-react';
+import { Save, MapPin, Percent, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+
+interface Zone { id: number; name: string; feeCedis: number; }
+interface Town { id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null; }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -72,6 +77,61 @@ export default function AdminPricing() {
     const fee = parseFloat(zoneFees[id] ?? '0');
     if (isNaN(fee) || fee < 0) { toast({ variant: 'destructive', title: 'Invalid fee' }); return; }
     updateZoneMutation.mutate({ id, feeCedis: fee });
+  };
+
+  // ── Delivery Towns ─────────────────────────────────────────────────────────
+  const { data: towns = [] } = useQuery<Town[]>({
+    queryKey: ['delivery-towns'],
+    queryFn: () => apiFetch('/finance/towns'),
+  });
+
+  const [newTownName, setNewTownName] = useState('');
+  const [newTownZoneId, setNewTownZoneId] = useState<string>('');
+  const [editingTown, setEditingTown] = useState<{ id: number; name: string; zoneId: string } | null>(null);
+
+  const ZONE_COLORS: Record<string, string> = {
+    'Inner Accra': 'bg-green-100 text-green-800',
+    'Outer Accra': 'bg-blue-100 text-blue-800',
+    'Far': 'bg-orange-100 text-orange-800',
+  };
+
+  const createTownMutation = useMutation({
+    mutationFn: (body: { name: string; zoneId: number | null }) =>
+      apiFetch('/finance/towns', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['delivery-towns'] });
+      setNewTownName(''); setNewTownZoneId('');
+      toast({ title: 'Town added' });
+    },
+    onError: (e: any) => toast({ variant: 'destructive', title: 'Error', description: e.message }),
+  });
+
+  const updateTownMutation = useMutation({
+    mutationFn: ({ id, name, zoneId }: { id: number; name: string; zoneId: number | null }) =>
+      apiFetch(`/finance/towns/${id}`, { method: 'PUT', body: JSON.stringify({ name, zoneId }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['delivery-towns'] });
+      setEditingTown(null);
+      toast({ title: 'Town updated' });
+    },
+    onError: (e: any) => toast({ variant: 'destructive', title: 'Error', description: e.message }),
+  });
+
+  const deleteTownMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/finance/towns/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['delivery-towns'] }); toast({ title: 'Town removed' }); },
+    onError: (e: any) => toast({ variant: 'destructive', title: 'Error', description: e.message }),
+  });
+
+  const handleAddTown = () => {
+    if (!newTownName.trim()) { toast({ variant: 'destructive', title: 'Enter a town name' }); return; }
+    createTownMutation.mutate({ name: newTownName.trim(), zoneId: newTownZoneId ? parseInt(newTownZoneId) : null });
+  };
+
+  const handleSaveEditTown = () => {
+    if (!editingTown || !editingTown.name.trim()) return;
+    const zoneId = editingTown.zoneId && editingTown.zoneId !== '__none__' ? parseInt(editingTown.zoneId) : null;
+    updateTownMutation.mutate({ id: editingTown.id, name: editingTown.name.trim(), zoneId });
   };
 
   // ── Finance Settings (commissions + distance) ─────────────────────────────
@@ -186,6 +246,92 @@ export default function AdminPricing() {
                   </Button>
                 </div>
               ))}
+            </div>
+          </Section>
+
+          {/* Delivery Towns */}
+          <Section icon={MapPin} title="Towns & Delivery Areas" description="Map towns/areas to a zone. Order forms will show these towns — the system automatically applies the right delivery fee.">
+            <div className="space-y-4">
+              {/* Town list */}
+              {towns.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">No towns added yet. Add your first town below.</p>
+              )}
+              {towns.map(town => (
+                <div key={town.id} className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0">
+                  {editingTown?.id === town.id ? (
+                    <>
+                      <Input
+                        className="flex-1 h-9 rounded-lg"
+                        value={editingTown.name}
+                        onChange={e => setEditingTown({ ...editingTown, name: e.target.value })}
+                        onKeyDown={e => e.key === 'Enter' && handleSaveEditTown()}
+                      />
+                      <Select value={editingTown.zoneId} onValueChange={v => setEditingTown({ ...editingTown, zoneId: v })}>
+                        <SelectTrigger className="w-40 h-9 rounded-lg"><SelectValue placeholder="Zone…" /></SelectTrigger>
+                        <SelectContent position="popper">
+                          <SelectItem value="__none__">— No zone —</SelectItem>
+                          {(zones as Zone[]).map(z => (
+                            <SelectItem key={z.id} value={String(z.id)}>{z.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-green-600" onClick={handleSaveEditTown} disabled={updateTownMutation.isPending}>
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-muted-foreground" onClick={() => setEditingTown(null)}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 font-medium text-sm">{town.name}</span>
+                      {town.zoneName ? (
+                        <Badge className={`text-xs font-medium ${ZONE_COLORS[town.zoneName] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {town.zoneName} · GH₵{town.feeCedis?.toFixed(2)}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">No zone</Badge>
+                      )}
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setEditingTown({ id: town.id, name: town.name, zoneId: town.zoneId ? String(town.zoneId) : '' })}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-400 hover:text-red-600"
+                        onClick={() => deleteTownMutation.mutate(town.id)} disabled={deleteTownMutation.isPending}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+
+              {/* Add new town row */}
+              <div className="flex items-center gap-3 pt-2">
+                <Input
+                  className="flex-1 h-10 rounded-xl"
+                  placeholder="Town or area name (e.g. Tema, East Legon)"
+                  value={newTownName}
+                  onChange={e => setNewTownName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddTown()}
+                />
+                <Select value={newTownZoneId} onValueChange={setNewTownZoneId}>
+                  <SelectTrigger className="w-44 h-10 rounded-xl"><SelectValue placeholder="Assign zone…" /></SelectTrigger>
+                  <SelectContent position="popper">
+                    {(zones as Zone[]).map(z => (
+                      <SelectItem key={z.id} value={String(z.id)}>{z.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  className="h-10 gap-1.5 rounded-xl px-4"
+                  onClick={handleAddTown}
+                  disabled={createTownMutation.isPending || !newTownName.trim()}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Residents and admins will pick a town when placing orders — the system will automatically apply the matching zone's delivery fee.</p>
             </div>
           </Section>
 

@@ -9,6 +9,7 @@ export * from "./agents";
 export * from "./complaints";
 export * from "./orders";
 export * from "./delivery_zones";
+export * from "./delivery_towns";
 export * from "./employees";
 export * from "./expenses";
 export * from "./float_issues";
