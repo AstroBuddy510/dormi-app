@@ -8,6 +8,7 @@ import {
   vendorsTable,
   expensesTable,
   payrollPaymentsTable,
+  deliveryPartnersTable,
 } from "@workspace/db/schema";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -180,9 +181,10 @@ router.get("/stats", async (req, res) => {
         serviceFee: ordersTable.serviceFee,
         deliveryFee: ordersTable.deliveryFee,
         total: ordersTable.total,
-        orderType: ordersTable.orderType,
         paymentMethod: ordersTable.paymentMethod,
         vendorId: ordersTable.vendorId,
+        riderId: ordersTable.riderId,
+        deliveryPartnerId: ordersTable.deliveryPartnerId,
         createdAt: ordersTable.createdAt,
       })
       .from(ordersTable)
@@ -190,16 +192,24 @@ router.get("/stats", async (req, res) => {
 
     const vendors = await db.select({ id: vendorsTable.id, commissionPercent: vendorsTable.commissionPercent }).from(vendorsTable);
     const vendorCommissionMap: Record<number, number> = {};
-    vendors.forEach(v => { if (v.id && v.commissionPercent) vendorCommissionMap[v.id] = parseFloat(v.commissionPercent); });
+    vendors.forEach(v => { if (v.id) vendorCommissionMap[v.id] = parseFloat(v.commissionPercent ?? "5"); });
+
+    const partners = await db.select({ id: deliveryPartnersTable.id, commissionPercent: deliveryPartnersTable.commissionPercent }).from(deliveryPartnersTable);
+    const partnerCommissionMap: Record<number, number> = {};
+    partners.forEach(p => { if (p.id) partnerCommissionMap[p.id] = parseFloat(p.commissionPercent); });
 
     const [financeSettings] = await db.select().from(financeSettingsTable).limit(1);
-    const globalCommission = financeSettings ? parseFloat(financeSettings.vendorCommissionPercent) : 5;
-    const courierCommission = financeSettings ? parseFloat(financeSettings.courierCommissionFixed) : 10;
+    const globalVendorCommission = financeSettings ? parseFloat(financeSettings.vendorCommissionPercent) : 5;
 
+    // ── Net Revenue formula (same as Admin dashboard) ──────────────────────
+    // Service fee: all delivered orders
+    // In-house delivery: full fee for orders with our rider (no third-party partner)
+    // Third-party commission: our % of fee for orders routed to external partners
+    // Vendor commission: vendor's % of subtotal for vendor-sourced orders
     let serviceChargeRevenue = 0;
-    let deliveryFeeRevenue = 0;
+    let inHouseDeliveryRevenue = 0;
+    let thirdPartyCommissionRevenue = 0;
     let vendorCommissionRevenue = 0;
-    let courierCommissionRevenue = 0;
     let cashRevenue = 0;
     let paystackRevenue = 0;
 
@@ -210,15 +220,17 @@ router.get("/stats", async (req, res) => {
       const total = parseFloat(order.total);
 
       serviceChargeRevenue += serviceFee;
-      deliveryFeeRevenue += deliveryFee;
 
-      if (order.vendorId) {
-        const commPct = vendorCommissionMap[order.vendorId] ?? globalCommission;
-        vendorCommissionRevenue += (subtotal * commPct) / 100;
+      if (order.deliveryPartnerId) {
+        const rate = (partnerCommissionMap[order.deliveryPartnerId] ?? 0) / 100;
+        thirdPartyCommissionRevenue += deliveryFee * rate;
+      } else if (order.riderId) {
+        inHouseDeliveryRevenue += deliveryFee;
       }
 
-      if (order.orderType === "third_party") {
-        courierCommissionRevenue += courierCommission;
+      if (order.vendorId) {
+        const commPct = vendorCommissionMap[order.vendorId] ?? globalVendorCommission;
+        vendorCommissionRevenue += (subtotal * commPct) / 100;
       }
 
       if (order.paymentMethod === "cash") cashRevenue += total;
@@ -244,15 +256,15 @@ router.get("/stats", async (req, res) => {
     let totalPayroll = 0;
     for (const p of payrollPayments) totalPayroll += parseFloat(p.amount);
 
-    const totalRevenue = serviceChargeRevenue + deliveryFeeRevenue + vendorCommissionRevenue + courierCommissionRevenue;
+    const totalRevenue = serviceChargeRevenue + inHouseDeliveryRevenue + thirdPartyCommissionRevenue + vendorCommissionRevenue;
     const netProfit = totalRevenue - totalExpenses - totalPayroll;
     const utilitiesFlag = totalRevenue > 0 && utilitiesExpenses / totalRevenue > 0.2;
 
     res.json({
       serviceChargeRevenue: round2(serviceChargeRevenue),
-      deliveryFeeRevenue: round2(deliveryFeeRevenue),
+      deliveryFeeRevenue: round2(inHouseDeliveryRevenue),
       vendorCommissionRevenue: round2(vendorCommissionRevenue),
-      courierCommissionRevenue: round2(courierCommissionRevenue),
+      courierCommissionRevenue: round2(thirdPartyCommissionRevenue),
       totalRevenue: round2(totalRevenue),
       cashBalance: round2(cashRevenue),
       paystackBalance: round2(paystackRevenue),

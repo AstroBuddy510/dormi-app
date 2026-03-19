@@ -210,9 +210,9 @@ function exportPDF(stats: any, periodLabel: string) {
     head: [['Revenue Source', `Amount (${C})`]],
     body: [
       ['Service Charge', fmtRaw(stats.serviceChargeRevenue)],
-      ['Delivery Fees', fmtRaw(stats.deliveryFeeRevenue)],
+      ['In-House Delivery', fmtRaw(stats.deliveryFeeRevenue)],
       ['Vendor Commission', fmtRaw(stats.vendorCommissionRevenue)],
-      ['Courier Commission', fmtRaw(stats.courierCommissionRevenue)],
+      ['3rd-Party Commission', fmtRaw(stats.courierCommissionRevenue)],
     ],
     foot: [['TOTAL REVENUE', fmtRaw(stats.totalRevenue)]],
     headStyles: { fillColor: GREEN, textColor: WHITE, fontStyle: 'bold', fontSize: 8.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
@@ -419,9 +419,9 @@ export default function AccountantOverview() {
                   <CardContent className="space-y-3">
                     {[
                       { label: 'Service Charge', value: stats.serviceChargeRevenue, icon: '💼' },
-                      { label: 'Delivery Fees', value: stats.deliveryFeeRevenue, icon: '🚚' },
+                      { label: 'In-House Delivery', value: stats.deliveryFeeRevenue, icon: '🚚' },
                       { label: 'Vendor Commission', value: stats.vendorCommissionRevenue, icon: '🏪' },
-                      { label: 'Courier Commission', value: stats.courierCommissionRevenue, icon: '📦' },
+                      { label: '3rd-Party Commission', value: stats.courierCommissionRevenue, icon: '📦' },
                     ].map(({ label, value, icon }) => (
                       <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                         <span className="text-sm">{icon} {label}</span>
