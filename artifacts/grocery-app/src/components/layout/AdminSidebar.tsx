@@ -3,7 +3,7 @@ import { useAuth } from '@/store';
 import {
   LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings,
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
-  Briefcase, ShoppingBasket, Bell, BarChart3, Tag,
+  Briefcase, ShoppingBasket, Bell, BarChart3, Tag, MessageCircle,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/components/ui/StatusBadge';
@@ -34,6 +34,13 @@ export function AdminSidebar() {
   });
   const pendingCount = (requests as any[]).length;
 
+  const { data: unreadData } = useQuery<{ total: number }>({
+    queryKey: ['rider-messages-unread-admin'],
+    queryFn: () => fetch(`${BASE}/api/rider-messages/unread-count?role=admin`).then(r => r.json()),
+    refetchInterval: 15000,
+  });
+  const riderMsgUnread = unreadData?.total ?? 0;
+
   const groups: NavGroup[] = [
     {
       heading: 'Operations',
@@ -43,6 +50,7 @@ export function AdminSidebar() {
         { icon: PhoneCall,       label: 'Call Log',          path: '/call-log' },
         { icon: Truck,           label: 'Assign Riders',     path: '/riders' },
         { icon: Building2,       label: 'Delivery Partners', path: '/delivery-partners' },
+        { icon: MessageCircle,   label: 'Rider Messages',    path: '/rider-messages', badge: riderMsgUnread || undefined },
         { icon: MessageSquareWarning, label: 'Complaints',   path: '/complaints' },
       ],
     },

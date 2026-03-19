@@ -64,6 +64,7 @@ lib/
 - **Finance** (`/finance`): daily/weekly/monthly revenue breakdown, expenses, net profit, CSV export, utilities toggle
 - **Employees** (`/employees`): staff CRUD (salary types: monthly/daily/per_trip), float tracking for riders
 - **Pricing** (`/pricing`): zone delivery fees, vendor commission %, courier commission fixed, distance rate/threshold + legacy global fee
+- **Rider Messages** (`/rider-messages`): two-way inbox to message riders; unread badge in sidebar; thread view with reply UI
 
 ### Call Agent
 - Login with PIN: **3456** (any phone)
@@ -80,11 +81,11 @@ lib/
 
 ### Rider
 - Login with PIN: **9012** (phone must exist in riders table) — demo: Kofi Mensah (0244111001, PIN 4321)
-- **Incoming Job Alert**: When admin assigns an order, rider sees a pulsing red "Incoming Job" card with a 3-beep audio alert (Web Audio API). Page polls every 5 seconds.
-- **Accept / Decline**: Rider taps Accept (shows in Active Deliveries) or Decline (order returned to admin for reassignment; `riderId` cleared)
-- Active Deliveries: Google Maps + GhanaPost GPS navigation, Call Customer, Mark Picked Up → Snap Proof photo → Mark Delivered
-- Completed Today: summary of delivered orders for the shift
-- `riderAccepted` (nullable boolean) column on orders: null = awaiting response, true = accepted, false = n/a (declined unassigns)
+- **Three-tab interface**: Jobs | Stats | Chat
+- **Jobs tab**: Incoming Job Alert (pulsing red + 3-beep audio), Accept/Decline, Active Deliveries (navigation, photo proof, mark delivered), Completed Today
+- **Stats tab**: stat cards (Today/Week/All-Time/Avg time), 7-day delivery bar chart, earned + locked achievement badges
+- **Chat tab**: two-way messaging with admin; polls every 8s; unread badge on Chat tab trigger; messages auto-mark-read
+- `riderAccepted` (nullable boolean): null = awaiting, true = accepted, false = declined (unassigns rider)
 
 ## Pricing Logic
 - **Delivery fee**: zone-based (Inner Accra GH₵25, Outer Accra GH₵35, Far GH₵50) or fallback flat fee

@@ -3,10 +3,13 @@ import { useAuth } from '@/store';
 import { useListOrders, useUpdateOrderStatus, OrderStatus, useUploadOrderPhoto, UploadPhotoRequestPhotoType } from '@workspace/api-client-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
+import { RiderStats } from './RiderStats';
+import { RiderMessages } from './RiderMessages';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useQueryClient } from '@tanstack/react-query';
-import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff, BarChart3, MessageCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -167,10 +170,18 @@ export default function RiderJobs() {
     }
   }, [uploadPhoto, toast]);
 
+  const { data: unreadData } = useQuery<{ total: number }>({
+    queryKey: ['rider-messages-unread', user?.id],
+    queryFn: () => fetch(`${BASE}/api/rider-messages/unread-count`).then(r => r.json()),
+    refetchInterval: 10_000,
+    enabled: !!user?.id,
+  });
+  const unreadCount = unreadData?.total ?? 0;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
-      <div className="bg-zinc-900 px-6 pt-12 pb-6 text-white mb-6">
+      <div className="bg-zinc-900 px-6 pt-12 pb-5 text-white">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-zinc-800 rounded-full">
             <Bike className="h-6 w-6 text-primary" />
@@ -188,7 +199,34 @@ export default function RiderJobs() {
         </div>
       </div>
 
-      <div className="px-4 max-w-md mx-auto space-y-6">
+      <div className="px-4 max-w-md mx-auto">
+
+        {/* Tabs */}
+        <Tabs defaultValue="jobs" className="w-full mt-4">
+          <TabsList className="w-full grid grid-cols-3 mb-5 rounded-2xl bg-white border border-border shadow-sm h-11">
+            <TabsTrigger value="jobs" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
+              <Bike size={14} /> Jobs
+              {(pendingJobs.length + activeJobs.length) > 0 && (
+                <span className="bg-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                  {pendingJobs.length + activeJobs.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
+              <BarChart3 size={14} /> Stats
+            </TabsTrigger>
+            <TabsTrigger value="messages" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
+              <MessageCircle size={14} /> Chat
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                  {unreadCount}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ── Jobs Tab ── */}
+          <TabsContent value="jobs" className="space-y-6 mt-0">
 
         {/* ── Incoming Jobs ── */}
         {pendingJobs.length > 0 && (
@@ -457,6 +495,22 @@ export default function RiderJobs() {
             </div>
           </div>
         )}
+
+          </TabsContent>
+
+          {/* ── Stats Tab ── */}
+          <TabsContent value="stats" className="mt-0">
+            <RiderStats allJobs={allJobs} />
+          </TabsContent>
+
+          {/* ── Messages Tab ── */}
+          <TabsContent value="messages" className="mt-0">
+            {user && (
+              <RiderMessages riderId={user.id} riderName={user.name} />
+            )}
+          </TabsContent>
+
+        </Tabs>
       </div>
     </div>
   );

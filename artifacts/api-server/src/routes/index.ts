@@ -20,6 +20,7 @@ import floatRouter from "./float";
 import payrollRouter from "./payroll";
 import paymentsRouter from "./payments";
 import gatewaySettingsRouter from "./gatewaySettings";
+import riderMessagesRouter from "./riderMessages";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use("/float", floatRouter);
 router.use("/payroll", payrollRouter);
 router.use("/payments", paymentsRouter);
 router.use("/settings/gateway", gatewaySettingsRouter);
+router.use("/rider-messages", riderMessagesRouter);
 
 export default router;
