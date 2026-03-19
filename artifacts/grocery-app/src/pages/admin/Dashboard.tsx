@@ -246,12 +246,10 @@ export default function AdminDashboard() {
         </div>
 
         {/* ── Stat Cards ── */}
-        <div className="-mb-2">
-          <p className="text-sm font-medium text-muted-foreground">
-            Stats for: <span className="text-foreground font-semibold">{periodLabel}</span>
-            <span className="ml-2 text-xs text-muted-foreground/60">· auto-refreshes every 30s</span>
-          </p>
-        </div>
+        <p className="text-sm font-medium text-muted-foreground">
+          Stats for: <span className="text-foreground font-semibold">{periodLabel}</span>
+          <span className="ml-2 text-xs text-muted-foreground/60">· auto-refreshes every 30s</span>
+        </p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {statCards.map(({ title, value, icon: Icon, color }) => (
             <Card key={title} className="rounded-2xl shadow-sm border-border/50">
