@@ -1,10 +1,10 @@
 import { useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { format } from 'date-fns';
 import {
   Receipt, MapPin, User, Phone, Store, Bike, Clock,
-  CreditCard, Package, Camera, FileText, Printer,
+  CreditCard, Package, Camera, FileText, Printer, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -146,29 +146,38 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden">
         {/* Header band */}
-        <div className="sticky top-0 bg-white border-b border-border px-5 pt-5 pb-4 rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-white border-b border-border px-5 pt-4 pb-4 rounded-t-2xl z-10 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Receipt size={18} className="text-primary" />
-                <span className="text-lg font-bold">Order #{order.id}</span>
-              </div>
-              <div className="flex items-center gap-2">
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Receipt size={18} className="text-primary shrink-0" />
+                <span className="text-base font-bold truncate">Order #{order.id}</span>
                 <StatusBadge status={order.status} />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs rounded-lg gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                  className="h-8 text-xs rounded-xl gap-1 border-primary/30 text-primary hover:bg-primary/10 px-2.5"
                   onClick={handlePrint}
                 >
                   <Printer size={12} /> Print
                 </Button>
+                <DialogClose asChild>
+                  <button
+                    onClick={onClose}
+                    className="h-8 w-8 rounded-xl flex items-center justify-center border border-border bg-gray-50 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-muted-foreground transition-all"
+                    aria-label="Close"
+                  >
+                    <X size={15} />
+                  </button>
+                </DialogClose>
               </div>
             </DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground mt-1 pl-6">
+          <p className="text-xs text-muted-foreground mt-1.5 pl-6">
             {format(new Date(order.createdAt), 'EEEE, MMM d yyyy • h:mm a')}
           </p>
         </div>

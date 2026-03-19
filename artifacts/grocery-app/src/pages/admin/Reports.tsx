@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   BarChart3, Users, Truck, PhoneCall, Building2, Download,
   Star, Trophy, TrendingUp, Package, CheckCircle, XCircle,
-  Calendar, Clock3, ChevronDown,
+  Calendar, Clock3, ChevronDown, ArrowLeft,
 } from 'lucide-react';
 import { format, parseISO, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, subMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -192,6 +192,7 @@ export default function AdminReports() {
   const [toStr, setToStr]     = useState('');
   const [showPresets, setShowPresets] = useState(false);
   const [tab, setTab]         = useState<'residents' | 'vendors' | 'riders' | 'agents' | 'partners'>('residents');
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
 
   const { from, to } = useMemo(() => {
     if (preset === 'custom') {
@@ -425,40 +426,209 @@ export default function AdminReports() {
           )}
 
           {/* ── Call Agents ── */}
-          {tab === 'agents' && (
-            <ReportCard
-              title="Call Agent Orders"
-              icon={PhoneCall}
-              color="bg-pink-50 text-pink-800"
-              count={agentMap.callOrders.length}
-              onExport={() => exportPDF('agents', agentMap.callOrders.slice(0, 100).map((o: any) => [
-                `#${o.id}`, o.residentName, format(parseISO(o.createdAt), 'dd MMM yyyy HH:mm'),
-                o.items?.length ?? 0, `GHs ${o.total.toFixed(2)}`, o.status,
-              ]), ['Order #', 'Resident', 'Date', 'Items', 'Total', 'Status'], 'Call Agent Orders', dateLabel)}
-            >
-              {agentMap.callOrders.length === 0 ? (
-                <div className="py-10 text-center text-muted-foreground text-sm">No call-created orders in this period.</div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr><TH>Order #</TH><TH>Resident</TH><TH>Date</TH><TH right>Items</TH><TH right>Total</TH><TH>Status</TH></tr>
-                  </thead>
-                  <tbody>
-                    {agentMap.callOrders.map((o: any) => (
-                      <tr key={o.id} className="hover:bg-gray-50/70">
-                        <TD bold>#{o.id}</TD>
-                        <TD>{o.residentName || '—'}</TD>
-                        <TD muted>{format(parseISO(o.createdAt), 'dd MMM, HH:mm')}</TD>
-                        <TD right>{o.items?.length ?? 0}</TD>
-                        <TD green right>GHs {o.total.toFixed(2)}</TD>
-                        <TD><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', o.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>{o.status}</span></TD>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </ReportCard>
-          )}
+          {tab === 'agents' && (() => {
+            const { agents: agentRows, callOrders } = agentMap;
+            const selectedAgent = selectedAgentId !== null
+              ? agentRows.find(a => a.id === selectedAgentId) ?? null
+              : null;
+            const agentOrders = selectedAgentId !== null
+              ? callOrders.filter((o: any) => o.agentId === selectedAgentId)
+              : [];
+            const delivered = agentOrders.filter((o: any) => o.status === 'delivered');
+            const agentValue = agentOrders.reduce((s: number, o: any) => s + o.total, 0);
+
+            /* ── Drill-down: individual agent ── */
+            if (selectedAgent) {
+              return (
+                <div className="space-y-4">
+                  {/* Back breadcrumb */}
+                  <button
+                    onClick={() => setSelectedAgentId(null)}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground font-medium transition-colors"
+                  >
+                    <ArrowLeft size={15} /> Back to all agents
+                  </button>
+
+                  {/* Agent hero card */}
+                  <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden">
+                    <div className="bg-gradient-to-br from-pink-50 to-rose-50 px-6 py-5 border-b border-border/40">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-12 rounded-2xl bg-pink-100 flex items-center justify-center">
+                            <PhoneCall size={22} className="text-pink-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-foreground">{selectedAgent.name}</h2>
+                            <p className="text-sm text-muted-foreground">Call Agent · {dateLabel}</p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs rounded-xl gap-1.5 bg-white/70 hover:bg-white"
+                          onClick={() => exportPDF(
+                            `agent-${selectedAgent.id}`,
+                            agentOrders.map((o: any) => [
+                              `#${o.id}`, o.residentName || '—',
+                              format(parseISO(o.createdAt), 'dd MMM yyyy HH:mm'),
+                              o.items?.length ?? 0, `GHs ${o.total.toFixed(2)}`, o.status,
+                            ]),
+                            ['Order #', 'Resident', 'Date', 'Items', 'Total', 'Status'],
+                            `${selectedAgent.name} — Call Agent Sales`,
+                            dateLabel,
+                          )}
+                        >
+                          <Download size={12} /> Export PDF
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Stats strip */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border/40">
+                      {[
+                        { label: 'Total Orders', value: agentOrders.length, color: 'text-foreground' },
+                        { label: 'Delivered', value: delivered.length, color: 'text-green-700' },
+                        { label: 'In Progress', value: agentOrders.length - delivered.length, color: 'text-amber-600' },
+                        { label: 'Total Value', value: `GHs ${agentValue.toFixed(2)}`, color: 'text-green-700 font-mono' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="px-5 py-4">
+                          <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                          <p className={cn('text-xl font-bold', color)}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Success rate bar */}
+                    {agentOrders.length > 0 && (
+                      <div className="px-6 py-3 bg-gray-50/60 border-t border-border/30 flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-24 shrink-0">Delivery Rate</span>
+                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-green-500 rounded-full transition-all"
+                            style={{ width: `${Math.round((delivered.length / agentOrders.length) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold text-green-700 w-10 text-right">
+                          {Math.round((delivered.length / agentOrders.length) * 100)}%
+                        </span>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Individual orders table */}
+                  <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-border/50 bg-gray-50/60">
+                      <p className="text-sm font-semibold text-muted-foreground">
+                        {agentOrders.length === 0 ? 'No orders' : `${agentOrders.length} order${agentOrders.length !== 1 ? 's' : ''} in this period`}
+                      </p>
+                    </div>
+                    {agentOrders.length === 0 ? (
+                      <div className="py-10 text-center text-muted-foreground text-sm">No call orders attributed to this agent in this period.</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr><TH>Order #</TH><TH>Resident</TH><TH>Date</TH><TH right>Items</TH><TH right>Total</TH><TH>Status</TH></tr>
+                        </thead>
+                        <tbody>
+                          {agentOrders.map((o: any) => (
+                            <tr key={o.id} className="hover:bg-gray-50/70">
+                              <TD bold>#{o.id}</TD>
+                              <TD>{o.residentName || '—'}</TD>
+                              <TD muted>{format(parseISO(o.createdAt), 'dd MMM, HH:mm')}</TD>
+                              <TD right>{o.items?.length ?? 0}</TD>
+                              <TD green right>GHs {o.total.toFixed(2)}</TD>
+                              <TD>
+                                <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full',
+                                  o.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                )}>{o.status}</span>
+                              </TD>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </Card>
+                </div>
+              );
+            }
+
+            /* ── Overview: all agents leaderboard + selectable cards ── */
+            return (
+              <div className="space-y-4">
+                <ReportCard
+                  title="Call Agent Leaderboard"
+                  icon={PhoneCall}
+                  color="bg-pink-50 text-pink-800"
+                  count={agentRows.length}
+                  onExport={() => exportPDF('agents', agentRows.map((a, i) => [
+                    i + 1, a.name, a.orders, `GHs ${a.value.toFixed(2)}`,
+                  ]), ['Rank', 'Agent', 'Total Orders', 'Total Value'], 'Call Agent Performance', dateLabel)}
+                >
+                  {agentRows.length === 0 ? (
+                    <div className="py-10 text-center text-muted-foreground text-sm">No call-created orders in this period.</div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr><TH>Rank</TH><TH>Agent</TH><TH right>Orders</TH><TH right>Total Value</TH><TH right>Avg / Order</TH><TH></TH></tr>
+                      </thead>
+                      <tbody>
+                        {agentRows.map((a, i) => (
+                          <tr key={a.id} className="hover:bg-gray-50/70 cursor-pointer" onClick={() => setSelectedAgentId(a.id)}>
+                            <TD><RankBadge rank={i + 1} /></TD>
+                            <TD bold>{a.name}</TD>
+                            <TD right>{a.orders}</TD>
+                            <TD green right>GHs {a.value.toFixed(2)}</TD>
+                            <TD right muted>GHs {(a.value / a.orders).toFixed(2)}</TD>
+                            <TD>
+                              <span className="text-xs text-primary font-medium hover:underline">View →</span>
+                            </TD>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </ReportCard>
+
+                {/* Agent selector cards */}
+                {agentRows.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-3 uppercase tracking-wide">
+                      Click an agent to see their individual sales breakdown
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {agentRows.map((a, i) => (
+                        <button
+                          key={a.id}
+                          onClick={() => setSelectedAgentId(a.id)}
+                          className="text-left p-4 rounded-2xl border border-border bg-white hover:border-pink-200 hover:bg-pink-50/40 hover:shadow-sm transition-all group"
+                        >
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="h-9 w-9 rounded-xl bg-pink-100 group-hover:bg-pink-200 transition-colors flex items-center justify-center text-pink-700 font-bold text-sm">
+                              {a.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm text-foreground truncate">{a.name}</p>
+                              <p className="text-xs text-muted-foreground">Rank #{i + 1}</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-gray-50 rounded-xl p-2.5">
+                              <p className="text-xs text-muted-foreground">Orders</p>
+                              <p className="font-bold text-foreground">{a.orders}</p>
+                            </div>
+                            <div className="bg-green-50 rounded-xl p-2.5">
+                              <p className="text-xs text-muted-foreground">Value</p>
+                              <p className="font-bold text-green-700 text-xs">GHs {a.value.toFixed(0)}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Delivery Partners ── */}
           {tab === 'partners' && (
