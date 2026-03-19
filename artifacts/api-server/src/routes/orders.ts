@@ -77,6 +77,7 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     isSubscription: order.isSubscription,
     callOnly: order.callOnly,
     callAccepted: order.callAccepted,
+    riderAccepted: order.riderAccepted ?? null,
     photoUrl: order.photoUrl,
     deliveryPhotoUrl: order.deliveryPhotoUrl,
     pickupDeadline: order.pickupDeadline?.toISOString() ?? null,
@@ -229,7 +230,36 @@ router.put("/:id/assign-rider", async (req, res) => {
     const id = parseInt(req.params.id);
     const body = AssignRiderBody.parse(req.body);
     const [order] = await db.update(ordersTable)
-      .set({ riderId: body.riderId, updatedAt: new Date() })
+      .set({ riderId: body.riderId, riderAccepted: null, updatedAt: new Date() })
+      .where(eq(ordersTable.id, id))
+      .returning();
+    if (!order) {
+      res.status(404).json({ error: "not_found", message: "Order not found" });
+      return;
+    }
+    res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/rider-response", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { accepted } = req.body;
+    if (typeof accepted !== "boolean") {
+      res.status(400).json({ error: "bad_request", message: "accepted must be a boolean" });
+      return;
+    }
+    let updateData: any;
+    if (accepted) {
+      updateData = { riderAccepted: true, updatedAt: new Date() };
+    } else {
+      // Rider declined — unassign them so admin can reassign
+      updateData = { riderId: null, riderAccepted: null, updatedAt: new Date() };
+    }
+    const [order] = await db.update(ordersTable)
+      .set(updateData)
       .where(eq(ordersTable.id, id))
       .returning();
     if (!order) {

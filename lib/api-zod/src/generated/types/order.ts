@@ -28,6 +28,7 @@ export interface Order {
   isSubscription: boolean;
   callOnly: boolean;
   callAccepted?: boolean;
+  riderAccepted?: boolean | null;
   photoUrl?: string;
   deliveryPhotoUrl?: string;
   pickupDeadline?: Date;

@@ -1,12 +1,14 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '@/store';
 import { useListOrders, useUpdateOrderStatus, OrderStatus, useUploadOrderPhoto, UploadPhotoRequestPhotoType } from '@workspace/api-client-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone } from 'lucide-react';
+import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const GHANA_POST_RE = /\b([A-Z]{2,3}-\d{3,4}-\d{3,4})\b/i;
 
@@ -23,23 +25,50 @@ function ghanaPostUrl(code: string): string {
   return `https://ghanapostgps.com/map?address=${encodeURIComponent(code)}`;
 }
 
+function playAlertTone() {
+  try {
+    const ctx = new AudioContext();
+    const times = [0, 0.15, 0.30];
+    times.forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime + t);
+      gain.gain.setValueAtTime(0, ctx.currentTime + t);
+      gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.12);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.13);
+    });
+    setTimeout(() => ctx.close(), 1000);
+  } catch {
+    // AudioContext unavailable (e.g. on some older devices) — fail silently
+  }
+}
+
 async function uploadFileToStorage(file: File): Promise<string> {
-  const urlRes = await fetch('/api/storage/uploads/request-url', {
+  const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
   });
   if (!urlRes.ok) throw new Error('Failed to get upload URL');
   const { uploadURL, objectPath } = await urlRes.json();
-
-  const uploadRes = await fetch(uploadURL, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type },
-    body: file,
-  });
+  const uploadRes = await fetch(uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
   if (!uploadRes.ok) throw new Error('Failed to upload photo');
-
   return objectPath as string;
+}
+
+async function respondToJob(orderId: number, accepted: boolean) {
+  const res = await fetch(`${BASE}/api/orders/${orderId}/rider-response`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accepted }),
+  });
+  if (!res.ok) throw new Error((await res.json()).message ?? 'Request failed');
+  return res.json();
 }
 
 export default function RiderJobs() {
@@ -47,63 +76,99 @@ export default function RiderJobs() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: jobs = [], isLoading } = useListOrders({ riderId: user?.id });
+  const { data: allJobs = [], isLoading } = useListOrders(
+    { riderId: user?.id },
+    { query: { refetchInterval: 5000 } }
+  );
 
   const updateStatus = useUpdateOrderStatus({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      toast({ title: "Status Updated" });
-    }
+      toast({ title: 'Status Updated' });
+    },
   });
 
   const uploadPhoto = useUploadOrderPhoto({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      toast({ title: "Photo uploaded!", description: "Proof of delivery saved." });
-    }
+      toast({ title: 'Photo uploaded!', description: 'Proof of delivery saved.' });
+    },
   });
 
   const [uploading, setUploading] = useState<Record<number, boolean>>({});
   const [previews, setPreviews] = useState<Record<number, string>>({});
+  const [responding, setResponding] = useState<Record<number, boolean>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  // Track which incoming-job IDs we've already played a sound for
+  const alertedIds = useRef<Set<number>>(new Set());
+
+  // Categorise jobs
+  // pendingJobs  = assigned to this rider, awaiting their response, not yet active
+  const pendingJobs   = allJobs.filter(j =>
+    (j as any).riderAccepted === null &&
+    !['in_transit', 'delivered', 'cancelled'].includes(j.status)
+  );
+  // activeJobs = accepted ready-to-deliver orders, or already in_transit (handles legacy + new flow)
+  const activeJobs    = allJobs.filter(j =>
+    ['ready', 'in_transit'].includes(j.status) &&
+    (j as any).riderAccepted !== false
+  );
+  const completedJobs = allJobs.filter(j => j.status === 'delivered');
+
+  // Play alert sound for each new incoming job
+  const pendingKey = pendingJobs.map(j => j.id).join(',');
+  useEffect(() => {
+    const newOnes = pendingJobs.filter(j => !alertedIds.current.has(j.id));
+    if (newOnes.length > 0) {
+      playAlertTone();
+      newOnes.forEach(j => alertedIds.current.add(j.id));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKey]);
 
   const handleUpdate = (id: number, status: OrderStatus) => {
     updateStatus.mutate({ id, data: { status } });
   };
 
-  const triggerFilePicker = (jobId: number) => {
-    fileInputRefs.current[jobId]?.click();
+  const handleRespond = async (jobId: number, accepted: boolean) => {
+    setResponding(prev => ({ ...prev, [jobId]: true }));
+    try {
+      await respondToJob(jobId, accepted);
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({
+        title: accepted ? 'Job Accepted!' : 'Job Declined',
+        description: accepted ? 'Head to the pickup location.' : 'The admin will reassign.',
+        variant: accepted ? 'default' : 'destructive',
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setResponding(prev => ({ ...prev, [jobId]: false }));
+    }
   };
+
+  const triggerFilePicker = (jobId: number) => fileInputRefs.current[jobId]?.click();
 
   const handleFileSelected = useCallback(async (jobId: number, file: File) => {
     if (!file) return;
-
     const localPreview = URL.createObjectURL(file);
     setPreviews(prev => ({ ...prev, [jobId]: localPreview }));
     setUploading(prev => ({ ...prev, [jobId]: true }));
-
     try {
       const objectPath = await uploadFileToStorage(file);
-      uploadPhoto.mutate({
-        id: jobId,
-        data: {
-          photoType: UploadPhotoRequestPhotoType.delivery,
-          photoUrl: objectPath,
-        },
-      });
+      uploadPhoto.mutate({ id: jobId, data: { photoType: UploadPhotoRequestPhotoType.delivery, photoUrl: objectPath } });
     } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message ?? "Could not upload photo.", variant: "destructive" });
+      toast({ title: 'Upload failed', description: err.message ?? 'Could not upload photo.', variant: 'destructive' });
       setPreviews(prev => { const n = { ...prev }; delete n[jobId]; return n; });
     } finally {
       setUploading(prev => ({ ...prev, [jobId]: false }));
     }
   }, [uploadPhoto, toast]);
 
-  const activeJobs = jobs.filter(j => ['ready', 'in_transit'].includes(j.status));
-  const completedJobs = jobs.filter(j => j.status === 'delivered');
-
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header */}
       <div className="bg-zinc-900 px-6 pt-12 pb-6 text-white mb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-zinc-800 rounded-full">
@@ -113,10 +178,90 @@ export default function RiderJobs() {
             <h1 className="text-xl font-display font-bold">Rider App</h1>
             <p className="text-zinc-400 text-sm">Stay safe out there, {user?.name}</p>
           </div>
+          {pendingJobs.length > 0 && (
+            <div className="ml-auto flex items-center gap-1.5 bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
+              <Bell size={13} />
+              {pendingJobs.length} Incoming
+            </div>
+          )}
         </div>
       </div>
 
       <div className="px-4 max-w-md mx-auto space-y-6">
+
+        {/* ── Incoming Jobs ── */}
+        {pendingJobs.length > 0 && (
+          <div>
+            <h2 className="text-lg font-bold text-red-600 mb-3 flex items-center gap-2">
+              <Bell size={20} className="animate-bounce" /> Incoming Jobs ({pendingJobs.length})
+            </h2>
+            <div className="space-y-4">
+              {pendingJobs.map(job => (
+                <Card key={job.id} className="rounded-2xl border-2 border-red-400 shadow-lg overflow-hidden">
+                  <div className="bg-red-50 p-4 border-b border-red-200 flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-lg text-red-700">Order #{job.id} — New Job!</p>
+                      <p className="text-sm text-red-500">{job.items.length} item{job.items.length !== 1 ? 's' : ''} · GH₵{job.total?.toFixed(2)}</p>
+                    </div>
+                    <Bell className="text-red-500 animate-bounce" size={24} />
+                  </div>
+
+                  <CardContent className="p-4 space-y-3 bg-white">
+                    {/* Address */}
+                    <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 flex items-start gap-3">
+                      <div className="mt-0.5 p-1.5 bg-primary/10 rounded-lg">
+                        <MapPin size={16} className="text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-sm leading-tight">{job.residentName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{job.residentAddress}</p>
+                      </div>
+                    </div>
+
+                    {/* Items summary */}
+                    <div className="space-y-1">
+                      {(job.items as any[]).slice(0, 3).map((item: any, i: number) => (
+                        <div key={i} className="flex justify-between text-xs text-muted-foreground">
+                          <span>{item.name}</span>
+                          <span>×{item.quantity}</span>
+                        </div>
+                      ))}
+                      {job.items.length > 3 && (
+                        <p className="text-xs text-muted-foreground">+{job.items.length - 3} more items</p>
+                      )}
+                    </div>
+
+                    {/* Accept / Decline */}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-base"
+                        onClick={() => handleRespond(job.id, true)}
+                        disabled={responding[job.id]}
+                      >
+                        <CheckCircle2 className="mr-2" size={18} />
+                        {responding[job.id] ? 'Accepting…' : 'Accept'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 h-12 rounded-xl border-red-400 text-red-500 hover:bg-red-50 font-bold text-base"
+                        onClick={() => handleRespond(job.id, false)}
+                        disabled={responding[job.id]}
+                      >
+                        <BellOff className="mr-2" size={18} />
+                        Decline
+                      </Button>
+                    </div>
+                    <p className="text-xs text-center text-muted-foreground">
+                      Declining will return this order to the admin for reassignment.
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Active Deliveries ── */}
         <div>
           <h2 className="text-lg font-bold text-foreground mb-4">Active Deliveries ({activeJobs.length})</h2>
           {isLoading ? <p className="text-muted-foreground text-center">Loading...</p> :
@@ -142,7 +287,7 @@ export default function RiderJobs() {
                     </div>
 
                     <CardContent className="p-4 space-y-4 bg-gray-50/50">
-                      {/* Delivery address block */}
+                      {/* Delivery address */}
                       <div className="bg-white rounded-xl border border-border p-3.5 flex items-start gap-3">
                         <div className="mt-0.5 p-1.5 bg-primary/10 rounded-lg">
                           <MapPin size={18} className="text-primary" />
@@ -158,9 +303,8 @@ export default function RiderJobs() {
                         </div>
                       </div>
 
-                      {/* Navigation buttons */}
+                      {/* Navigation */}
                       <div className="space-y-2">
-                        {/* Primary: Google Maps direct navigation */}
                         <a
                           href={googleMapsNavUrl(job.residentAddress || job.residentName || '')}
                           target="_blank"
@@ -170,8 +314,6 @@ export default function RiderJobs() {
                           <Navigation size={18} />
                           Navigate with Google Maps
                         </a>
-
-                        {/* Secondary row: GhanaPost GPS (if code found) + Call */}
                         <div className="flex gap-2">
                           {extractGhanaPostCode(job.residentAddress || '') ? (
                             <a
@@ -266,7 +408,6 @@ export default function RiderJobs() {
                               <CheckCircle2 className="mr-2" size={18} /> Delivered
                             </Button>
                           </div>
-
                           {!hasProof && (
                             <p className="text-xs text-center text-red-500 font-medium">
                               Take a photo of the delivered goods before marking as delivered.
@@ -282,6 +423,7 @@ export default function RiderJobs() {
           )}
         </div>
 
+        {/* ── Completed Today ── */}
         {completedJobs.length > 0 && (
           <div>
             <h2 className="text-lg font-bold text-foreground mb-4">Completed Today ({completedJobs.length})</h2>

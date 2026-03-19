@@ -79,10 +79,12 @@ lib/
 - Float management (issue float to riders, record reconciliation)
 
 ### Rider
-- Login with PIN: **9012** (phone must exist in riders table)
-- View assigned jobs with full address and Ghana GPS code
-- Update status: On Way → Picked Up → Delivered
-- Upload delivery photo proof
+- Login with PIN: **9012** (phone must exist in riders table) — demo: Kofi Mensah (0244111001, PIN 4321)
+- **Incoming Job Alert**: When admin assigns an order, rider sees a pulsing red "Incoming Job" card with a 3-beep audio alert (Web Audio API). Page polls every 5 seconds.
+- **Accept / Decline**: Rider taps Accept (shows in Active Deliveries) or Decline (order returned to admin for reassignment; `riderId` cleared)
+- Active Deliveries: Google Maps + GhanaPost GPS navigation, Call Customer, Mark Picked Up → Snap Proof photo → Mark Delivered
+- Completed Today: summary of delivered orders for the shift
+- `riderAccepted` (nullable boolean) column on orders: null = awaiting response, true = accepted, false = n/a (declined unassigns)
 
 ## Pricing Logic
 - **Delivery fee**: zone-based (Inner Accra GH₵25, Outer Accra GH₵35, Far GH₵50) or fallback flat fee
