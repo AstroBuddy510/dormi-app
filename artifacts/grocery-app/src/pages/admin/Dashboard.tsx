@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import {
   useGetAdminStats,
@@ -51,12 +51,59 @@ export default function AdminDashboard() {
 
   /* ── Data ─────────────────────────────────────────── */
   const { data: stats, refetch: refetchStats } = useGetAdminStats({
-    query: { refetchInterval: 30_000 },
+    query: { refetchInterval: 10_000 },
   });
   const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders } = useListOrders(
     undefined,
-    { query: { refetchInterval: 30_000 } },
+    { query: { refetchInterval: 10_000 } },
   );
+
+  /* ── Auto-detect rider-delivered orders ──────────────── */
+  const prevStatusesRef = useRef<Record<number, string>>({});
+  const isInitialLoadRef = useRef(true);
+
+  useEffect(() => {
+    if (!allOrders.length) return;
+
+    if (!isInitialLoadRef.current) {
+      const newlyDelivered = allOrders.filter(order => {
+        const prev = prevStatusesRef.current[order.id];
+        return order.status === 'delivered' && prev === 'in_transit';
+      });
+
+      newlyDelivered.forEach(order => {
+        // Play a soft success chime
+        try {
+          const ctx = new AudioContext();
+          const notes = [523, 659, 784]; // C5, E5, G5 — major chord arpeggio
+          notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.12);
+            gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.12);
+            gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + i * 0.12 + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.35);
+            osc.start(ctx.currentTime + i * 0.12);
+            osc.stop(ctx.currentTime + i * 0.12 + 0.36);
+          });
+          setTimeout(() => ctx.close(), 1500);
+        } catch { /* AudioContext unavailable */ }
+
+        toast({
+          title: '✅ Order Delivered!',
+          description: `Order #${order.id} — ${order.residentName || 'customer'} — delivered by ${(order as any).riderName || 'rider'}. Timer stopped.`,
+        });
+      });
+    }
+
+    prevStatusesRef.current = Object.fromEntries(allOrders.map(o => [o.id, o.status]));
+    isInitialLoadRef.current = false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allOrders]);
+
   const { data: riders = [] }          = useListRiders();
   const { data: deliveryPartners = [] } = useQuery<DeliveryPartner[]>({
     queryKey: ['/api/delivery-partners'],
