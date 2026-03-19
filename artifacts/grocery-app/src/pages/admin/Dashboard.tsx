@@ -49,8 +49,13 @@ export default function AdminDashboard() {
   const [historyPage, setHistoryPage] = useState(1);
 
   /* ── Data ─────────────────────────────────────────── */
-  const { data: stats, refetch: refetchStats } = useGetAdminStats();
-  const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders } = useListOrders();
+  const { data: stats, refetch: refetchStats } = useGetAdminStats({
+    query: { refetchInterval: 30_000 },
+  });
+  const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders } = useListOrders(
+    undefined,
+    { query: { refetchInterval: 30_000 } },
+  );
   const { data: riders = [] }          = useListRiders();
   const { data: deliveryPartners = [] } = useQuery<DeliveryPartner[]>({
     queryKey: ['/api/delivery-partners'],
@@ -159,14 +164,48 @@ export default function AdminDashboard() {
     setHistoryPage(Math.max(1, Math.min(historyTotalPages, p)));
   }
 
+  /* ── Period label ────────────────────────────────────── */
+  const periodLabel =
+    datePreset === 'today'  ? 'Today' :
+    datePreset === 'week'   ? 'This Week' :
+    (fromDate && toDate)    ? `${fromDate} – ${toDate}` : 'All Time';
+
+  /* ── Period-scoped orders (all statuses, within date range) ── */
+  const periodOrders = useMemo(() => {
+    const now = new Date();
+    return allOrders.filter((o) => {
+      const date = parseISO(o.createdAt);
+      if (datePreset === 'today') {
+        return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
+      }
+      if (datePreset === 'week') {
+        return isWithinInterval(date, {
+          start: startOfWeek(now, { weekStartsOn: 1 }),
+          end: endOfWeek(now, { weekStartsOn: 1 }),
+        });
+      }
+      if (datePreset === 'custom') {
+        if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
+        if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
+        return true;
+      }
+      return true;
+    });
+  }, [allOrders, datePreset, fromDate, toDate]);
+
+  const periodRevenue = useMemo(
+    () => periodOrders.filter(o => o.status === 'delivered').reduce((sum, o) => sum + parseFloat(o.total ?? '0'), 0),
+    [periodOrders]
+  );
+
   /* ── Stat cards ──────────────────────────────────────── */
   const statCards = [
-    { title: 'Total Orders',  value: stats?.totalOrders     ?? 0,                        icon: ShoppingCart, color: 'text-blue-600 bg-blue-50' },
-    { title: 'Pending',       value: stats?.pendingOrders   ?? 0,                        icon: Activity,     color: 'text-red-600 bg-red-50' },
-    { title: 'In Progress',   value: stats?.inProgressOrders ?? 0,                       icon: Package,      color: 'text-amber-600 bg-amber-50' },
-    { title: 'Delivered',     value: stats?.deliveredOrders ?? 0,                        icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
-    { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                        icon: Users,        color: 'text-purple-600 bg-purple-50' },
-    { title: 'Revenue',       value: `₵${(stats?.totalRevenue ?? 0).toFixed(2)}`,        icon: DollarSign,   color: 'text-emerald-600 bg-emerald-50' },
+    { title: 'Total Orders',  value: periodOrders.length,                                             icon: ShoppingCart, color: 'text-blue-600 bg-blue-50' },
+    { title: 'Pending',       value: periodOrders.filter(o => o.status === 'pending').length,         icon: Activity,     color: 'text-red-600 bg-red-50' },
+    { title: 'In Progress',   value: periodOrders.filter(o => ['accepted','ready','in_transit'].includes(o.status)).length, icon: Package, color: 'text-amber-600 bg-amber-50' },
+    { title: 'Delivered',     value: periodOrders.filter(o => o.status === 'delivered').length,       icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
+    { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                                     icon: Users,        color: 'text-purple-600 bg-purple-50' },
+    { title: 'Revenue',       value: `GH₵ ${periodRevenue.toFixed(2)}`,                               icon: DollarSign,   color: 'text-emerald-600 bg-emerald-50' },
   ];
 
   const liveTabs: { label: string; value: LiveFilter }[] = [
@@ -207,6 +246,28 @@ export default function AdminDashboard() {
         </div>
 
         {/* ── Stat Cards ── */}
+        <div className="flex items-center justify-between flex-wrap gap-2 -mb-2">
+          <p className="text-sm font-medium text-muted-foreground">
+            Stats for: <span className="text-foreground font-semibold">{periodLabel}</span>
+            <span className="ml-2 text-xs text-muted-foreground/60">· auto-refreshes every 30s</span>
+          </p>
+          <div className="flex gap-1.5">
+            {(['today', 'week', 'custom'] as DatePreset[]).map(p => (
+              <button
+                key={p}
+                onClick={() => { setDatePreset(p); setHistoryPage(1); }}
+                className={cn(
+                  'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
+                  datePreset === p
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'Custom'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {statCards.map(({ title, value, icon: Icon, color }) => (
             <Card key={title} className="rounded-2xl shadow-sm border-border/50">
