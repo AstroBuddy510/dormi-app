@@ -16,6 +16,7 @@ Full-stack grocery delivery app for gated estates in Accra, Ghana. Supports 6 us
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Payments**: Paystack (Mobile Money, Card, Bank — GHS)
 
 ## Structure
 
