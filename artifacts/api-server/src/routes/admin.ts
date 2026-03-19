@@ -38,9 +38,11 @@ function addHours(h: number) {
 async function enrichOrder(order: typeof ordersTable.$inferSelect) {
   const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, order.residentId)).limit(1);
   let vendorName: string | undefined;
+  let vendorCommissionPercent = 0;
   if (order.vendorId) {
     const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, order.vendorId)).limit(1);
     vendorName = v?.name;
+    vendorCommissionPercent = parseFloat(v?.commissionPercent ?? "0");
   }
   const address = resident
     ? `${resident.estate}, Block ${resident.blockNumber}, House ${resident.houseNumber}`
@@ -53,7 +55,9 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     residentAddress: address,
     vendorId: order.vendorId,
     vendorName: vendorName ?? null,
+    vendorCommissionPercent,
     riderId: order.riderId,
+    deliveryPartnerId: order.deliveryPartnerId,
     riderName: null,
     items: order.items as any[],
     subtotal: parseFloat(order.subtotal),
@@ -375,10 +379,58 @@ router.get("/stats", async (_req, res) => {
   const pendingOrders = allOrders.filter(o => o.status === "pending").length;
   const inProgressOrders = allOrders.filter(o => ["accepted", "ready", "in_transit"].includes(o.status)).length;
   const deliveredOrders = allOrders.filter(o => o.status === "delivered").length;
-  const totalRevenue = allOrders.reduce((sum, o) => sum + parseFloat(o.total), 0);
   const subscriberCount = await db.select().from(residentsTable).where(eq(residentsTable.subscribeWeekly, true)).then(r => r.length);
 
-  res.json({ totalOrders, pendingOrders, inProgressOrders, deliveredOrders, totalRevenue, subscriberCount });
+  // ── Net Revenue calculation ───────────────────────────────────────────────
+  // Only count delivered orders for earnings
+  const delivered = allOrders.filter(o => o.status === "delivered");
+
+  // 1. Service fee (18% markup) — belongs entirely to GrocerEase
+  const serviceFeeEarnings = delivered.reduce((s, o) => s + parseFloat(o.serviceFee ?? "0"), 0);
+
+  // 2. In-house rider delivery fees — where riderId is set and no delivery partner
+  const inHouseDeliveryEarnings = delivered
+    .filter(o => o.riderId !== null && o.deliveryPartnerId === null)
+    .reduce((s, o) => s + parseFloat(o.deliveryFee ?? "0"), 0);
+
+  // 3. Third-party delivery partner commissions — we earn commissionPercent of their delivery fee
+  const partnerIds = [...new Set(delivered.filter(o => o.deliveryPartnerId !== null).map(o => o.deliveryPartnerId!))];
+  let partnerCommissionEarnings = 0;
+  if (partnerIds.length > 0) {
+    const partners = await db.select().from(deliveryPartnersTable);
+    const partnerMap = new Map(partners.map(p => [p.id, parseFloat(p.commissionPercent)]));
+    partnerCommissionEarnings = delivered
+      .filter(o => o.deliveryPartnerId !== null)
+      .reduce((s, o) => {
+        const rate = (partnerMap.get(o.deliveryPartnerId!) ?? 0) / 100;
+        return s + parseFloat(o.deliveryFee ?? "0") * rate;
+      }, 0);
+  }
+
+  // 4. Vendor commission — each vendor may have a commissionPercent on the order subtotal
+  const vendorIds = [...new Set(delivered.filter(o => o.vendorId !== null).map(o => o.vendorId!))];
+  let vendorCommissionEarnings = 0;
+  if (vendorIds.length > 0) {
+    const vendors = await db.select().from(vendorsTable);
+    const vendorMap = new Map(vendors.map(v => [v.id, parseFloat(v.commissionPercent ?? "0")]));
+    vendorCommissionEarnings = delivered
+      .filter(o => o.vendorId !== null)
+      .reduce((s, o) => {
+        const rate = (vendorMap.get(o.vendorId!) ?? 0) / 100;
+        return s + parseFloat(o.subtotal ?? "0") * rate;
+      }, 0);
+  }
+
+  const netRevenue = serviceFeeEarnings + inHouseDeliveryEarnings + partnerCommissionEarnings + vendorCommissionEarnings;
+
+  const revenueBreakdown = {
+    serviceFee: parseFloat(serviceFeeEarnings.toFixed(2)),
+    inHouseDelivery: parseFloat(inHouseDeliveryEarnings.toFixed(2)),
+    partnerCommission: parseFloat(partnerCommissionEarnings.toFixed(2)),
+    vendorCommission: parseFloat(vendorCommissionEarnings.toFixed(2)),
+  };
+
+  res.json({ totalOrders, pendingOrders, inProgressOrders, deliveredOrders, netRevenue: parseFloat(netRevenue.toFixed(2)), revenueBreakdown, subscriberCount });
 });
 
 export default router;

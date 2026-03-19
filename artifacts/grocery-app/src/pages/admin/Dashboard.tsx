@@ -27,7 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import { OrderDetailModal } from '@/components/ui/OrderDetailModal';
 import { cn } from '@/lib/utils';
 
-interface DeliveryPartner { id: number; name: string; isActive: boolean; }
+interface DeliveryPartner { id: number; name: string; commissionPercent: number; isActive: boolean; }
 
 type LiveFilter  = 'all' | 'pending' | 'in_progress';
 type DatePreset  = 'today' | 'week' | 'custom';
@@ -241,10 +241,33 @@ export default function AdminDashboard() {
     });
   }, [allOrders, datePreset, fromDate, toDate]);
 
-  const periodRevenue = useMemo(
-    () => periodOrders.filter(o => o.status === 'delivered').reduce((sum, o) => sum + parseFloat(o.total ?? '0'), 0),
-    [periodOrders]
+  // ── Net Revenue breakdown (only delivered orders) ──────────────────────────
+  // GrocerEase earnings = service fee + in-house delivery fee + partner commission + vendor commission
+  const partnerMap = useMemo(
+    () => new Map(deliveryPartners.map((p: DeliveryPartner) => [p.id, p.commissionPercent ?? 0])),
+    [deliveryPartners]
   );
+
+  const periodNetRevenue = useMemo(() => {
+    const delivered = periodOrders.filter(o => o.status === 'delivered');
+    const serviceFeeTotal        = delivered.reduce((s, o) => s + (o.serviceFee ?? 0), 0);
+    const inHouseDeliveryTotal   = delivered.filter(o => o.riderId && !(o as any).deliveryPartnerId)
+                                            .reduce((s, o) => s + (o.deliveryFee ?? 0), 0);
+    const partnerCommissionTotal = delivered.filter(o => (o as any).deliveryPartnerId)
+                                            .reduce((s, o) => {
+                                              const rate = (partnerMap.get((o as any).deliveryPartnerId) ?? 0) / 100;
+                                              return s + (o.deliveryFee ?? 0) * rate;
+                                            }, 0);
+    const vendorCommissionTotal  = delivered.filter(o => o.vendorId)
+                                            .reduce((s, o) => {
+                                              const rate = ((o as any).vendorCommissionPercent ?? 0) / 100;
+                                              return s + (o.subtotal ?? 0) * rate;
+                                            }, 0);
+    return { serviceFeeTotal, inHouseDeliveryTotal, partnerCommissionTotal, vendorCommissionTotal,
+             total: serviceFeeTotal + inHouseDeliveryTotal + partnerCommissionTotal + vendorCommissionTotal };
+  }, [periodOrders, partnerMap]);
+
+  const fmt = (n: number) => `GH₵ ${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   /* ── Stat cards ──────────────────────────────────────── */
   const statCards = [
@@ -253,7 +276,6 @@ export default function AdminDashboard() {
     { title: 'In Progress',   value: periodOrders.filter(o => ['accepted','ready','in_transit'].includes(o.status)).length, icon: Package, color: 'text-amber-600 bg-amber-50' },
     { title: 'Delivered',     value: periodOrders.filter(o => o.status === 'delivered').length,       icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
     { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                                     icon: Users,        color: 'text-purple-600 bg-purple-50' },
-    { title: 'Revenue',       value: `GH₵ ${periodRevenue.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50' },
   ];
 
   const liveTabs: { label: string; value: LiveFilter }[] = [
@@ -298,7 +320,7 @@ export default function AdminDashboard() {
           Stats for: <span className="text-foreground font-semibold">{periodLabel}</span>
           <span className="ml-2 text-xs text-muted-foreground/60">· auto-refreshes every 30s</span>
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {statCards.map(({ title, value, icon: Icon, color }) => (
             <Card key={title} className="rounded-2xl shadow-sm border-border/50">
               <CardContent className="p-4 flex flex-col gap-2">
@@ -311,6 +333,42 @@ export default function AdminDashboard() {
             </Card>
           ))}
         </div>
+
+        {/* ── Net Revenue Card ── */}
+        <Card className="rounded-2xl shadow-sm border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-100">
+                  <DollarSign size={20} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">GrocerEase Net Revenue</p>
+                  <p className="text-2xl font-bold text-emerald-700 mt-0.5">{fmt(periodNetRevenue.total)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Delivered orders · {periodLabel}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 min-w-0">
+                <div className="bg-white rounded-xl border border-emerald-100 px-3 py-2.5">
+                  <p className="text-[11px] text-muted-foreground">Service Fee (18%)</p>
+                  <p className="text-sm font-bold text-emerald-700">{fmt(periodNetRevenue.serviceFeeTotal)}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-blue-100 px-3 py-2.5">
+                  <p className="text-[11px] text-muted-foreground">In-House Delivery</p>
+                  <p className="text-sm font-bold text-blue-700">{fmt(periodNetRevenue.inHouseDeliveryTotal)}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-amber-100 px-3 py-2.5">
+                  <p className="text-[11px] text-muted-foreground">3rd-Party Commission</p>
+                  <p className="text-sm font-bold text-amber-700">{fmt(periodNetRevenue.partnerCommissionTotal)}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-purple-100 px-3 py-2.5">
+                  <p className="text-[11px] text-muted-foreground">Vendor Commission</p>
+                  <p className="text-sm font-bold text-purple-700">{fmt(periodNetRevenue.vendorCommissionTotal)}</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* ── Live Orders ── */}
         <div>
