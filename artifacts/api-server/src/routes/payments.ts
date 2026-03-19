@@ -2,10 +2,9 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { ordersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { getGatewayKeys } from "../lib/gatewayKeys";
 
 const router: IRouter = Router();
-
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY ?? "";
 
 router.post("/verify", async (req, res) => {
   try {
@@ -15,12 +14,13 @@ router.post("/verify", async (req, res) => {
       return res.status(400).json({ error: "missing_reference", message: "Payment reference is required." });
     }
 
-    if (!PAYSTACK_SECRET_KEY) {
+    const { secretKey } = await getGatewayKeys();
+    if (!secretKey) {
       return res.status(500).json({ error: "misconfigured", message: "Payment gateway not configured." });
     }
 
     const psRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+      headers: { Authorization: `Bearer ${secretKey}` },
     });
 
     if (!psRes.ok) {

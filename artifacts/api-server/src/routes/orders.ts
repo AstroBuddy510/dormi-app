@@ -9,15 +9,16 @@ import {
   UploadOrderPhotoBody,
 } from "@workspace/api-zod";
 
+import { getGatewayKeys } from "../lib/gatewayKeys";
+
 const router: IRouter = Router();
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY ?? "";
-
 async function verifyPaystackRef(reference: string): Promise<boolean> {
-  if (!PAYSTACK_SECRET_KEY) return false;
+  const { secretKey } = await getGatewayKeys();
+  if (!secretKey) return false;
   try {
     const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+      headers: { Authorization: `Bearer ${secretKey}` },
     });
     if (!res.ok) return false;
     const data = (await res.json()) as any;

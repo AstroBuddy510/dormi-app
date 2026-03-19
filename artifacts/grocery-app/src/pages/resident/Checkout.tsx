@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, MapPin, Receipt, CheckCircle, Smartphone, Loader2, ShieldCheck, Banknote } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
 declare global {
@@ -17,7 +17,6 @@ declare global {
   }
 }
 
-const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string | undefined;
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export default function CheckoutPage() {
@@ -28,6 +27,11 @@ export default function CheckoutPage() {
   const { getCartTotal, getCartItems, clearCart } = useCart();
 
   const { data: pricing, isLoading: isPricingLoading } = useGetPricing();
+  const { data: gateway } = useQuery<{ publicKey: string; mode: string }>({
+    queryKey: ['/api/settings/gateway-public'],
+    queryFn: () => fetch(`${BASE}/api/settings/gateway`).then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const [paymentMethod, setPaymentMethod] = useState<CreateOrderRequestPaymentMethod>(
     CreateOrderRequestPaymentMethod.cash_on_delivery,
@@ -69,8 +73,9 @@ export default function CheckoutPage() {
   };
 
   const openPaystackPopup = () => {
+    const PAYSTACK_PUBLIC_KEY = gateway?.publicKey;
     if (!PAYSTACK_PUBLIC_KEY) {
-      toast({ variant: 'destructive', title: 'Payment not configured', description: 'Paystack public key is missing.' });
+      toast({ variant: 'destructive', title: 'Payment not configured', description: 'Paystack public key is missing. Ask your admin to configure it in Settings.' });
       return;
     }
     if (!window.PaystackPop) {

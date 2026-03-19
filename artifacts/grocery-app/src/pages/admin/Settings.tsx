@@ -12,12 +12,12 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle, ChevronsUpDown } from 'lucide-react';
+import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle, ChevronsUpDown, CreditCard, Eye, EyeOff, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
-type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner';
+type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner' | 'payment-gateway';
 
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`/api${path}`, {
@@ -638,6 +638,161 @@ function DeliveryPartnersTab() {
   );
 }
 
+function PaymentGatewayTab() {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ publicKey: '', secretKey: '', mode: 'test' });
+  const [showSecret, setShowSecret] = useState(false);
+  const [status, setStatus] = useState<{ success?: string; error?: string }>({});
+
+  const { data: current, isLoading } = useQuery({
+    queryKey: ['/api/settings/gateway'],
+    queryFn: () => apiFetch('/settings/gateway'),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: object) => apiFetch('/settings/gateway', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settings/gateway'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings/gateway-public'] });
+      setStatus({ success: 'Gateway settings saved successfully.' });
+      setForm(f => ({ ...f, secretKey: '' }));
+    },
+    onError: (err: any) => {
+      setStatus({ error: err?.message ?? 'Failed to save settings.' });
+    },
+  });
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus({});
+    const payload: any = { mode: form.mode };
+    if (form.publicKey.trim()) payload.publicKey = form.publicKey.trim();
+    if (form.secretKey.trim()) payload.secretKey = form.secretKey.trim();
+    saveMutation.mutate(payload);
+  };
+
+  const modeLabel = current?.mode === 'live' ? 'Live' : 'Test';
+  const modeColor = current?.mode === 'live' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700';
+
+  return (
+    <form onSubmit={handleSave} className="space-y-6">
+
+      {/* Current status */}
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <RefreshCw size={14} className="animate-spin" /> Loading current settings…
+        </div>
+      ) : current ? (
+        <div className="rounded-xl border border-border bg-gray-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={16} className="text-green-600" />
+              <span className="font-semibold text-sm">Paystack</span>
+            </div>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${modeColor}`}>{modeLabel} Mode</span>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Public Key</span>
+              <span className="font-mono text-gray-600 truncate max-w-[240px]">{current.publicKey || '—'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Secret Key</span>
+              <span className="font-mono text-gray-600">{current.maskedSecretKey || '—'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Last Updated</span>
+              <span>{current.updatedAt ? new Date(current.updatedAt).toLocaleString() : '—'}</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="border-t border-border pt-5 space-y-5">
+        <p className="text-sm text-muted-foreground">
+          Enter your new API keys below. Leave <span className="font-semibold">Secret Key</span> blank to keep the existing one.
+          Switch to <span className="font-semibold">Live Mode</span> when you're ready for real transactions.
+        </p>
+
+        {/* Mode selector */}
+        <div className="space-y-2">
+          <Label>Mode</Label>
+          <Select
+            value={form.mode}
+            onValueChange={v => setForm(f => ({ ...f, mode: v }))}
+          >
+            <SelectTrigger className="h-12 rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="test">🧪 Test Mode — use test keys</SelectItem>
+              <SelectItem value="live">🟢 Live Mode — real transactions</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Public key */}
+        <div className="space-y-2">
+          <Label htmlFor="gw-pub">Public Key <span className="text-xs text-muted-foreground">(pk_test_... or pk_live_...)</span></Label>
+          <Input
+            id="gw-pub"
+            className="h-12 rounded-xl font-mono text-sm"
+            placeholder="pk_test_xxxxxxxxxxxxxxxx  or  pk_live_xxxxxxxxxxxxxxxx"
+            value={form.publicKey}
+            onChange={e => setForm(f => ({ ...f, publicKey: e.target.value }))}
+          />
+        </div>
+
+        {/* Secret key */}
+        <div className="space-y-2">
+          <Label htmlFor="gw-sec">Secret Key <span className="text-xs text-muted-foreground">(sk_test_... or sk_live_...)</span></Label>
+          <div className="relative">
+            <Input
+              id="gw-sec"
+              type={showSecret ? 'text' : 'password'}
+              className="h-12 rounded-xl font-mono text-sm pr-11"
+              placeholder="Leave blank to keep the existing key"
+              value={form.secretKey}
+              onChange={e => setForm(f => ({ ...f, secretKey: e.target.value }))}
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecret(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showSecret ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </div>
+        </div>
+
+        <FormStatus {...status} />
+
+        {form.mode === 'live' && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <span>You are switching to <strong>Live Mode</strong>. Real money will be charged to customers. Ensure your keys are from the Paystack live dashboard.</span>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full h-12 text-base font-bold rounded-xl gap-2"
+          disabled={saveMutation.isPending}
+        >
+          {saveMutation.isPending ? (
+            <><RefreshCw size={16} className="animate-spin" /> Saving…</>
+          ) : (
+            <><CreditCard size={16} /> Save Gateway Settings</>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<Tab>('rider');
 
@@ -647,6 +802,7 @@ export default function AdminSettings() {
     { id: 'vendor', label: 'Add Vendor' },
     { id: 'agent', label: 'Add Agent' },
     { id: 'delivery-partner', label: 'Delivery Companies' },
+    { id: 'payment-gateway', label: '💳 Payment Gateway' },
   ];
 
   return (
@@ -730,6 +886,25 @@ export default function AdminSettings() {
                   </CardHeader>
                   <CardContent className="p-6">
                     <DeliveryPartnersTab />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'payment-gateway' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <div className="flex items-center gap-2">
+                      <CreditCard size={20} className="text-primary" />
+                      <div>
+                        <CardTitle>Payment Gateway — Paystack</CardTitle>
+                        <CardDescription>
+                          Update your Paystack API keys and switch between Test and Live mode. Use test keys while developing, then switch to your live keys for real transactions.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <PaymentGatewayTab />
                   </CardContent>
                 </>
               )}
