@@ -78,6 +78,8 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     callOnly: order.callOnly,
     callAccepted: order.callAccepted,
     riderAccepted: order.riderAccepted ?? null,
+    riderAcceptedAt: order.riderAcceptedAt?.toISOString() ?? null,
+    deliveredAt: order.deliveredAt?.toISOString() ?? null,
     photoUrl: order.photoUrl,
     deliveryPhotoUrl: order.deliveryPhotoUrl,
     pickupDeadline: order.pickupDeadline?.toISOString() ?? null,
@@ -213,6 +215,7 @@ router.put("/:id/status", async (req, res) => {
     const id = parseInt(req.params.id);
     const body = UpdateOrderStatusBody.parse(req.body);
     const updateData: any = { status: body.status, updatedAt: new Date() };
+    if (body.status === 'delivered') updateData.deliveredAt = new Date();
     if (body.callAccepted !== undefined) updateData.callAccepted = body.callAccepted;
     const [order] = await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, id)).returning();
     if (!order) {
@@ -253,10 +256,10 @@ router.put("/:id/rider-response", async (req, res) => {
     }
     let updateData: any;
     if (accepted) {
-      updateData = { riderAccepted: true, updatedAt: new Date() };
+      updateData = { riderAccepted: true, riderAcceptedAt: new Date(), updatedAt: new Date() };
     } else {
       // Rider declined — unassign them so admin can reassign
-      updateData = { riderId: null, riderAccepted: null, updatedAt: new Date() };
+      updateData = { riderId: null, riderAccepted: null, riderAcceptedAt: null, updatedAt: new Date() };
     }
     const [order] = await db.update(ordersTable)
       .set(updateData)

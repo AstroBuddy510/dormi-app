@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '@/store';
 import { useListOrders, useUpdateOrderStatus, OrderStatus, useUploadOrderPhoto, UploadPhotoRequestPhotoType } from '@workspace/api-client-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
@@ -278,12 +279,19 @@ export default function RiderJobs() {
 
                 return (
                   <Card key={job.id} className="rounded-2xl shadow-md border-0 overflow-hidden">
-                    <div className="p-4 border-b border-border bg-white flex justify-between items-start">
-                      <div>
-                        <p className="font-bold text-lg">Order #{job.id}</p>
-                        <p className="text-sm text-muted-foreground">{job.items.length} items</p>
+                    <div className="p-4 border-b border-border bg-white">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-bold text-lg">Order #{job.id}</p>
+                          <p className="text-sm text-muted-foreground">{job.items.length} items</p>
+                        </div>
+                        <StatusBadge status={job.status} />
                       </div>
-                      <StatusBadge status={job.status} />
+                      <DeliveryTimer
+                        riderAcceptedAt={(job as any).riderAcceptedAt}
+                        deliveredAt={(job as any).deliveredAt}
+                        size="sm"
+                      />
                     </div>
 
                     <CardContent className="p-4 space-y-4 bg-gray-50/50">
@@ -429,13 +437,20 @@ export default function RiderJobs() {
             <h2 className="text-lg font-bold text-foreground mb-4">Completed Today ({completedJobs.length})</h2>
             <div className="space-y-3">
               {completedJobs.map(job => (
-                <Card key={job.id} className="rounded-2xl border-0 shadow-sm opacity-70">
-                  <CardContent className="p-4 flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold">Order #{job.id}</p>
-                      <p className="text-sm text-muted-foreground">{job.residentName}</p>
+                <Card key={job.id} className="rounded-2xl border-0 shadow-sm opacity-80">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold">Order #{job.id}</p>
+                        <p className="text-sm text-muted-foreground">{job.residentName}</p>
+                      </div>
+                      <StatusBadge status={job.status} />
                     </div>
-                    <StatusBadge status={job.status} />
+                    <DeliveryTimer
+                      riderAcceptedAt={(job as any).riderAcceptedAt}
+                      deliveredAt={(job as any).deliveredAt}
+                      size="sm"
+                    />
                   </CardContent>
                 </Card>
               ))}

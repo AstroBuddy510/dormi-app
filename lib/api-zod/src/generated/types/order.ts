@@ -29,6 +29,8 @@ export interface Order {
   callOnly: boolean;
   callAccepted?: boolean;
   riderAccepted?: boolean | null;
+  riderAcceptedAt?: string | null;
+  deliveredAt?: string | null;
   photoUrl?: string;
   deliveryPhotoUrl?: string;
   pickupDeadline?: Date;

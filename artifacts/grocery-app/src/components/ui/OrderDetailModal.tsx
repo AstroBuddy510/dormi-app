@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
 import { format } from 'date-fns';
 import {
   Receipt, MapPin, User, Phone, Store, Bike, Clock,
@@ -303,7 +304,15 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
                   <span className="font-medium">{order.eta}</span>
                 </div>
               )}
-              {!order.vendorName && !order.riderName && !order.deliveryPartnerName && !order.eta && (
+              {(order as any).riderAcceptedAt && (
+                <div className="pt-1">
+                  <DeliveryTimer
+                    riderAcceptedAt={(order as any).riderAcceptedAt}
+                    deliveredAt={(order as any).deliveredAt}
+                  />
+                </div>
+              )}
+              {!order.vendorName && !order.riderName && !order.deliveryPartnerName && !order.eta && !(order as any).riderAcceptedAt && (
                 <p className="text-xs text-muted-foreground italic">No delivery details yet.</p>
               )}
             </div>

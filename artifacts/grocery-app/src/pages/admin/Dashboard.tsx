@@ -9,6 +9,7 @@ import {
 } from '@workspace/api-client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -403,6 +404,7 @@ export default function AdminDashboard() {
                           <TableHead>Total</TableHead>
                           <TableHead>Rider / Partner</TableHead>
                           <TableHead>Delivered At</TableHead>
+                          <TableHead>⏱ Duration</TableHead>
                           <TableHead className="w-10"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -442,6 +444,13 @@ export default function AdminDashboard() {
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                               {format(parseISO(order.updatedAt), 'dd MMM yyyy, HH:mm')}
+                            </TableCell>
+                            <TableCell>
+                              <DeliveryTimer
+                                riderAcceptedAt={(order as any).riderAcceptedAt}
+                                deliveredAt={(order as any).deliveredAt}
+                                size="sm"
+                              />
                             </TableCell>
                             <TableCell>
                               <button
@@ -534,7 +543,8 @@ function LiveOrdersTable({
             <TableHead>Status</TableHead>
             <TableHead>Rider / Delivery Co.</TableHead>
             <TableHead>Action</TableHead>
-            <TableHead>Time</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead>⏱ Timer</TableHead>
             <TableHead className="w-10"></TableHead>
           </TableRow>
         </TableHeader>
@@ -631,6 +641,13 @@ function LiveOrdersTable({
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                   {format(new Date(order.createdAt), 'dd MMM HH:mm')}
+                </TableCell>
+                <TableCell>
+                  <DeliveryTimer
+                    riderAcceptedAt={order.riderAcceptedAt}
+                    deliveredAt={order.deliveredAt}
+                    size="sm"
+                  />
                 </TableCell>
                 <TableCell>
                   <button

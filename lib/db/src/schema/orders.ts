@@ -29,6 +29,8 @@ export const ordersTable = pgTable("orders", {
   callOnly: boolean("call_only").notNull().default(false),
   callAccepted: boolean("call_accepted").notNull().default(false),
   riderAccepted: boolean("rider_accepted"),
+  riderAcceptedAt: timestamp("rider_accepted_at"),
+  deliveredAt: timestamp("delivered_at"),
   photoUrl: text("photo_url"),
   deliveryPhotoUrl: text("delivery_photo_url"),
   pickupDeadline: timestamp("pickup_deadline"),
