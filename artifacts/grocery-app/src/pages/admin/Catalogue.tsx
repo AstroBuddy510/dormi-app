@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/select';
 import {
   ShoppingBasket, Plus, Trash2, Search, CheckCircle2, XCircle,
-  PackagePlus, Bell, Boxes, Filter, X, Tag,
+  PackagePlus, Bell, Boxes, Filter, X, Tag, ImagePlus, Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -78,6 +78,9 @@ function AddItemDialog({
   const [unit, setUnit] = useState('1 unit');
   const [brands, setBrands] = useState<string[]>([]);
   const [brandInput, setBrandInput] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageObjectPath, setImageObjectPath] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   const isCustomCategory = categorySelect === NEW_CATEGORY_VALUE;
   const resolvedCategory = isCustomCategory ? newCategory.trim() : categorySelect;
@@ -90,6 +93,36 @@ function AddItemDialog({
     setUnit('1 unit');
     setBrands([]);
     setBrandInput('');
+    setImagePreview(null);
+    setImageObjectPath(null);
+    setImageUploading(false);
+  };
+
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      toast({ title: 'Unsupported format', description: 'Use PNG, JPG, SVG, or WebP.', variant: 'destructive' });
+      return;
+    }
+    setImagePreview(URL.createObjectURL(file));
+    setImageUploading(true);
+    try {
+      const res = await apiFetch('/storage/uploads/request-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      await fetch(res.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      setImageObjectPath(res.objectPath);
+    } catch {
+      toast({ title: 'Upload failed', description: 'Could not upload image. Try again.', variant: 'destructive' });
+      setImagePreview(null);
+    } finally {
+      setImageUploading(false);
+    }
+    e.target.value = '';
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -116,12 +149,14 @@ function AddItemDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resolvedCategory) { toast({ title: 'Select or enter a category', variant: 'destructive' }); return; }
+    if (imageUploading) { toast({ title: 'Image still uploading', description: 'Please wait…', variant: 'destructive' }); return; }
     setSaving(true);
+    const imageUrl = imageObjectPath ? `${BASE}/api/storage${imageObjectPath}` : undefined;
     try {
       await apiFetch('/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category: resolvedCategory, price: parseFloat(price), unit, brands }),
+        body: JSON.stringify({ name, category: resolvedCategory, price: parseFloat(price), unit, brands, imageUrl }),
       });
       toast({ title: 'Item added', description: `"${name}" is now in the catalogue.` });
       onAdded();
@@ -216,10 +251,43 @@ function AddItemDialog({
             )}
           </div>
 
+          {/* Image Upload */}
+          <div className="space-y-1.5">
+            <Label>Item Image <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <p className="text-xs text-muted-foreground">Upload a PNG, JPG, SVG or WebP image for visual reference.</p>
+            <div className="flex items-start gap-3">
+              {imagePreview ? (
+                <div className="relative shrink-0">
+                  <img src={imagePreview} alt="Preview" className="w-16 h-16 rounded-xl object-cover border border-border" />
+                  {imageUploading && (
+                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-xl">
+                      <Loader2 size={16} className="animate-spin text-primary" />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setImagePreview(null); setImageObjectPath(null); }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-16 h-16 rounded-xl border-2 border-dashed border-border bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors shrink-0">
+                  <ImagePlus size={18} className="text-muted-foreground" />
+                  <input type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp" className="hidden" onChange={handleImagePick} />
+                </label>
+              )}
+              {imageObjectPath && !imageUploading && (
+                <p className="text-xs text-green-600 font-medium mt-1">✓ Image uploaded</p>
+              )}
+            </div>
+          </div>
+
           <DialogFooter className="gap-2 pt-2">
             <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
-            <Button type="submit" className="rounded-xl bg-primary hover:bg-primary/90" disabled={saving}>
-              {saving ? 'Adding…' : 'Add Item'}
+            <Button type="submit" className="rounded-xl bg-primary hover:bg-primary/90" disabled={saving || imageUploading}>
+              {saving ? 'Adding…' : imageUploading ? 'Uploading…' : 'Add Item'}
             </Button>
           </DialogFooter>
         </form>
@@ -323,7 +391,14 @@ function CatalogueTab() {
               {filtered.map((item: any) => (
                 <tr key={item.id} className="bg-white hover:bg-secondary/30 transition-colors">
                   <td className="px-4 py-3 font-medium">
-                    <span className="mr-2">{CATEGORY_EMOJI[item.category] || '📦'}</span>{item.name}
+                    <div className="flex items-center gap-2.5">
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl} alt={item.name} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
+                      ) : (
+                        <span className="text-xl leading-none">{CATEGORY_EMOJI[item.category] || '📦'}</span>
+                      )}
+                      <span>{item.name}</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
                   <td className="px-4 py-3">

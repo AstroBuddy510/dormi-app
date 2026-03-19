@@ -1,10 +1,12 @@
+import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { format } from 'date-fns';
 import {
   Receipt, MapPin, User, Phone, Store, Bike, Clock,
-  CreditCard, Package, Camera, FileText,
+  CreditCard, Package, Camera, FileText, Printer,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   Vegetables: '🥦', Fruits: '🍎', Meat: '🥩', Dairy: '🥛',
@@ -35,9 +37,112 @@ interface OrderDetailModalProps {
 }
 
 export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps) {
+  const printRef = useRef<HTMLDivElement>(null);
+
   if (!order) return null;
 
   const paymentLabel = (order.paymentMethod as string)?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) ?? '—';
+
+  const handlePrint = () => {
+    const items = (order.items ?? []).map((item: any) =>
+      `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${emoji(item.category)} ${item.itemName}${item.selectedBrand ? ` <span style="color:#16a34a;font-size:11px;">(${item.selectedBrand})</span>` : ''}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;">${item.quantity}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">GHs ${Number(item.unitPrice ?? 0).toFixed(2)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">GHs ${Number(item.totalPrice ?? (item.unitPrice * item.quantity) ?? 0).toFixed(2)}</td>
+      </tr>`
+    ).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Order Receipt #${order.id}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #111; padding: 24px; max-width: 600px; margin: 0 auto; }
+    .header { text-align: center; border-bottom: 2px solid #16a34a; padding-bottom: 14px; margin-bottom: 16px; }
+    .brand { font-size: 22px; font-weight: 800; color: #16a34a; letter-spacing: -0.5px; }
+    .brand span { color: #111; }
+    .subtitle { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .order-id { font-size: 18px; font-weight: 700; margin-top: 8px; }
+    .date { font-size: 11px; color: #6b7280; margin-top: 3px; }
+    .section { margin-bottom: 14px; }
+    .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 6px; }
+    .info-box { background: #f9fafb; border-radius: 8px; padding: 10px 12px; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-label { color: #6b7280; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: #f3f4f6; }
+    th { padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #6b7280; font-weight: 600; }
+    th:last-child, td:last-child { text-align: right; }
+    th:nth-child(2), td:nth-child(2) { text-align: center; }
+    .totals { margin-top: 10px; }
+    .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #6b7280; }
+    .total-final { font-size: 15px; font-weight: 800; color: #16a34a; border-top: 2px solid #e5e7eb; padding-top: 8px; margin-top: 6px; display: flex; justify-content: space-between; }
+    .notes { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; font-size: 12px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 10px; color: #9ca3af; border-top: 1px dashed #e5e7eb; padding-top: 12px; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 600; background: #dcfce7; color: #15803d; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">Grocer<span>Ease</span> Accra</div>
+    <div class="subtitle">Fresh groceries delivered to your estate</div>
+    <div class="order-id">Order Receipt #${order.id} &nbsp;<span class="status-badge">${order.status}</span></div>
+    <div class="date">${format(new Date(order.createdAt), 'EEEE, MMMM d yyyy • h:mm a')}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Customer</div>
+    <div class="info-box">
+      <div class="info-row"><span class="info-label">Name</span><span>${order.residentName || '—'}</span></div>
+      <div class="info-row"><span class="info-label">Phone</span><span>${order.residentPhone || '—'}</span></div>
+      <div class="info-row"><span class="info-label">Address</span><span style="max-width:280px;text-align:right;">${order.residentAddress || '—'}</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Items (${order.items?.length ?? 0})</div>
+    <table>
+      <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+      <tbody>${items}</tbody>
+    </table>
+    <div class="totals">
+      <div class="total-row"><span>Subtotal</span><span>GHs ${Number(order.subtotal ?? 0).toFixed(2)}</span></div>
+      ${order.serviceFee ? `<div class="total-row"><span>Service Fee</span><span>GHs ${Number(order.serviceFee).toFixed(2)}</span></div>` : ''}
+      ${order.deliveryFee ? `<div class="total-row"><span>Delivery Fee</span><span>GHs ${Number(order.deliveryFee).toFixed(2)}</span></div>` : ''}
+      <div class="total-final"><span>Total</span><span>GHs ${Number(order.total ?? 0).toFixed(2)}</span></div>
+      <div class="total-row" style="font-size:11px;color:#9ca3af;"><span>Payment Method</span><span>${paymentLabel}</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Delivery</div>
+    <div class="info-box">
+      ${order.vendorName ? `<div class="info-row"><span class="info-label">Vendor</span><span>${order.vendorName}</span></div>` : ''}
+      ${order.riderName ? `<div class="info-row"><span class="info-label">Rider</span><span>${order.riderName}</span></div>` : ''}
+      ${order.deliveryPartnerName ? `<div class="info-row"><span class="info-label">Delivery Co.</span><span>${order.deliveryPartnerName}</span></div>` : ''}
+      ${order.eta ? `<div class="info-row"><span class="info-label">ETA</span><span>${order.eta}</span></div>` : ''}
+    </div>
+  </div>
+
+  ${order.notes ? `<div class="section"><div class="section-title">Notes</div><div class="notes">${order.notes}</div></div>` : ''}
+
+  <div class="footer">
+    GrocerEase Accra &bull; Printed ${format(new Date(), 'dd MMM yyyy, HH:mm')} &bull; Thank you for your order!
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=680,height=900');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -50,7 +155,17 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
                 <Receipt size={18} className="text-primary" />
                 <span className="text-lg font-bold">Order #{order.id}</span>
               </div>
-              <StatusBadge status={order.status} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={order.status} />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs rounded-lg gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={handlePrint}
+                >
+                  <Printer size={12} /> Print
+                </Button>
+              </div>
             </DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground mt-1 pl-6">
@@ -217,6 +332,17 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
               </div>
             </Section>
           )}
+
+          {/* Print CTA */}
+          <div className="flex justify-center pt-1 pb-2">
+            <Button
+              variant="outline"
+              className="gap-2 rounded-xl text-primary border-primary/30 hover:bg-primary/10"
+              onClick={handlePrint}
+            >
+              <Printer size={15} /> Print Rider Copy
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

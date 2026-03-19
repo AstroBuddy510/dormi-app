@@ -11,6 +11,7 @@ export const itemsTable = pgTable("items", {
   unit: text("unit").notNull().default("1 unit"),
   vendorCategory: text("vendor_category"),
   brands: text("brands").array().notNull().default(sql`'{}'::text[]`),
+  imageUrl: text("image_url"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

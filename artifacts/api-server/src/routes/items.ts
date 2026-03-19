@@ -24,6 +24,7 @@ const AddItemBody = z.object({
   unit: z.string().min(1).default("1 unit"),
   vendorCategory: z.string().optional(),
   brands: z.array(z.string()).optional().default([]),
+  imageUrl: z.string().optional(),
 });
 
 router.post("/", async (req, res) => {
@@ -36,6 +37,7 @@ router.post("/", async (req, res) => {
       unit: body.unit,
       vendorCategory: body.vendorCategory ?? null,
       brands: body.brands ?? [],
+      imageUrl: body.imageUrl ?? null,
     }).returning();
     res.status(201).json(mapItem(item));
   } catch (err: any) {
@@ -136,6 +138,7 @@ function mapItem(i: typeof itemsTable.$inferSelect) {
     unit: i.unit,
     vendorCategory: i.vendorCategory,
     brands: i.brands ?? [],
+    imageUrl: i.imageUrl ?? null,
   };
 }
 

@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
-import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings, UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp, Briefcase, ShoppingBasket, Bell } from 'lucide-react';
+import { LayoutDashboard, PhoneCall, Truck, DollarSign, Users, LogOut, Settings, UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp, Briefcase, ShoppingBasket, Bell, BarChart3 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/components/ui/StatusBadge';
 
@@ -31,6 +31,7 @@ export function AdminSidebar() {
     { icon: Users, label: 'Subscribers', path: '/subscribers' },
     { icon: UsersRound, label: 'Users', path: '/users' },
     { icon: ShoppingBasket, label: 'Catalogue', path: '/catalogue', badge: pendingCount },
+    { icon: BarChart3, label: 'Reports', path: '/reports' },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
