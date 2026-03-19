@@ -79,6 +79,7 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     callAccepted: order.callAccepted,
     riderAccepted: order.riderAccepted ?? null,
     riderAcceptedAt: order.riderAcceptedAt?.toISOString() ?? null,
+    pickedUpAt: order.pickedUpAt?.toISOString() ?? null,
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
     photoUrl: order.photoUrl,
     deliveryPhotoUrl: order.deliveryPhotoUrl,
@@ -215,6 +216,7 @@ router.put("/:id/status", async (req, res) => {
     const id = parseInt(req.params.id);
     const body = UpdateOrderStatusBody.parse(req.body);
     const updateData: any = { status: body.status, updatedAt: new Date() };
+    if (body.status === 'in_transit') updateData.pickedUpAt = new Date();
     if (body.status === 'delivered') updateData.deliveredAt = new Date();
     if (body.callAccepted !== undefined) updateData.callAccepted = body.callAccepted;
     const [order] = await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, id)).returning();

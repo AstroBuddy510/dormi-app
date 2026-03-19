@@ -305,9 +305,16 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
                 </div>
               )}
               {(order as any).riderAcceptedAt && (
+                <div className="flex items-center gap-1.5 text-sm">
+                  <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    ✓ Rider Accepted
+                  </span>
+                </div>
+              )}
+              {(order as any).pickedUpAt && (
                 <div className="pt-1">
                   <DeliveryTimer
-                    riderAcceptedAt={(order as any).riderAcceptedAt}
+                    pickedUpAt={(order as any).pickedUpAt}
                     deliveredAt={(order as any).deliveredAt}
                   />
                 </div>

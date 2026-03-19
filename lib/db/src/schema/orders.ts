@@ -30,6 +30,7 @@ export const ordersTable = pgTable("orders", {
   callAccepted: boolean("call_accepted").notNull().default(false),
   riderAccepted: boolean("rider_accepted"),
   riderAcceptedAt: timestamp("rider_accepted_at"),
+  pickedUpAt: timestamp("picked_up_at"),
   deliveredAt: timestamp("delivered_at"),
   photoUrl: text("photo_url"),
   deliveryPhotoUrl: text("delivery_photo_url"),

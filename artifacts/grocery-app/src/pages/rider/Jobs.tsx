@@ -288,7 +288,7 @@ export default function RiderJobs() {
                         <StatusBadge status={job.status} />
                       </div>
                       <DeliveryTimer
-                        riderAcceptedAt={(job as any).riderAcceptedAt}
+                        pickedUpAt={(job as any).pickedUpAt}
                         deliveredAt={(job as any).deliveredAt}
                         size="sm"
                       />
@@ -447,7 +447,7 @@ export default function RiderJobs() {
                       <StatusBadge status={job.status} />
                     </div>
                     <DeliveryTimer
-                      riderAcceptedAt={(job as any).riderAcceptedAt}
+                      pickedUpAt={(job as any).pickedUpAt}
                       deliveredAt={(job as any).deliveredAt}
                       size="sm"
                     />

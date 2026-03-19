@@ -447,7 +447,7 @@ export default function AdminDashboard() {
                             </TableCell>
                             <TableCell>
                               <DeliveryTimer
-                                riderAcceptedAt={(order as any).riderAcceptedAt}
+                                pickedUpAt={(order as any).pickedUpAt}
                                 deliveredAt={(order as any).deliveredAt}
                                 size="sm"
                               />
@@ -585,7 +585,16 @@ function LiveOrdersTable({
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{order.vendorName || '—'}</TableCell>
                 <TableCell className="font-bold text-primary">₵{order.total.toFixed(2)}</TableCell>
-                <TableCell><StatusBadge status={order.status} /></TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge status={order.status} />
+                    {order.riderAccepted === true && (
+                      <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap">
+                        ✓ Rider Accepted
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="min-w-[160px]">
                   {order.orderType === 'third_party' ? (
                     <div className="space-y-1">
@@ -644,7 +653,7 @@ function LiveOrdersTable({
                 </TableCell>
                 <TableCell>
                   <DeliveryTimer
-                    riderAcceptedAt={order.riderAcceptedAt}
+                    pickedUpAt={order.pickedUpAt}
                     deliveredAt={order.deliveredAt}
                     size="sm"
                   />

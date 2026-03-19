@@ -16,40 +16,40 @@ function formatDuration(totalSeconds: number): string {
 }
 
 interface DeliveryTimerProps {
-  riderAcceptedAt?: string | null;
+  pickedUpAt?: string | null;
   deliveredAt?: string | null;
   className?: string;
   size?: 'sm' | 'md';
 }
 
-export function DeliveryTimer({ riderAcceptedAt, deliveredAt, className = '', size = 'md' }: DeliveryTimerProps) {
+export function DeliveryTimer({ pickedUpAt, deliveredAt, className = '', size = 'md' }: DeliveryTimerProps) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isLive = !!riderAcceptedAt && !deliveredAt;
+  const isLive = !!pickedUpAt && !deliveredAt;
 
   useEffect(() => {
-    if (!riderAcceptedAt) return;
+    if (!pickedUpAt) return;
 
     if (deliveredAt) {
       const total = Math.max(0, Math.floor(
-        (new Date(deliveredAt).getTime() - new Date(riderAcceptedAt).getTime()) / 1000
+        (new Date(deliveredAt).getTime() - new Date(pickedUpAt).getTime()) / 1000
       ));
       setElapsed(total);
       return;
     }
 
-    setElapsed(elapsedSeconds(riderAcceptedAt));
+    setElapsed(elapsedSeconds(pickedUpAt));
     intervalRef.current = setInterval(() => {
-      setElapsed(elapsedSeconds(riderAcceptedAt));
+      setElapsed(elapsedSeconds(pickedUpAt));
     }, 1000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [riderAcceptedAt, deliveredAt]);
+  }, [pickedUpAt, deliveredAt]);
 
-  if (!riderAcceptedAt) return null;
+  if (!pickedUpAt) return null;
 
   const iconSize = size === 'sm' ? 12 : 14;
   const textSize = size === 'sm' ? 'text-xs' : 'text-sm';

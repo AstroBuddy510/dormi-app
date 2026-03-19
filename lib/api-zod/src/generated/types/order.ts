@@ -30,6 +30,7 @@ export interface Order {
   callAccepted?: boolean;
   riderAccepted?: boolean | null;
   riderAcceptedAt?: string | null;
+  pickedUpAt?: string | null;
   deliveredAt?: string | null;
   photoUrl?: string;
   deliveryPhotoUrl?: string;
