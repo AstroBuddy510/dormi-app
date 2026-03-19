@@ -205,7 +205,7 @@ export default function AdminDashboard() {
     { title: 'In Progress',   value: periodOrders.filter(o => ['accepted','ready','in_transit'].includes(o.status)).length, icon: Package, color: 'text-amber-600 bg-amber-50' },
     { title: 'Delivered',     value: periodOrders.filter(o => o.status === 'delivered').length,       icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
     { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                                     icon: Users,        color: 'text-purple-600 bg-purple-50' },
-    { title: 'Revenue',       value: `GH₵ ${periodRevenue.toFixed(2)}`,                               icon: DollarSign,   color: 'text-emerald-600 bg-emerald-50' },
+    { title: 'Revenue',       value: `GH₵ ${periodRevenue.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50' },
   ];
 
   const liveTabs: { label: string; value: LiveFilter }[] = [
