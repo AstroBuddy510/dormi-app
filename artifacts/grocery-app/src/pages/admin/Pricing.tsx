@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode, type ElementType } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useGetPricing, useUpdatePricing } from '@workspace/api-client-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +21,23 @@ function apiFetch(path: string, opts?: RequestInit) {
     if (!r.ok) throw new Error((await r.json()).message ?? 'Request failed');
     return r.json();
   });
+}
+
+function Section({ icon: Icon, title, description, children }: { icon: ElementType; title: string; description?: string; children: ReactNode }) {
+  return (
+    <Card className="rounded-2xl shadow-sm border-border/50">
+      <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-primary/10 text-primary"><Icon size={18} /></div>
+          <div>
+            <CardTitle className="text-base">{title}</CardTitle>
+            {description && <CardDescription className="text-xs mt-0.5">{description}</CardDescription>}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-6">{children}</CardContent>
+    </Card>
+  );
 }
 
 export default function AdminPricing() {
@@ -168,21 +185,6 @@ export default function AdminPricing() {
       distanceThresholdKm: parseFloat(fs.distanceThresholdKm),
     });
   };
-
-  const Section = ({ icon: Icon, title, description, children }: any) => (
-    <Card className="rounded-2xl shadow-sm border-border/50">
-      <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-primary/10 text-primary"><Icon size={18} /></div>
-          <div>
-            <CardTitle className="text-base">{title}</CardTitle>
-            {description && <CardDescription className="text-xs mt-0.5">{description}</CardDescription>}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-6">{children}</CardContent>
-    </Card>
-  );
 
   return (
     <div className="flex min-h-screen bg-gray-50/50">
