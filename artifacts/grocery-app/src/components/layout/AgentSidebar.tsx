@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
-import { LayoutDashboard, PackagePlus, MessageSquareWarning, LogOut, Headphones } from 'lucide-react';
+import { LayoutDashboard, PackagePlus, MessageSquareWarning, LogOut, Headphones, PhoneCall } from 'lucide-react';
 import { cn } from '@/components/ui/StatusBadge';
 
 export function AgentSidebar() {
@@ -9,7 +9,8 @@ export function AgentSidebar() {
 
   const links = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: PackagePlus, label: 'Create Order', path: '/create-order' },
+    { icon: PhoneCall,        label: 'Call Log',    path: '/call-log' },
+    { icon: PackagePlus,      label: 'Create Order', path: '/create-order' },
     { icon: MessageSquareWarning, label: 'Complaints', path: '/complaints' },
   ];
 

@@ -32,6 +32,7 @@ import AdminRiderInbox from "@/pages/admin/RiderInbox";
 import AgentDashboard from "@/pages/agent/Dashboard";
 import AgentCreateOrder from "@/pages/agent/CreateOrder";
 import AgentComplaints from "@/pages/agent/Complaints";
+import AgentCallLog from "@/pages/agent/CallLog";
 import RiderJobs from "@/pages/rider/Jobs";
 import AccountantOverview from "@/pages/accountant/Overview";
 import AccountantPayroll from "@/pages/accountant/Payroll";
@@ -130,6 +131,7 @@ function RoleBasedRouter() {
     return (
       <Switch>
         <Route path="/" component={AgentDashboard} />
+        <Route path="/call-log" component={AgentCallLog} />
         <Route path="/create-order" component={AgentCreateOrder} />
         <Route path="/complaints" component={AgentComplaints} />
         <Route component={NotFound} />
