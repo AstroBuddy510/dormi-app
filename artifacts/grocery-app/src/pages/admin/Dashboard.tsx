@@ -246,27 +246,11 @@ export default function AdminDashboard() {
         </div>
 
         {/* ── Stat Cards ── */}
-        <div className="flex items-center justify-between flex-wrap gap-2 -mb-2">
+        <div className="-mb-2">
           <p className="text-sm font-medium text-muted-foreground">
             Stats for: <span className="text-foreground font-semibold">{periodLabel}</span>
             <span className="ml-2 text-xs text-muted-foreground/60">· auto-refreshes every 30s</span>
           </p>
-          <div className="flex gap-1.5">
-            {(['today', 'week', 'custom'] as DatePreset[]).map(p => (
-              <button
-                key={p}
-                onClick={() => { setDatePreset(p); setHistoryPage(1); }}
-                className={cn(
-                  'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
-                  datePreset === p
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'Custom'}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {statCards.map(({ title, value, icon: Icon, color }) => (
