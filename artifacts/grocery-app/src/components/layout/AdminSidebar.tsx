@@ -89,8 +89,8 @@ export function AdminSidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-border shrink-0">
         <div className="flex items-center gap-2 text-primary">
-          <img src={`${import.meta.env.BASE_URL}images/logo-icon.png`} alt="Logo" className="w-8 h-8 rounded-lg shadow-sm" />
-          <span className="font-display font-bold text-xl tracking-tight">Admin<span className="text-foreground">Ease</span></span>
+          <img src={`${import.meta.env.BASE_URL}images/dormi-logo.png`} alt="Dormi Logo" className="w-8 h-8 rounded-lg shadow-sm" />
+          <span className="font-display font-bold text-xl tracking-tight">Dormi</span>
         </div>
       </div>
 

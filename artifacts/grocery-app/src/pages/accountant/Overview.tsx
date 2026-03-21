@@ -143,10 +143,7 @@ function exportPDF(stats: any, periodLabel: string) {
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...WHITE);
-  doc.text('GrocerEase', 16, 15);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Accra', 16 + doc.getTextWidth('GrocerEase') + 1.5, 15);
+  doc.text('Dormi', 16, 15);
 
   // Right side header info
   doc.setFontSize(7.5);
@@ -281,16 +278,16 @@ function exportPDF(stats: any, periodLabel: string) {
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...WHITE);
-  doc.text('GrocerEase Accra', 16, pageH - 11.5);
+  doc.text('Dormi', 16, pageH - 11.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(187, 247, 208);
-  doc.text('Confidential – For Internal Use Only', 16 + doc.getTextWidth('GrocerEase Accra') + 3, pageH - 11.5);
+  doc.text('Confidential – For Internal Use Only', 16 + doc.getTextWidth('Dormi') + 3, pageH - 11.5);
 
   doc.setTextColor(...WHITE);
   doc.text('Page 1 of 1', pageW - 16, pageH - 11.5, { align: 'right' });
 
-  doc.save(`GrocerEase_Finance_Report_${periodLabel.replace(/[\s–]+/g, '_')}.pdf`);
+  doc.save(`Dormi_Finance_Report_${periodLabel.replace(/[\s–]+/g, '_')}.pdf`);
 }
 
 export default function AccountantOverview() {
@@ -324,7 +321,7 @@ export default function AccountantOverview() {
   const handleExportPDF = () => {
     if (!stats) { toast({ title: 'No data', description: 'Load a period first.', variant: 'destructive' }); return; }
     exportPDF(stats, periodLabel);
-    toast({ title: 'PDF downloaded', description: `GrocerEase_Finance_Report_${periodLabel.replace(/\s+/g, '_')}.pdf` });
+    toast({ title: 'PDF downloaded', description: `Dormi_Finance_Report_${periodLabel.replace(/\s+/g, '_')}.pdf` });
   };
 
   return (

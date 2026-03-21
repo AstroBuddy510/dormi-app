@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { ShoppingBasket, Phone } from 'lucide-react';
+import { Phone } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -54,9 +56,9 @@ export default function Login() {
       >
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center p-4 bg-primary text-primary-foreground rounded-3xl shadow-xl shadow-primary/20 mb-4">
-            <ShoppingBasket size={40} />
+            <img src={`${BASE}/images/dormi-logo.png`} alt="Dormi Logo" className="w-10 h-10 object-contain" />
           </div>
-          <h1 className="text-4xl font-display font-extrabold text-foreground tracking-tight">Grocer<span className="text-primary">Ease</span></h1>
+          <h1 className="text-4xl font-display font-extrabold text-foreground tracking-tight">Dormi</h1>
           <p className="text-muted-foreground mt-2 font-medium">Fresh groceries delivered to your estate.</p>
         </div>
 

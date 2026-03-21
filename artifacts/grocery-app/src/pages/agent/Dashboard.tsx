@@ -273,7 +273,7 @@ export default function AgentDashboard() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Good day, {user?.name?.split(" ")[0]} 👋</h1>
-          <p className="text-gray-500 mt-1">Call Center Dashboard — GrocerEase Accra</p>
+          <p className="text-gray-500 mt-1">Call Center Dashboard — Dormi</p>
         </div>
 
         {/* Stats */}

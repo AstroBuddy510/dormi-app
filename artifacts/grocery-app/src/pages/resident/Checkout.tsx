@@ -107,7 +107,7 @@ export default function CheckoutPage() {
       amount: totalPesewas,
       currency: 'GHS',
       ref: reference,
-      label: `GrocerEase — ${user?.name}`,
+      label: `Dormi — ${user?.name}`,
       channels: ['mobile_money', 'card', 'bank'],
       metadata: {
         resident_name: user?.name,

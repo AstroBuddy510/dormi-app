@@ -103,7 +103,7 @@ export default function AdminFinance() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('GrocerEase Accra — Finance Report', 14, 14);
+    doc.text('Dormi — Finance Report', 14, 14);
 
     // Sub-header
     doc.setFontSize(9);
@@ -225,7 +225,7 @@ export default function AdminFinance() {
       doc.setPage(i);
       doc.setFontSize(7);
       doc.setTextColor(...grey);
-      doc.text(`GrocerEase Accra — Confidential   |   Page ${i} of ${pageCount}`, 14, 290);
+      doc.text(`Dormi — Confidential   |   Page ${i} of ${pageCount}`, 14, 290);
     }
 
     const tag = period === 'custom' ? `${customFrom}_${customTo}` : period;

@@ -122,7 +122,7 @@ async function exportPDF(section: string, rows: any[], columns: string[], title:
 
   doc.setFontSize(18);
   doc.setTextColor(22, 163, 74);
-  doc.text('GrocerEase Accra', 14, 20);
+  doc.text('Dormi', 14, 20);
 
   doc.setFontSize(13);
   doc.setTextColor(0, 0, 0);

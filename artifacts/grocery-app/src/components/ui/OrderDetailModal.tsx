@@ -89,7 +89,7 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
 </head>
 <body>
   <div class="header">
-    <div class="brand">Grocer<span>Ease</span> Accra</div>
+    <div class="brand">Dormi</div>
     <div class="subtitle">Fresh groceries delivered to your estate</div>
     <div class="order-id">Order Receipt #${order.id} &nbsp;<span class="status-badge">${order.status}</span></div>
     <div class="date">${format(new Date(order.createdAt), 'EEEE, MMMM d yyyy • h:mm a')}</div>
@@ -132,7 +132,7 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
   ${order.notes ? `<div class="section"><div class="section-title">Notes</div><div class="notes">${order.notes}</div></div>` : ''}
 
   <div class="footer">
-    GrocerEase Accra &bull; Printed ${format(new Date(), 'dd MMM yyyy, HH:mm')} &bull; Thank you for your order!
+    Dormi &bull; Printed ${format(new Date(), 'dd MMM yyyy, HH:mm')} &bull; Thank you for your order!
   </div>
 </body>
 </html>`;

@@ -68,7 +68,7 @@ export default function Signup() {
           <Card className="rounded-3xl shadow-xl shadow-black/5 border-0">
             <CardHeader className="pb-4">
               <CardTitle className="text-3xl font-display text-foreground">Create Account</CardTitle>
-              <p className="text-muted-foreground">Join GrocerEase for fast estate delivery.</p>
+              <p className="text-muted-foreground">Join Dormi for fast estate delivery.</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-5">
