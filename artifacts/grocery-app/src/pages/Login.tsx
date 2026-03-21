@@ -65,13 +65,12 @@ export default function Login() {
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
-            className="mb-5"
+            className="mb-4"
           >
             <img
-              src={`${BASE}/images/dormi-logo.png`}
+              src={`${BASE}/images/dormi-icon-nobg.png`}
               alt="Dormi"
-              className="w-24 h-24 rounded-3xl shadow-2xl"
-              style={{ boxShadow: '0 20px 50px rgba(22,163,74,0.25), 0 8px 16px rgba(0,0,0,0.08)' }}
+              className="w-20 h-20 drop-shadow-xl"
             />
           </motion.div>
 
