@@ -44,6 +44,8 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
 
   const paymentLabel = (order.paymentMethod as string)?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) ?? '—';
 
+  const logoUrl = `${window.location.origin}${import.meta.env.BASE_URL}images/dormi-logo.png`;
+
   const handlePrint = () => {
     const items = (order.items ?? []).map((item: any) =>
       `<tr>
@@ -89,6 +91,7 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
 </head>
 <body>
   <div class="header">
+    <img src="${logoUrl}" alt="Dormi" style="width:52px;height:52px;object-fit:contain;margin:0 auto 6px;display:block;" />
     <div class="brand">Dormi</div>
     <div class="subtitle">Fresh groceries delivered to your estate</div>
     <div class="order-id">Order Receipt #${order.id} &nbsp;<span class="status-badge">${order.status}</span></div>

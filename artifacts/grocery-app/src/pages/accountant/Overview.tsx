@@ -13,6 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { fetchLogoBase64 } from '@/lib/pdfLogo';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -111,7 +112,7 @@ function metricTile(
   doc.text(value, x + 6, y + 12);
 }
 
-function exportPDF(stats: any, periodLabel: string) {
+async function exportPDF(stats: any, periodLabel: string) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const GREEN  = [22, 163, 74]   as [number, number, number];
   const GREEN2 = [20, 83, 45]    as [number, number, number];
@@ -139,11 +140,13 @@ function exportPDF(stats: any, periodLabel: string) {
   doc.setFillColor(...GREEN2);
   doc.rect(8, 8, pageW - 16, 8, 'F');
 
-  // Logo text
+  // Logo icon + text
+  const logo = await fetchLogoBase64().catch(() => null);
+  if (logo) doc.addImage(logo, 'PNG', 10, 9.5, 6, 6);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...WHITE);
-  doc.text('Dormi', 16, 15);
+  doc.text('Dormi', logo ? 18 : 16, 15);
 
   // Right side header info
   doc.setFontSize(7.5);
@@ -275,14 +278,15 @@ function exportPDF(stats: any, periodLabel: string) {
   doc.setFillColor(...GREEN);
   doc.rect(8, pageH - 18, pageW - 16, 10, 'F');
 
+  if (logo) doc.addImage(logo, 'PNG', 10, pageH - 17, 5, 5);
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...WHITE);
-  doc.text('Dormi', 16, pageH - 11.5);
+  doc.text('Dormi', logo ? 17 : 16, pageH - 11.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(187, 247, 208);
-  doc.text('Confidential – For Internal Use Only', 16 + doc.getTextWidth('Dormi') + 3, pageH - 11.5);
+  doc.text('Confidential – For Internal Use Only', (logo ? 17 : 16) + doc.getTextWidth('Dormi') + 3, pageH - 11.5);
 
   doc.setTextColor(...WHITE);
   doc.text('Page 1 of 1', pageW - 16, pageH - 11.5, { align: 'right' });
@@ -320,8 +324,9 @@ export default function AccountantOverview() {
 
   const handleExportPDF = () => {
     if (!stats) { toast({ title: 'No data', description: 'Load a period first.', variant: 'destructive' }); return; }
-    exportPDF(stats, periodLabel);
-    toast({ title: 'PDF downloaded', description: `Dormi_Finance_Report_${periodLabel.replace(/\s+/g, '_')}.pdf` });
+    void exportPDF(stats, periodLabel).then(() =>
+      toast({ title: 'PDF downloaded', description: `Dormi_Finance_Report_${periodLabel.replace(/\s+/g, '_')}.pdf` })
+    );
   };
 
   return (
