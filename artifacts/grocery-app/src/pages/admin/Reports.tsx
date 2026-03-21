@@ -118,19 +118,15 @@ function useReportData(fromDate: Date, toDate: Date) {
 async function exportPDF(section: string, rows: any[], columns: string[], title: string, dateLabel: string) {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
-  const { fetchLogoBase64 } = await import('@/lib/pdfLogo');
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  const logo = await fetchLogoBase64().catch(() => null);
-  if (logo) doc.addImage(logo, 'PNG', 14, 8, 12, 12);
 
   doc.setFontSize(18);
   doc.setTextColor(22, 163, 74);
-  doc.text('Dormi', logo ? 30 : 14, 20);
+  doc.text('Dormi', 14, 20);
 
   doc.setFontSize(13);
   doc.setTextColor(0, 0, 0);
-  doc.text(`${title} Report`, logo ? 30 : 14, 29);
+  doc.text(`${title} Report`, 14, 29);
 
   doc.setFontSize(9);
   doc.setTextColor(120, 120, 120);

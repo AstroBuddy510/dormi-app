@@ -55,11 +55,11 @@ export default function Login() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-4 bg-primary text-primary-foreground rounded-3xl shadow-xl shadow-primary/20 mb-4">
-            <img src={`${BASE}/images/dormi-logo.png`} alt="Dormi Logo" className="w-10 h-10 object-contain" />
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <img src={`${BASE}/images/dormi-logo.png`} alt="Dormi" className="w-14 h-14 rounded-2xl shadow-xl" />
+            <h1 className="text-4xl font-display font-extrabold text-foreground tracking-tight">Dormi</h1>
           </div>
-          <h1 className="text-4xl font-display font-extrabold text-foreground tracking-tight">Dormi</h1>
-          <p className="text-muted-foreground mt-2 font-medium">Fresh groceries delivered to your estate.</p>
+          <p className="text-muted-foreground font-medium">Fresh groceries delivered to your estate.</p>
         </div>
 
         <Card className="shadow-2xl shadow-black/5 border-0 bg-white/70 backdrop-blur-xl rounded-3xl">

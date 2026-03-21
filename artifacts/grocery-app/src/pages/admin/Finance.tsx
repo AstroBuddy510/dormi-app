@@ -10,7 +10,6 @@ import { TrendingUp, DollarSign, ShoppingBag, Truck, Users, AlertTriangle, Downl
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { fetchLogoBase64 } from '@/lib/pdfLogo';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -102,12 +101,10 @@ export default function AdminFinance() {
     // Header bar
     doc.setFillColor(...green);
     doc.rect(0, 0, 210, 22, 'F');
-    const logo = await fetchLogoBase64().catch(() => null);
-    if (logo) doc.addImage(logo, 'PNG', 10, 4, 13, 13);
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('Dormi — Finance Report', logo ? 26 : 14, 14);
+    doc.text('Dormi — Finance Report', 14, 14);
 
     // Sub-header
     doc.setFontSize(9);
