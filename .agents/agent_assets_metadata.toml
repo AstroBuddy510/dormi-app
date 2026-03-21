@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "FWOuch8QT3OJoLbqkDQCF"
+uri = "file://attached_assets/dormi-icon-full.png"
+type = "image"
+title = "Dormi App Store Icon (Full-Bleed)"
