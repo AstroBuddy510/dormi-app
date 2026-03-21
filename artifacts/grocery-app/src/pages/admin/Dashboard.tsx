@@ -13,6 +13,7 @@ import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import {
   format, parseISO, startOfDay, endOfDay,
   startOfWeek, endOfWeek, isWithinInterval,
@@ -20,11 +21,12 @@ import {
 import {
   Activity, ShoppingCart, Users, DollarSign, RefreshCcw,
   CheckCircle, Package, Eye, ChevronLeft, ChevronRight,
-  Calendar, Clock3,
+  Calendar, Clock3, Boxes,
 } from 'lucide-react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { OrderDetailModal } from '@/components/ui/OrderDetailModal';
+import { BulkGroupDetailModal } from '@/components/ui/BulkGroupDetailModal';
 import { cn } from '@/lib/utils';
 
 interface DeliveryPartner { id: number; name: string; commissionPercent: number; isActive: boolean; }
@@ -39,8 +41,9 @@ export default function AdminDashboard() {
   const { toast } = useToast();
 
   /* ── UI state ─────────────────────────────────────── */
-  const [liveFilter, setLiveFilter]     = useState<LiveFilter>('all');
+  const [liveFilter, setLiveFilter]       = useState<LiveFilter>('all');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedBulkGroup, setSelectedBulkGroup] = useState<any>(null);
   const [isRefreshing, setIsRefreshing]   = useState(false);
 
   /* History filters */
@@ -53,10 +56,23 @@ export default function AdminDashboard() {
   const { data: stats, refetch: refetchStats } = useGetAdminStats({
     query: { refetchInterval: 10_000 },
   });
-  const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders } = useListOrders(
+  const { data: allOrdersRaw = [], isLoading: ordersLoading, refetch: refetchOrders } = useListOrders(
     undefined,
     { query: { refetchInterval: 10_000 } },
   );
+
+  /* Filter out block-type orders — those are represented by their group instead */
+  const allOrders = useMemo(
+    () => allOrdersRaw.filter((o: any) => o.orderType !== 'block'),
+    [allOrdersRaw],
+  );
+
+  /* ── Block groups ──────────────────────────────────── */
+  const { data: blockGroups = [], refetch: refetchGroups } = useQuery<any[]>({
+    queryKey: ['/api/block-groups'],
+    queryFn: () => fetch('/api/block-groups').then(r => r.json()),
+    refetchInterval: 10_000,
+  });
 
   /* ── Auto-detect rider-delivered orders ──────────────── */
   const prevStatusesRef = useRef<Record<number, string>>({});
@@ -66,16 +82,15 @@ export default function AdminDashboard() {
     if (!allOrders.length) return;
 
     if (!isInitialLoadRef.current) {
-      const newlyDelivered = allOrders.filter(order => {
+      const newlyDelivered = allOrders.filter((order: any) => {
         const prev = prevStatusesRef.current[order.id];
         return order.status === 'delivered' && prev === 'in_transit';
       });
 
-      newlyDelivered.forEach(order => {
-        // Play a soft success chime
+      newlyDelivered.forEach((order: any) => {
         try {
           const ctx = new AudioContext();
-          const notes = [523, 659, 784]; // C5, E5, G5 — major chord arpeggio
+          const notes = [523, 659, 784];
           notes.forEach((freq, i) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -99,7 +114,7 @@ export default function AdminDashboard() {
       });
     }
 
-    prevStatusesRef.current = Object.fromEntries(allOrders.map(o => [o.id, o.status]));
+    prevStatusesRef.current = Object.fromEntries(allOrders.map((o: any) => [o.id, o.status]));
     isInitialLoadRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allOrders]);
@@ -114,6 +129,7 @@ export default function AdminDashboard() {
   /* ── Mutations ────────────────────────────────────── */
   const updateStatusMutation  = useUpdateOrderStatus();
   const assignRiderMutation   = useAssignRider();
+
   const assignDeliveryPartnerMutation = useMutation({
     mutationFn: ({ orderId, partnerId }: { orderId: number; partnerId: number }) =>
       fetch(`/api/orders/${orderId}/assign-delivery-partner`, {
@@ -127,18 +143,40 @@ export default function AdminDashboard() {
     },
   });
 
+  const assignBulkRiderMutation = useMutation({
+    mutationFn: ({ groupId, riderId }: { groupId: number; riderId: number }) =>
+      fetch(`/api/block-groups/${groupId}/assign-rider`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderId }),
+      }).then(r => r.json()),
+    onSuccess: (_data, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/block-groups'] });
+      toast({ title: 'Rider Assigned', description: `Rider assigned to bulk group #${groupId}` });
+    },
+  });
+
+  const updateBulkStatusMutation = useMutation({
+    mutationFn: ({ groupId, status }: { groupId: number; status: string }) =>
+      fetch(`/api/block-groups/${groupId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      }).then(r => r.json()),
+    onSuccess: (_data, { groupId, status }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/block-groups'] });
+      toast({ title: 'Bulk Order Updated', description: `Bulk group #${groupId} → ${status}` });
+    },
+  });
+
   /* ── Refresh ──────────────────────────────────────── */
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([
-      refetchOrders(),
-      refetchStats(),
-      queryClient.invalidateQueries(),
-    ]);
+    await Promise.all([refetchOrders(), refetchStats(), refetchGroups(), queryClient.invalidateQueries()]);
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  /* ── Handlers ─────────────────────────────────────── */
+  /* ── Handlers for individual orders ──────────────── */
   const handleStatusUpdate = (orderId: number, newStatus: string) => {
     updateStatusMutation.mutate(
       { id: orderId, data: { status: newStatus as any } },
@@ -163,9 +201,18 @@ export default function AdminDashboard() {
     );
   };
 
-  /* ── Derived: live orders (non-delivered, non-cancelled) ── */
-  const liveOrders = useMemo(() => {
-    return allOrders.filter((o) => {
+  /* ── Handlers for bulk groups ─────────────────────── */
+  const handleBulkAssignRider = (groupId: number, riderId: string) => {
+    assignBulkRiderMutation.mutate({ groupId, riderId: parseInt(riderId) });
+  };
+
+  const handleBulkStatusUpdate = (groupId: number, newStatus: string) => {
+    updateBulkStatusMutation.mutate({ groupId, status: newStatus });
+  };
+
+  /* ── Derived: combined live items (orders + bulk groups) ── */
+  const liveSingle = useMemo(() => {
+    return allOrders.filter((o: any) => {
       if (o.status === 'delivered' || o.status === 'cancelled') return false;
       if (liveFilter === 'pending')     return o.status === 'pending';
       if (liveFilter === 'in_progress') return ['accepted', 'ready', 'in_transit'].includes(o.status);
@@ -173,65 +220,73 @@ export default function AdminDashboard() {
     });
   }, [allOrders, liveFilter]);
 
+  const liveBulkGroups = useMemo(() => {
+    return blockGroups.filter((g: any) => {
+      if (g.status === 'delivered' || g.status === 'cancelled') return false;
+      if (liveFilter === 'pending')     return g.status === 'pending';
+      if (liveFilter === 'in_progress') return ['accepted', 'ready', 'in_transit'].includes(g.status);
+      return true;
+    });
+  }, [blockGroups, liveFilter]);
+
+  /* Merge and sort by createdAt descending */
+  const liveOrders = useMemo(() => {
+    const combined: any[] = [...liveSingle, ...liveBulkGroups];
+    return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [liveSingle, liveBulkGroups]);
+
   /* ── Derived: delivered history ──────────────────────── */
-  const deliveredAll = useMemo(
-    () => allOrders.filter(o => o.status === 'delivered'),
-    [allOrders]
+  const deliveredSingle = useMemo(
+    () => allOrders.filter((o: any) => o.status === 'delivered'),
+    [allOrders],
+  );
+  const deliveredBulk = useMemo(
+    () => blockGroups.filter((g: any) => g.status === 'delivered'),
+    [blockGroups],
   );
 
   const deliveredFiltered = useMemo(() => {
     const now = new Date();
-    return deliveredAll.filter((o) => {
-      const date = parseISO(o.createdAt);
-      if (datePreset === 'today') {
-        return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
-      }
-      if (datePreset === 'week') {
-        return isWithinInterval(date, {
-          start: startOfWeek(now, { weekStartsOn: 1 }),
-          end: endOfWeek(now, { weekStartsOn: 1 }),
-        });
-      }
-      if (datePreset === 'custom') {
-        if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
-        if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
+    const combined: any[] = [...deliveredSingle, ...deliveredBulk];
+    return combined
+      .filter((o) => {
+        const date = parseISO(o.createdAt);
+        if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
+        if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
+        if (datePreset === 'custom') {
+          if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
+          if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
+          return true;
+        }
         return true;
-      }
-      return true;
-    });
-  }, [deliveredAll, datePreset, fromDate, toDate]);
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [deliveredSingle, deliveredBulk, datePreset, fromDate, toDate]);
 
   const historyTotalPages = Math.max(1, Math.ceil(deliveredFiltered.length / HISTORY_PAGE_SIZE));
   const safePage          = Math.min(historyPage, historyTotalPages);
   const historyPage_data  = deliveredFiltered.slice(
     (safePage - 1) * HISTORY_PAGE_SIZE,
-    safePage * HISTORY_PAGE_SIZE
+    safePage * HISTORY_PAGE_SIZE,
   );
 
   function goHistoryPage(p: number) {
     setHistoryPage(Math.max(1, Math.min(historyTotalPages, p)));
   }
 
-  /* ── Period label ────────────────────────────────────── */
+  /* ── Period label ─────────────────────────────────── */
   const periodLabel =
     datePreset === 'today'  ? 'Today' :
     datePreset === 'week'   ? 'This Week' :
     (fromDate && toDate)    ? `${fromDate} – ${toDate}` : 'All Time';
 
-  /* ── Period-scoped orders (all statuses, within date range) ── */
+  /* ── Period-scoped (all statuses, within date range, individual only) ── */
   const periodOrders = useMemo(() => {
     const now = new Date();
-    return allOrders.filter((o) => {
+    return allOrders.filter((o: any) => {
       const date = parseISO(o.createdAt);
-      if (datePreset === 'today') {
-        return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
-      }
-      if (datePreset === 'week') {
-        return isWithinInterval(date, {
-          start: startOfWeek(now, { weekStartsOn: 1 }),
-          end: endOfWeek(now, { weekStartsOn: 1 }),
-        });
-      }
+      if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
+      if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
       if (datePreset === 'custom') {
         if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
         if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
@@ -241,26 +296,25 @@ export default function AdminDashboard() {
     });
   }, [allOrders, datePreset, fromDate, toDate]);
 
-  // ── Net Revenue breakdown (only delivered orders) ──────────────────────────
-  // GrocerEase earnings = service fee + in-house delivery fee + partner commission + vendor commission
+  /* ── Net Revenue (individual delivered orders) ──────── */
   const partnerMap = useMemo(
     () => new Map(deliveryPartners.map((p: DeliveryPartner) => [p.id, p.commissionPercent ?? 0])),
-    [deliveryPartners]
+    [deliveryPartners],
   );
 
   const periodNetRevenue = useMemo(() => {
-    const delivered = periodOrders.filter(o => o.status === 'delivered');
-    const serviceFeeTotal        = delivered.reduce((s, o) => s + (o.serviceFee ?? 0), 0);
-    const inHouseDeliveryTotal   = delivered.filter(o => o.riderId && !(o as any).deliveryPartnerId)
-                                            .reduce((s, o) => s + (o.deliveryFee ?? 0), 0);
-    const partnerCommissionTotal = delivered.filter(o => (o as any).deliveryPartnerId)
-                                            .reduce((s, o) => {
-                                              const rate = (partnerMap.get((o as any).deliveryPartnerId) ?? 0) / 100;
+    const delivered = periodOrders.filter((o: any) => o.status === 'delivered');
+    const serviceFeeTotal        = delivered.reduce((s: number, o: any) => s + (o.serviceFee ?? 0), 0);
+    const inHouseDeliveryTotal   = delivered.filter((o: any) => o.riderId && !o.deliveryPartnerId)
+                                            .reduce((s: number, o: any) => s + (o.deliveryFee ?? 0), 0);
+    const partnerCommissionTotal = delivered.filter((o: any) => o.deliveryPartnerId)
+                                            .reduce((s: number, o: any) => {
+                                              const rate = (partnerMap.get(o.deliveryPartnerId) ?? 0) / 100;
                                               return s + (o.deliveryFee ?? 0) * rate;
                                             }, 0);
-    const vendorCommissionTotal  = delivered.filter(o => o.vendorId)
-                                            .reduce((s, o) => {
-                                              const rate = ((o as any).vendorCommissionPercent ?? 0) / 100;
+    const vendorCommissionTotal  = delivered.filter((o: any) => o.vendorId)
+                                            .reduce((s: number, o: any) => {
+                                              const rate = (o.vendorCommissionPercent ?? 0) / 100;
                                               return s + (o.subtotal ?? 0) * rate;
                                             }, 0);
     return { serviceFeeTotal, inHouseDeliveryTotal, partnerCommissionTotal, vendorCommissionTotal,
@@ -269,13 +323,13 @@ export default function AdminDashboard() {
 
   const fmt = (n: number) => `GH₵ ${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  /* ── Stat cards ──────────────────────────────────────── */
+  /* ── Stat cards ──────────────────────────────────── */
   const statCards = [
-    { title: 'Total Orders',  value: periodOrders.length,                                             icon: ShoppingCart, color: 'text-blue-600 bg-blue-50' },
-    { title: 'Pending',       value: periodOrders.filter(o => o.status === 'pending').length,         icon: Activity,     color: 'text-red-600 bg-red-50' },
-    { title: 'In Progress',   value: periodOrders.filter(o => ['accepted','ready','in_transit'].includes(o.status)).length, icon: Package, color: 'text-amber-600 bg-amber-50' },
-    { title: 'Delivered',     value: periodOrders.filter(o => o.status === 'delivered').length,       icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
-    { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                                     icon: Users,        color: 'text-purple-600 bg-purple-50' },
+    { title: 'Total Orders',  value: periodOrders.length,                                                         icon: ShoppingCart, color: 'text-blue-600 bg-blue-50' },
+    { title: 'Pending',       value: periodOrders.filter((o: any) => o.status === 'pending').length,              icon: Activity,     color: 'text-red-600 bg-red-50' },
+    { title: 'In Progress',   value: periodOrders.filter((o: any) => ['accepted','ready','in_transit'].includes(o.status)).length, icon: Package, color: 'text-amber-600 bg-amber-50' },
+    { title: 'Delivered',     value: periodOrders.filter((o: any) => o.status === 'delivered').length,            icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
+    { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                                                 icon: Users,        color: 'text-purple-600 bg-purple-50' },
   ];
 
   const liveTabs: { label: string; value: LiveFilter }[] = [
@@ -292,7 +346,7 @@ export default function AdminDashboard() {
     pending: 'Accept', accepted: 'Mark Ready', ready: 'In Transit', in_transit: 'Delivered',
   };
 
-  /* ── Render ──────────────────────────────────────────── */
+  /* ── Render ──────────────────────────────────────── */
   return (
     <div className="flex min-h-screen bg-gray-50/50">
       <AdminSidebar />
@@ -304,12 +358,8 @@ export default function AdminDashboard() {
             <h1 className="text-2xl md:text-3xl font-bold text-foreground">Live Orders Dashboard</h1>
             <p className="text-muted-foreground mt-1 text-sm">Real-time overview of all orders</p>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="rounded-xl border-border gap-2 min-w-[110px]"
-          >
+          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}
+            className="rounded-xl border-border gap-2 min-w-[110px]">
             <RefreshCcw className={cn('h-4 w-4 transition-transform duration-500', isRefreshing && 'animate-spin')} />
             {isRefreshing ? 'Refreshing…' : 'Refresh'}
           </Button>
@@ -343,7 +393,7 @@ export default function AdminDashboard() {
                   <DollarSign size={20} className="text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">GrocerEase Net Revenue</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Dormi Net Revenue</p>
                   <p className="text-2xl font-bold text-emerald-700 mt-0.5">{fmt(periodNetRevenue.total)}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Delivered orders · {periodLabel}</p>
                 </div>
@@ -375,20 +425,22 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-lg font-bold text-foreground">Live Orders</h2>
-              <p className="text-xs text-muted-foreground">{liveOrders.length} active order{liveOrders.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-muted-foreground">
+                {liveOrders.length} active item{liveOrders.length !== 1 ? 's' : ''}
+                {liveBulkGroups.length > 0 && (
+                  <span className="ml-1 text-indigo-600">· {liveBulkGroups.length} bulk</span>
+                )}
+              </p>
             </div>
             <div className="flex gap-2">
               {liveTabs.map((tab) => (
-                <button
-                  key={tab.value}
-                  onClick={() => setLiveFilter(tab.value)}
+                <button key={tab.value} onClick={() => setLiveFilter(tab.value)}
                   className={cn(
                     'px-3 py-1.5 rounded-xl text-xs font-medium transition-all',
                     liveFilter === tab.value
                       ? 'bg-primary text-white shadow-sm'
                       : 'bg-white border border-border text-muted-foreground hover:text-foreground',
-                  )}
-                >
+                  )}>
                   {tab.label}
                 </button>
               ))}
@@ -412,11 +464,15 @@ export default function AdminDashboard() {
                   nextStatus={nextStatus}
                   nextStatusLabel={nextStatusLabel}
                   updateStatusMutation={updateStatusMutation}
+                  updateBulkStatusMutation={updateBulkStatusMutation}
                   assignRiderMutation={assignRiderMutation}
                   assignDeliveryPartnerMutation={assignDeliveryPartnerMutation}
                   onSelectOrder={setSelectedOrder}
+                  onSelectBulkGroup={setSelectedBulkGroup}
                   onStatusUpdate={handleStatusUpdate}
                   onAssignRider={handleAssignRider}
+                  onBulkAssignRider={handleBulkAssignRider}
+                  onBulkStatusUpdate={handleBulkStatusUpdate}
                 />
               )}
             </CardContent>
@@ -432,55 +488,40 @@ export default function AdminDashboard() {
                 Delivered Orders History
               </h2>
               <p className="text-xs text-muted-foreground">
-                {deliveredFiltered.length} order{deliveredFiltered.length !== 1 ? 's' : ''} · showing {HISTORY_PAGE_SIZE} per page
+                {deliveredFiltered.length} entr{deliveredFiltered.length !== 1 ? 'ies' : 'y'} · showing {HISTORY_PAGE_SIZE} per page
               </p>
             </div>
 
-            {/* Date filters */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Preset chips */}
               {(['today', 'week'] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => { setDatePreset(p); setHistoryPage(1); }}
+                <button key={p} onClick={() => { setDatePreset(p); setHistoryPage(1); }}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
                     datePreset === p
                       ? 'bg-green-600 text-white border-green-600 shadow-sm'
                       : 'bg-white border-border text-muted-foreground hover:text-foreground',
-                  )}
-                >
+                  )}>
                   <Clock3 size={11} />
                   {p === 'today' ? 'Today' : 'This Week'}
                 </button>
               ))}
-
-              {/* Custom range */}
-              <button
-                onClick={() => { setDatePreset('custom'); setHistoryPage(1); }}
+              <button onClick={() => { setDatePreset('custom'); setHistoryPage(1); }}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
                   datePreset === 'custom'
                     ? 'bg-green-600 text-white border-green-600 shadow-sm'
                     : 'bg-white border-border text-muted-foreground hover:text-foreground',
-                )}
-              >
+                )}>
                 <Calendar size={11} /> Custom range
               </button>
-
               {datePreset === 'custom' && (
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={fromDate}
+                  <input type="date" value={fromDate}
                     onChange={(e) => { setFromDate(e.target.value); setHistoryPage(1); }}
                     className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
                   />
                   <span className="text-xs text-muted-foreground">→</span>
-                  <input
-                    type="date"
-                    value={toDate}
-                    min={fromDate}
+                  <input type="date" value={toDate} min={fromDate}
                     onChange={(e) => { setToDate(e.target.value); setHistoryPage(1); }}
                     className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
                   />
@@ -503,108 +544,115 @@ export default function AdminDashboard() {
                       <TableHeader className="bg-gray-50">
                         <TableRow>
                           <TableHead className="w-14">ID</TableHead>
-                          <TableHead>Resident</TableHead>
-                          <TableHead>Items</TableHead>
-                          <TableHead>Vendor</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Resident / Estate</TableHead>
+                          <TableHead>Items / Summary</TableHead>
                           <TableHead>Total</TableHead>
                           <TableHead>Rider / Partner</TableHead>
                           <TableHead>Delivered At</TableHead>
-                          <TableHead>⏱ Duration</TableHead>
                           <TableHead className="w-10"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {historyPage_data.map((order) => (
-                          <TableRow key={order.id} className="hover:bg-gray-50/50">
-                            <TableCell>
-                              <button
-                                onClick={() => setSelectedOrder(order)}
-                                className="font-bold text-green-700 hover:underline"
-                              >
-                                #{order.id}
-                              </button>
-                            </TableCell>
-                            <TableCell>
-                              <p className="font-medium text-sm">{order.residentName || '—'}</p>
-                              <p className="text-xs text-muted-foreground">{order.residentPhone || ''}</p>
-                            </TableCell>
-                            <TableCell className="text-sm max-w-[160px]">
-                              {Array.isArray(order.items) && order.items.length > 0 ? (
-                                <div className="space-y-0.5">
-                                  {order.items.slice(0, 2).map((item: any, i: number) => (
-                                    <p key={i} className="truncate text-xs">{item.itemName} ×{item.quantity}</p>
-                                  ))}
-                                  {order.items.length > 2 && (
-                                    <p className="text-xs text-muted-foreground">+{order.items.length - 2} more</p>
-                                  )}
-                                </div>
-                              ) : '—'}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{order.vendorName || '—'}</TableCell>
-                            <TableCell className="font-bold text-green-700">₵{order.total.toFixed(2)}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {(order as any).orderType === 'third_party'
-                                ? ((order as any).deliveryPartnerName || '—')
-                                : (order.riderName || '—')}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                              {format(parseISO(order.updatedAt), 'dd MMM yyyy, HH:mm')}
-                            </TableCell>
-                            <TableCell>
-                              <DeliveryTimer
-                                pickedUpAt={(order as any).pickedUpAt}
-                                deliveredAt={(order as any).deliveredAt}
-                                size="sm"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <button
-                                onClick={() => setSelectedOrder(order)}
-                                title="View order details"
-                                className="p-1.5 rounded-lg text-muted-foreground hover:text-green-700 hover:bg-green-50 transition-colors"
-                              >
-                                <Eye size={15} />
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {historyPage_data.map((entry: any) => {
+                          const isBulk = !!entry.isBulkGroup;
+                          return (
+                            <TableRow key={isBulk ? `bulk-${entry.id}` : entry.id} className="hover:bg-gray-50/50">
+                              <TableCell>
+                                <button
+                                  onClick={() => isBulk ? setSelectedBulkGroup(entry) : setSelectedOrder(entry)}
+                                  className={cn('font-bold hover:underline', isBulk ? 'text-indigo-700' : 'text-green-700')}
+                                >
+                                  {isBulk ? `BLK-${entry.id}` : `#${entry.id}`}
+                                </button>
+                              </TableCell>
+                              <TableCell>
+                                {isBulk ? (
+                                  <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 text-[10px] px-2 gap-1 rounded-full">
+                                    <Boxes size={10} /> Bulk
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] px-2 rounded-full capitalize">
+                                    {entry.orderType || 'single'}
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isBulk ? (
+                                  <div>
+                                    <p className="font-medium text-sm">{entry.estate}</p>
+                                    <p className="text-xs text-muted-foreground">{entry.totalOrders} residents</p>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <p className="font-medium text-sm">{entry.residentName || '—'}</p>
+                                    <p className="text-xs text-muted-foreground">{entry.residentPhone || ''}</p>
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm max-w-[160px]">
+                                {isBulk ? (
+                                  <p className="text-xs text-muted-foreground">{entry.name}</p>
+                                ) : (
+                                  Array.isArray(entry.items) && entry.items.length > 0 ? (
+                                    <div className="space-y-0.5">
+                                      {entry.items.slice(0, 2).map((item: any, i: number) => (
+                                        <p key={i} className="truncate text-xs">{item.itemName} ×{item.quantity}</p>
+                                      ))}
+                                      {entry.items.length > 2 && (
+                                        <p className="text-xs text-muted-foreground">+{entry.items.length - 2} more</p>
+                                      )}
+                                    </div>
+                                  ) : '—'
+                                )}
+                              </TableCell>
+                              <TableCell className="font-bold text-green-700">
+                                ₵{(isBulk ? entry.totalAmount : entry.total)?.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {isBulk
+                                  ? (entry.riderName || '—')
+                                  : (entry.orderType === 'third_party' ? (entry.deliveryPartnerName || '—') : (entry.riderName || '—'))}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                {format(parseISO(entry.updatedAt ?? entry.createdAt), 'dd MMM yyyy, HH:mm')}
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  onClick={() => isBulk ? setSelectedBulkGroup(entry) : setSelectedOrder(entry)}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-green-700 hover:bg-green-50 transition-colors"
+                                >
+                                  <Eye size={15} />
+                                </button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
 
-                  {/* Pagination */}
                   {historyTotalPages > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-gray-50/50">
                       <p className="text-xs text-muted-foreground">
-                        Showing {(safePage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(safePage * HISTORY_PAGE_SIZE, deliveredFiltered.length)} of {deliveredFiltered.length} orders
+                        Showing {(safePage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(safePage * HISTORY_PAGE_SIZE, deliveredFiltered.length)} of {deliveredFiltered.length}
                       </p>
                       <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => goHistoryPage(safePage - 1)}
-                          disabled={safePage === 1}
-                          className="p-1.5 rounded-lg border border-border bg-white text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
+                        <button onClick={() => goHistoryPage(safePage - 1)} disabled={safePage === 1}
+                          className="p-1.5 rounded-lg border border-border bg-white text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                           <ChevronLeft size={14} />
                         </button>
                         {Array.from({ length: historyTotalPages }, (_, i) => i + 1).map((p) => (
-                          <button
-                            key={p}
-                            onClick={() => goHistoryPage(p)}
-                            className={cn(
-                              'w-7 h-7 rounded-lg text-xs font-medium transition-all',
+                          <button key={p} onClick={() => goHistoryPage(p)}
+                            className={cn('w-7 h-7 rounded-lg text-xs font-medium transition-all',
                               p === safePage
                                 ? 'bg-green-600 text-white shadow-sm'
-                                : 'bg-white border border-border text-muted-foreground hover:text-foreground',
-                            )}
-                          >
+                                : 'bg-white border border-border text-muted-foreground hover:text-foreground')}>
                             {p}
                           </button>
                         ))}
-                        <button
-                          onClick={() => goHistoryPage(safePage + 1)}
-                          disabled={safePage === historyTotalPages}
-                          className="p-1.5 rounded-lg border border-border bg-white text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
+                        <button onClick={() => goHistoryPage(safePage + 1)} disabled={safePage === historyTotalPages}
+                          className="p-1.5 rounded-lg border border-border bg-white text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                           <ChevronRight size={14} />
                         </button>
                       </div>
@@ -623,15 +671,23 @@ export default function AdminDashboard() {
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
       />
+
+      <BulkGroupDetailModal
+        group={selectedBulkGroup}
+        open={!!selectedBulkGroup}
+        onClose={() => setSelectedBulkGroup(null)}
+      />
     </div>
   );
 }
 
-/* ── Extracted live orders table ────────────────────────── */
+/* ── Live Orders Table ─────────────────────────────── */
 function LiveOrdersTable({
   orders, riders, activePartners, nextStatus, nextStatusLabel,
-  updateStatusMutation, assignRiderMutation, assignDeliveryPartnerMutation,
-  onSelectOrder, onStatusUpdate, onAssignRider,
+  updateStatusMutation, updateBulkStatusMutation,
+  assignRiderMutation, assignDeliveryPartnerMutation,
+  onSelectOrder, onSelectBulkGroup, onStatusUpdate, onAssignRider,
+  onBulkAssignRider, onBulkStatusUpdate,
 }: any) {
   return (
     <div className="overflow-x-auto">
@@ -639,11 +695,10 @@ function LiveOrdersTable({
         <TableHeader className="bg-gray-50">
           <TableRow>
             <TableHead className="w-14">ID</TableHead>
-            <TableHead className="w-8"></TableHead>
-            <TableHead>Resident</TableHead>
-            <TableHead>Address</TableHead>
-            <TableHead>Items</TableHead>
-            <TableHead>Vendor</TableHead>
+            <TableHead className="w-20">Type</TableHead>
+            <TableHead>Resident / Estate</TableHead>
+            <TableHead>Address / Batch</TableHead>
+            <TableHead>Items / Summary</TableHead>
             <TableHead>Total</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Rider / Delivery Co.</TableHead>
@@ -654,46 +709,141 @@ function LiveOrdersTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {orders.map((order: any) => {
-            const next = nextStatus[order.status];
+          {orders.map((entry: any) => {
+            const isBulk = !!entry.isBulkGroup;
+            const next = nextStatus[entry.status];
+
+            if (isBulk) {
+              return (
+                <TableRow key={`bulk-${entry.id}`} className="hover:bg-indigo-50/30 bg-indigo-50/10">
+                  <TableCell>
+                    <button
+                      onClick={() => onSelectBulkGroup(entry)}
+                      className="font-bold text-indigo-700 hover:underline"
+                    >
+                      BLK-{entry.id}
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 text-[10px] px-2 gap-1 rounded-full font-semibold">
+                      <Boxes size={10} /> Bulk · {entry.totalOrders}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <p className="font-semibold text-sm">{entry.estate}</p>
+                      <p className="text-xs text-muted-foreground">{entry.totalOrders} resident{entry.totalOrders !== 1 ? 's' : ''}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground font-mono">
+                    {entry.batchNumber || `BLK-${entry.id}`}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    <button
+                      onClick={() => onSelectBulkGroup(entry)}
+                      className="text-indigo-600 hover:underline font-medium"
+                    >
+                      View {entry.totalOrders} orders →
+                    </button>
+                  </TableCell>
+                  <TableCell className="font-bold text-indigo-700">
+                    ₵{entry.totalAmount?.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={entry.status} />
+                  </TableCell>
+                  <TableCell className="min-w-[160px]">
+                    <Select
+                      value={entry.riderId?.toString() ?? ''}
+                      onValueChange={(val) => onBulkAssignRider(entry.id, val)}
+                    >
+                      <SelectTrigger className="h-8 text-xs rounded-lg border-indigo-200 bg-indigo-50">
+                        <SelectValue placeholder="Assign rider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {riders.map((r: any) => (
+                          <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {entry.riderName && (
+                      <p className="text-[10px] text-indigo-600 font-medium mt-0.5 truncate">✓ {entry.riderName}</p>
+                    )}
+                  </TableCell>
+                  <TableCell className="min-w-[110px]">
+                    {next ? (
+                      <Button size="sm"
+                        variant={entry.status === 'pending' ? 'destructive' : 'default'}
+                        className="h-7 text-xs rounded-lg px-2 bg-indigo-600 hover:bg-indigo-700 text-white border-0"
+                        onClick={() => onBulkStatusUpdate(entry.id, next)}
+                        disabled={updateBulkStatusMutation.isPending}
+                      >
+                        {nextStatusLabel[entry.status]}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground capitalize">{entry.status}</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {format(new Date(entry.createdAt), 'dd MMM HH:mm')}
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs text-muted-foreground">—</span>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => onSelectBulkGroup(entry)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+                    >
+                      <Eye size={15} />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              );
+            }
+
+            /* ── Regular single / third-party order row ── */
             return (
-              <TableRow key={order.id} className="hover:bg-gray-50/50">
+              <TableRow key={entry.id} className="hover:bg-gray-50/50">
                 <TableCell>
                   <button
-                    onClick={() => onSelectOrder(order)}
+                    onClick={() => onSelectOrder(entry)}
                     className="font-bold text-primary hover:underline hover:text-primary/80 transition-colors"
                   >
-                    #{order.id}
+                    #{entry.id}
                   </button>
                 </TableCell>
-                <TableCell></TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-[10px] px-2 rounded-full capitalize">
+                    {entry.orderType || 'single'}
+                  </Badge>
+                </TableCell>
                 <TableCell>
                   <div>
-                    <p className="font-medium">{order.residentName || '—'}</p>
-                    <p className="text-xs text-muted-foreground">{order.residentPhone || ''}</p>
+                    <p className="font-medium">{entry.residentName || '—'}</p>
+                    <p className="text-xs text-muted-foreground">{entry.residentPhone || ''}</p>
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate">
-                  {order.residentAddress || '—'}
+                  {entry.residentAddress || '—'}
                 </TableCell>
                 <TableCell className="text-sm max-w-[160px]">
-                  {Array.isArray(order.items) && order.items.length > 0 ? (
+                  {Array.isArray(entry.items) && entry.items.length > 0 ? (
                     <div className="space-y-0.5">
-                      {order.items.slice(0, 2).map((item: any, i: number) => (
+                      {entry.items.slice(0, 2).map((item: any, i: number) => (
                         <p key={i} className="truncate text-xs">{item.itemName} ×{item.quantity}</p>
                       ))}
-                      {order.items.length > 2 && (
-                        <p className="text-xs text-muted-foreground">+{order.items.length - 2} more</p>
+                      {entry.items.length > 2 && (
+                        <p className="text-xs text-muted-foreground">+{entry.items.length - 2} more</p>
                       )}
                     </div>
                   ) : '—'}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{order.vendorName || '—'}</TableCell>
-                <TableCell className="font-bold text-primary">₵{order.total.toFixed(2)}</TableCell>
+                <TableCell className="font-bold text-primary">₵{entry.total?.toFixed(2)}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
-                    <StatusBadge status={order.status} />
-                    {order.riderAccepted === true && (
+                    <StatusBadge status={entry.status} />
+                    {entry.riderAccepted === true && (
                       <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap">
                         ✓ Rider Accepted
                       </span>
@@ -701,12 +851,12 @@ function LiveOrdersTable({
                   </div>
                 </TableCell>
                 <TableCell className="min-w-[160px]">
-                  {order.orderType === 'third_party' ? (
+                  {entry.orderType === 'third_party' ? (
                     <div className="space-y-1">
                       <Select
-                        value={order.deliveryPartnerId?.toString() ?? ''}
+                        value={entry.deliveryPartnerId?.toString() ?? ''}
                         onValueChange={(val) =>
-                          assignDeliveryPartnerMutation.mutate({ orderId: order.id, partnerId: parseInt(val) })
+                          assignDeliveryPartnerMutation.mutate({ orderId: entry.id, partnerId: parseInt(val) })
                         }
                       >
                         <SelectTrigger className="h-8 text-xs rounded-lg border-blue-200 bg-blue-50">
@@ -718,14 +868,14 @@ function LiveOrdersTable({
                           ))}
                         </SelectContent>
                       </Select>
-                      {order.deliveryPartnerName && (
-                        <p className="text-[10px] text-blue-600 font-medium truncate">✓ {order.deliveryPartnerName}</p>
+                      {entry.deliveryPartnerName && (
+                        <p className="text-[10px] text-blue-600 font-medium truncate">✓ {entry.deliveryPartnerName}</p>
                       )}
                     </div>
                   ) : (
                     <Select
-                      value={order.riderId?.toString() ?? ''}
-                      onValueChange={(val) => onAssignRider(order.id, val)}
+                      value={entry.riderId?.toString() ?? ''}
+                      onValueChange={(val) => onAssignRider(entry.id, val)}
                     >
                       <SelectTrigger className="h-8 text-xs rounded-lg">
                         <SelectValue placeholder="Assign rider" />
@@ -740,33 +890,27 @@ function LiveOrdersTable({
                 </TableCell>
                 <TableCell className="min-w-[110px]">
                   {next ? (
-                    <Button
-                      size="sm"
-                      variant={order.status === 'pending' ? 'destructive' : 'default'}
+                    <Button size="sm"
+                      variant={entry.status === 'pending' ? 'destructive' : 'default'}
                       className="h-7 text-xs rounded-lg px-2"
-                      onClick={() => onStatusUpdate(order.id, next)}
+                      onClick={() => onStatusUpdate(entry.id, next)}
                       disabled={updateStatusMutation.isPending}
                     >
-                      {nextStatusLabel[order.status]}
+                      {nextStatusLabel[entry.status]}
                     </Button>
                   ) : (
-                    <span className="text-xs text-muted-foreground capitalize">{order.status}</span>
+                    <span className="text-xs text-muted-foreground capitalize">{entry.status}</span>
                   )}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {format(new Date(order.createdAt), 'dd MMM HH:mm')}
+                  {format(new Date(entry.createdAt), 'dd MMM HH:mm')}
                 </TableCell>
                 <TableCell>
-                  <DeliveryTimer
-                    pickedUpAt={order.pickedUpAt}
-                    deliveredAt={order.deliveredAt}
-                    size="sm"
-                  />
+                  <DeliveryTimer pickedUpAt={entry.pickedUpAt} deliveredAt={entry.deliveredAt} size="sm" />
                 </TableCell>
                 <TableCell>
                   <button
-                    onClick={() => onSelectOrder(order)}
-                    title="View order details"
+                    onClick={() => onSelectOrder(entry)}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                   >
                     <Eye size={15} />
