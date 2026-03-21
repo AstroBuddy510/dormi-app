@@ -1,11 +1,16 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { blockOrderGroupsTable, ordersTable, residentsTable } from "@workspace/db/schema";
+import { blockOrderGroupsTable, ordersTable, residentsTable, ridersTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-function mapGroup(g: typeof blockOrderGroupsTable.$inferSelect) {
+async function mapGroupWithRider(g: typeof blockOrderGroupsTable.$inferSelect) {
+  let riderName: string | null = null;
+  if (g.riderId) {
+    const [rider] = await db.select({ name: ridersTable.name }).from(ridersTable).where(eq(ridersTable.id, g.riderId)).limit(1);
+    riderName = rider?.name ?? null;
+  }
   return {
     id: g.id,
     batchNumber: g.batchNumber ?? null,
@@ -13,17 +18,20 @@ function mapGroup(g: typeof blockOrderGroupsTable.$inferSelect) {
     estate: g.estate,
     status: g.status,
     riderId: g.riderId,
+    riderName,
     totalOrders: g.totalOrders,
     totalAmount: parseFloat(g.totalAmount),
     scheduledDate: g.scheduledDate?.toISOString() ?? null,
     notes: g.notes,
     createdAt: g.createdAt.toISOString(),
+    isBulkGroup: true,
   };
 }
 
 router.get("/", async (_req, res) => {
   const groups = await db.select().from(blockOrderGroupsTable).orderBy(desc(blockOrderGroupsTable.createdAt));
-  res.json(groups.map(mapGroup));
+  const mapped = await Promise.all(groups.map(mapGroupWithRider));
+  res.json(mapped);
 });
 
 router.get("/:id/orders", async (req, res) => {
@@ -33,39 +41,87 @@ router.get("/:id/orders", async (req, res) => {
     res.status(404).json({ error: "not_found", message: "Group not found" });
     return;
   }
-  const orders = await db.select().from(ordersTable)
+  const rows = await db.select().from(ordersTable)
     .leftJoin(residentsTable, eq(ordersTable.residentId, residentsTable.id))
     .where(eq(ordersTable.blockGroupId, id));
 
   res.json({
-    group: mapGroup(group),
-    orders: orders.map(row => ({
+    group: await mapGroupWithRider(group),
+    orders: rows.map(row => ({
       id: row.orders.id,
-      residentName: row.residents?.fullName ?? '',
-      residentPhone: row.residents?.phone ?? '',
-      residentAddress: row.residents ? `Block ${row.residents.blockNumber}, House ${row.residents.houseNumber}` : '',
+      residentName: row.residents?.fullName ?? "",
+      residentPhone: row.residents?.phone ?? "",
+      residentAddress: row.residents
+        ? `Block ${row.residents.blockNumber}, House ${row.residents.houseNumber}`
+        : "",
+      estate: row.residents?.estate ?? group.estate,
       items: row.orders.items as any[],
+      subtotal: parseFloat(row.orders.subtotal),
+      serviceFee: parseFloat(row.orders.serviceFee),
+      deliveryFee: parseFloat(row.orders.deliveryFee),
       total: parseFloat(row.orders.total),
       status: row.orders.status,
+      paymentMethod: row.orders.paymentMethod,
+      notes: row.orders.notes,
       createdAt: row.orders.createdAt.toISOString(),
     })),
   });
 });
 
-router.put("/:id/status", async (req, res) => {
+router.put("/:id/assign-rider", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { status, riderId } = req.body;
-    const updateData: any = { ...(status && { status }), ...(riderId !== undefined && { riderId }) };
+    const { riderId } = req.body;
+    if (!riderId) {
+      res.status(400).json({ error: "bad_request", message: "riderId is required" });
+      return;
+    }
+    const riderIdInt = parseInt(riderId);
+
     const [group] = await db.update(blockOrderGroupsTable)
-      .set(updateData)
+      .set({ riderId: riderIdInt })
       .where(eq(blockOrderGroupsTable.id, id))
       .returning();
+
     if (!group) {
       res.status(404).json({ error: "not_found", message: "Group not found" });
       return;
     }
-    res.json(mapGroup(group));
+
+    await db.update(ordersTable)
+      .set({ riderId: riderIdInt, riderAccepted: null, updatedAt: new Date() })
+      .where(eq(ordersTable.blockGroupId, id));
+
+    res.json(await mapGroupWithRider(group));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/status", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status } = req.body;
+    if (!status) {
+      res.status(400).json({ error: "bad_request", message: "status is required" });
+      return;
+    }
+
+    const [group] = await db.update(blockOrderGroupsTable)
+      .set({ status })
+      .where(eq(blockOrderGroupsTable.id, id))
+      .returning();
+
+    if (!group) {
+      res.status(404).json({ error: "not_found", message: "Group not found" });
+      return;
+    }
+
+    await db.update(ordersTable)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(ordersTable.blockGroupId, id));
+
+    res.json(await mapGroupWithRider(group));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }

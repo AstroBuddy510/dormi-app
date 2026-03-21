@@ -226,7 +226,7 @@ router.post("/orders/block", async (req, res) => {
       batchNumber,
       name,
       estate,
-      status: "collecting",
+      status: "pending",
       totalOrders: orderList.length,
       totalAmount: "0",
       scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
