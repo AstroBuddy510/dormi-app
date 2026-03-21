@@ -21,6 +21,8 @@ import payrollRouter from "./payroll";
 import paymentsRouter from "./payments";
 import gatewaySettingsRouter from "./gatewaySettings";
 import riderMessagesRouter from "./riderMessages";
+import vendorMessagesRouter from "./vendorMessages";
+import vendorStatsRouter from "./vendor";
 
 const router: IRouter = Router();
 
@@ -46,5 +48,7 @@ router.use("/payroll", payrollRouter);
 router.use("/payments", paymentsRouter);
 router.use("/settings/gateway", gatewaySettingsRouter);
 router.use("/rider-messages", riderMessagesRouter);
+router.use("/vendor-messages", vendorMessagesRouter);
+router.use("/vendor", vendorStatsRouter);
 
 export default router;
