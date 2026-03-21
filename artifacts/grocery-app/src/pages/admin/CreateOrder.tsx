@@ -249,7 +249,12 @@ function BulkOrderTab() {
 
   const handleEstateChange = (val: string) => {
     setEstate(val);
-    setEntries(prev => prev.map(e => ({ ...e, residentId: "" })));
+    const estRes = val ? (residents as any[]).filter((r: any) => r.estate === val) : [];
+    if (estRes.length > 0) {
+      setEntries(estRes.map((r: any) => ({ _eid: Date.now() + r.id, residentId: String(r.id), rawItems: "", notes: "" })));
+    } else {
+      setEntries([{ _eid: Date.now(), residentId: "", rawItems: "", notes: "" }]);
+    }
   };
 
   const mutation = useMutation({
@@ -283,7 +288,7 @@ function BulkOrderTab() {
     <div className="space-y-5">
       <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
         <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-        <p className="text-sm text-blue-700">Bulk orders batch all residents from one estate into a single driver run. Select the estate first — only residents registered to that estate will be available to add.</p>
+        <p className="text-sm text-blue-700">Select an estate — all residents registered to that estate are auto-loaded as entries. Fill in each resident's items, then submit as one grouped delivery run.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -346,7 +351,7 @@ function BulkOrderTab() {
 
         {!estate && (
           <div className="p-3 rounded-lg border border-dashed border-blue-200 bg-blue-50/50 text-sm text-blue-600 text-center">
-            Select an estate above to start adding resident orders.
+            Select an estate above — residents will be auto-loaded as entries.
           </div>
         )}
 

@@ -332,6 +332,10 @@ function ResidentsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: residents = [], isLoading } = useListResidents();
+  const { data: estateList = [] } = useQuery<string[]>({
+    queryKey: ['estates'],
+    queryFn: () => fetch('/api/residents/estates').then(r => r.json()),
+  });
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editZone, setEditZone] = useState<string>('none');
@@ -341,6 +345,8 @@ function ResidentsTab() {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
+  const [addOpen, setAddOpen] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   const filtered = residents.filter(
     (r) => r.fullName.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search) || r.estate.toLowerCase().includes(search.toLowerCase())
@@ -423,6 +429,30 @@ function ResidentsTab() {
     finally { setIsSaving(false); }
   };
 
+  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsAdding(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      await apiFetch('/residents/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullName: fd.get('fullName'),
+          phone: fd.get('phone'),
+          estate: fd.get('estate'),
+          blockNumber: fd.get('blockNumber'),
+          houseNumber: fd.get('houseNumber'),
+          ghanaGpsAddress: fd.get('ghanaGpsAddress') || undefined,
+        }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['residents'] });
+      queryClient.invalidateQueries({ queryKey: ['estates'] });
+      toast({ title: 'Resident Added' });
+      setAddOpen(false);
+    } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); }
+    finally { setIsAdding(false); }
+  };
+
   const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
   const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
 
@@ -438,6 +468,9 @@ function ResidentsTab() {
         <Button size="sm" variant="outline" className="rounded-xl h-9 gap-1.5 text-xs" onClick={handleBulkDetect} disabled={bulkRunning}>
           {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
           Auto-tag All Zones
+        </Button>
+        <Button size="sm" className="rounded-xl gap-1.5 ml-auto" onClick={() => setAddOpen(true)}>
+          <Plus size={14} /> Add Resident
         </Button>
       </div>
 
@@ -574,6 +607,54 @@ function ResidentsTab() {
       )}
 
       <Paginator page={page} total={filtered.length} pageSize={pageSize} onChange={setPage} />
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Users size={16} className="text-primary" /> Add Resident</DialogTitle></DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-3 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <Label>Full Name *</Label>
+                <Input name="fullName" required placeholder="e.g. Kofi Mensah" className="rounded-xl" />
+              </div>
+              <div className="space-y-1">
+                <Label>Phone *</Label>
+                <Input name="phone" required placeholder="e.g. 0244123456" className="rounded-xl font-mono" />
+              </div>
+              <div className="space-y-1">
+                <Label>Estate *</Label>
+                <Input
+                  name="estate"
+                  required
+                  list="add-resident-estates"
+                  placeholder="Select or type new…"
+                  className="rounded-xl"
+                />
+                <datalist id="add-resident-estates">
+                  {estateList.map(e => <option key={e} value={e} />)}
+                </datalist>
+                <p className="text-[11px] text-muted-foreground">Pick from list or type a new estate name.</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Block *</Label>
+                <Input name="blockNumber" required placeholder="e.g. A" className="rounded-xl" />
+              </div>
+              <div className="space-y-1">
+                <Label>House *</Label>
+                <Input name="houseNumber" required placeholder="e.g. 12" className="rounded-xl" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>Ghana GPS <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input name="ghanaGpsAddress" placeholder="e.g. GE-123-4567" className="rounded-xl" />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <DialogClose asChild><Button type="button" variant="outline" className="rounded-xl">Cancel</Button></DialogClose>
+              <Button type="submit" className="rounded-xl" disabled={isAdding}>{isAdding ? <><Loader2 size={14} className="animate-spin mr-1" /> Adding…</> : 'Add Resident'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
         <DialogContent className="rounded-2xl max-w-md">
@@ -1105,10 +1186,14 @@ function AgentsTab() {
   const [pinTarget, setPinTarget] = useState<any>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [page, setPage] = useState(1);
 
   const filtered = agents.filter(
     (a) => a.name.toLowerCase().includes(search.toLowerCase()) || a.phone.includes(search)
   );
+
+  useEffect(() => { setPage(1); }, [search, viewMode]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['agents'] });
 
@@ -1176,6 +1261,9 @@ function AgentsTab() {
     finally { setIsSaving(false); }
   };
 
+  const agentPageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+  const pagedAgents = filtered.slice((page - 1) * agentPageSize, page * agentPageSize);
+
   return (
     <>
       <div className="flex items-center gap-3 mb-4">
@@ -1184,19 +1272,22 @@ function AgentsTab() {
           <Input placeholder="Search agents…" className="pl-9 h-9 rounded-xl text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span className="text-sm text-muted-foreground">{filtered.length} agents</span>
+        <ViewToggle view={viewMode} onChange={(v) => { setViewMode(v); setPage(1); }} />
         <Button size="sm" className="rounded-xl gap-1.5 ml-auto" onClick={() => setAddOpen(true)}>
           <Plus size={14} /> Add Agent
         </Button>
       </div>
 
-      {isLoading ? <div className="py-12 text-center text-muted-foreground">Loading…</div> : filtered.length === 0 ? (
+      {isLoading && <div className="py-12 text-center text-muted-foreground">Loading…</div>}
+      {!isLoading && filtered.length === 0 && (
         <div className="py-16 text-center text-muted-foreground">
           <Headset size={36} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm">No call agents yet. Click <strong>Add Agent</strong> to create one.</p>
         </div>
-      ) : (
+      )}
+      {!isLoading && filtered.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((a) => (
+          {pagedAgents.map((a) => (
             <Card key={a.id} className={`rounded-2xl shadow-sm border-border/50 ${!a.isActive ? 'opacity-60' : ''}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -1258,6 +1349,58 @@ function AgentsTab() {
           ))}
         </div>
       )}
+      {!isLoading && filtered.length > 0 && viewMode !== 'grid' && (
+        <div className="space-y-1">
+          <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+            <span></span><span>Name</span><span>Phone</span><span>Status</span><span>Added</span><span></span>
+          </div>
+          {pagedAgents.map((a) => (
+            <div
+              key={a.id}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
+            >
+              <div className="relative shrink-0">
+                <Avatar name={a.name} photoUrl={a.photoUrl} color="bg-indigo-100 text-indigo-700" size="sm" />
+                <PhotoUploadButton onUpload={(file) => handlePhotoUpload(a, file)} />
+              </div>
+              {/* Desktop grid */}
+              <div className="hidden md:grid grid-cols-[1fr_1fr_auto_auto_auto] gap-4 flex-1 items-center min-w-0">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate">{a.name}</p>
+                  <p className="text-[11px] text-muted-foreground">Agent #{a.id}</p>
+                </div>
+                <p className="text-xs font-mono truncate">{a.phone}</p>
+                <StatusPill active={a.isActive} />
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                  {a.createdAt ? format(new Date(a.createdAt), 'dd MMM yy') : '—'}
+                </span>
+                <div className="flex gap-1">
+                  <button className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-600 transition-colors" onClick={() => setEditTarget({ ...a })} title="Edit"><Pencil size={14} /></button>
+                  <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" onClick={() => handleToggleActive(a)} title={a.isActive ? 'Suspend' : 'Reactivate'}>
+                    {a.isActive ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
+                  </button>
+                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive transition-colors" onClick={() => setDeleteTarget(a)} title="Delete"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              {/* Mobile fallback */}
+              <div className="flex-1 min-w-0 md:hidden">
+                <p className="font-semibold text-sm truncate">{a.name}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{a.phone}</p>
+                <StatusPill active={a.isActive} />
+              </div>
+              <div className="flex gap-1 shrink-0 md:hidden">
+                <button className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-600 transition-colors" onClick={() => setEditTarget({ ...a })}><Pencil size={14} /></button>
+                <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" onClick={() => handleToggleActive(a)}>
+                  {a.isActive ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
+                </button>
+                <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive transition-colors" onClick={() => setDeleteTarget(a)}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Paginator page={page} total={filtered.length} pageSize={agentPageSize} onChange={setPage} />
 
       <PinResetDialog
         open={!!pinTarget} onClose={() => setPinTarget(null)} name={pinTarget?.name ?? ''}
