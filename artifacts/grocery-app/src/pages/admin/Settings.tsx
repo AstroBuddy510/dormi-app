@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
+import { useAuth } from '@/store';
 import {
   useCreateRider,
   useResidentSignup,
@@ -17,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
-type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner' | 'payment-gateway';
+type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner' | 'payment-gateway' | 'admin-accounts';
 
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`/api${path}`, {
@@ -793,6 +794,231 @@ function PaymentGatewayTab() {
   );
 }
 
+function AdminAccountsTab() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', phone: '', pin: '' });
+  const [addStatus, setAddStatus] = useState<{ success?: string; error?: string }>({});
+
+  const [changePinId, setChangePinId] = useState<number | null>(null);
+  const [newPin, setNewPin] = useState('');
+  const [pinStatus, setPinStatus] = useState<{ success?: string; error?: string }>({});
+  const [showPin, setShowPin] = useState(false);
+
+  const { data: admins = [], isLoading } = useQuery<any[]>({
+    queryKey: ['admin-accounts'],
+    queryFn: () => apiFetch('/admin-accounts'),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof addForm) => apiFetch('/admin-accounts', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-accounts'] });
+      setAddStatus({ success: 'New admin account created.' });
+      setAddForm({ name: '', phone: '', pin: '' });
+      setShowAddForm(false);
+    },
+    onError: (e: any) => setAddStatus({ error: e.message ?? 'Failed to create admin.' }),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiFetch(`/admin-accounts/${id}`, { method: 'PUT', body: JSON.stringify({ isActive }) }),
+    onSuccess: () => { toast({ title: 'Admin status updated.' }); qc.invalidateQueries({ queryKey: ['admin-accounts'] }); },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/admin-accounts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { toast({ title: 'Admin removed.' }); qc.invalidateQueries({ queryKey: ['admin-accounts'] }); },
+    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const pinMutation = useMutation({
+    mutationFn: ({ id, newPin: pin }: { id: number; newPin: string }) =>
+      apiFetch(`/admin-accounts/${id}/pin`, { method: 'PUT', body: JSON.stringify({ newPin: pin }) }),
+    onSuccess: () => {
+      setPinStatus({ success: 'PIN changed successfully.' });
+      setNewPin('');
+      setChangePinId(null);
+    },
+    onError: (e: any) => setPinStatus({ error: e.message ?? 'Failed to change PIN.' }),
+  });
+
+  function handleAddSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAddStatus({});
+    createMutation.mutate(addForm);
+  }
+
+  function handlePinSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!changePinId) return;
+    setPinStatus({});
+    pinMutation.mutate({ id: changePinId, newPin });
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Current login info banner */}
+      <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-1">
+        <div className="flex items-center gap-2 text-green-800 font-semibold text-sm">
+          <ShieldCheck size={16} /> Current Login Credentials
+        </div>
+        <p className="text-sm text-green-700">
+          Your phone number is used to log in as <strong>Admin</strong>. Keep your PIN secure.
+        </p>
+        <div className="flex flex-wrap gap-4 mt-2">
+          <div className="text-xs bg-white rounded-lg border border-green-200 px-3 py-2">
+            <span className="text-muted-foreground">Phone: </span>
+            <span className="font-mono font-semibold">{user?.phone ?? '—'}</span>
+          </div>
+          <div className="text-xs bg-white rounded-lg border border-green-200 px-3 py-2">
+            <span className="text-muted-foreground">Role: </span>
+            <span className="font-semibold capitalize">Admin</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Admin accounts list */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-foreground">All Admin Accounts</p>
+          <Button
+            size="sm"
+            className="h-8 rounded-lg gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
+            onClick={() => { setShowAddForm(v => !v); setAddStatus({}); }}
+          >
+            <PlusCircle size={13} /> {showAddForm ? 'Cancel' : 'Add New Admin'}
+          </Button>
+        </div>
+
+        {/* Add new admin form */}
+        {showAddForm && (
+          <form onSubmit={handleAddSubmit} className="mb-4 border border-green-100 rounded-xl p-4 bg-green-50/40 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">New Admin Account</p>
+            <div className="space-y-1">
+              <Label>Full Name *</Label>
+              <Input required value={addForm.name} className="h-11 rounded-xl"
+                placeholder="e.g. Ama Serwaa"
+                onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Phone Number *</Label>
+              <Input required type="tel" value={addForm.phone} className="h-11 rounded-xl"
+                placeholder="024 123 4567"
+                onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>PIN (4–8 digits) *</Label>
+              <Input required type="password" inputMode="numeric" value={addForm.pin}
+                className="h-11 rounded-xl font-mono tracking-widest" maxLength={8}
+                placeholder="Set a secure PIN"
+                onChange={e => setAddForm(f => ({ ...f, pin: e.target.value.replace(/\D/g, '') }))} />
+            </div>
+            <FormStatus {...addStatus} />
+            <Button type="submit" className="w-full h-11 rounded-xl font-bold bg-green-600 hover:bg-green-700"
+              disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Creating...' : 'Create Admin Account'}
+            </Button>
+          </form>
+        )}
+
+        {isLoading ? (
+          <div className="text-center py-6 text-muted-foreground text-sm">Loading...</div>
+        ) : admins.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">No admin accounts found.</div>
+        ) : (
+          <div className="space-y-3">
+            {admins.map((a: any) => {
+              const isMe = a.id === user?.id;
+              return (
+                <div key={a.id} className={`rounded-xl border p-4 bg-white space-y-3 ${!a.isActive ? 'opacity-60' : ''}`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ShieldCheck className="w-4 h-4 text-green-600 shrink-0" />
+                      <span className="font-semibold text-sm text-gray-800 truncate">{a.name}</span>
+                      {isMe && (
+                        <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-2 shrink-0">You</Badge>
+                      )}
+                      {a.isActive
+                        ? <Badge className="bg-green-100 text-green-700 text-xs shrink-0">Active</Badge>
+                        : <Badge variant="outline" className="text-gray-400 text-xs shrink-0">Suspended</Badge>}
+                    </div>
+                    <span className="font-mono text-xs text-muted-foreground">{a.phone}</span>
+                  </div>
+
+                  {/* Change PIN section (inline for this admin) */}
+                  {changePinId === a.id ? (
+                    <form onSubmit={handlePinSubmit} className="space-y-2 border border-blue-100 rounded-lg p-3 bg-blue-50/30">
+                      <p className="text-xs font-semibold text-blue-700">Change PIN for {a.name}</p>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type={showPin ? 'text' : 'password'}
+                            inputMode="numeric"
+                            value={newPin}
+                            maxLength={8}
+                            required
+                            placeholder="New PIN (4–8 digits)"
+                            className="h-9 rounded-lg font-mono tracking-widest text-sm pr-9"
+                            onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                          />
+                          <button type="button" onClick={() => setShowPin(v => !v)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                            {showPin ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                        <Button type="submit" size="sm" className="h-9 rounded-lg px-4 text-xs bg-blue-600 hover:bg-blue-700"
+                          disabled={pinMutation.isPending}>
+                          {pinMutation.isPending ? 'Saving...' : 'Save'}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" className="h-9 rounded-lg px-3 text-xs"
+                          onClick={() => { setChangePinId(null); setNewPin(''); setPinStatus({}); }}>
+                          Cancel
+                        </Button>
+                      </div>
+                      <FormStatus {...pinStatus} />
+                    </form>
+                  ) : null}
+
+                  <div className="flex gap-3 flex-wrap">
+                    <button
+                      className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                      onClick={() => { setChangePinId(a.id); setNewPin(''); setPinStatus({}); }}
+                    >
+                      <Edit2 size={11} /> Change PIN
+                    </button>
+                    <button
+                      className={`text-xs flex items-center gap-1 ${a.isActive ? 'text-orange-500 hover:underline' : 'text-green-600 hover:underline'}`}
+                      onClick={() => toggleMutation.mutate({ id: a.id, isActive: !a.isActive })}
+                      disabled={isMe}
+                      title={isMe ? "You can't suspend yourself" : ''}
+                    >
+                      {a.isActive ? <><XCircle size={11} /> Suspend</> : <><CheckCircle size={11} /> Activate</>}
+                    </button>
+                    {!isMe && (
+                      <button
+                        className="text-xs text-red-500 hover:underline flex items-center gap-1 ml-auto"
+                        onClick={() => { if (confirm(`Remove admin account for ${a.name}?`)) deleteMutation.mutate(a.id); }}
+                      >
+                        <Trash2 size={11} /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<Tab>('rider');
 
@@ -803,6 +1029,7 @@ export default function AdminSettings() {
     { id: 'agent', label: 'Add Agent' },
     { id: 'delivery-partner', label: 'Delivery Companies' },
     { id: 'payment-gateway', label: '💳 Payment Gateway' },
+    { id: 'admin-accounts', label: '🔐 Admin Accounts' },
   ];
 
   return (
@@ -905,6 +1132,25 @@ export default function AdminSettings() {
                   </CardHeader>
                   <CardContent className="p-6">
                     <PaymentGatewayTab />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'admin-accounts' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={20} className="text-primary" />
+                      <div>
+                        <CardTitle>Admin Accounts</CardTitle>
+                        <CardDescription>
+                          View your login credentials, change your PIN, add new admin accounts, or suspend access for any admin.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <AdminAccountsTab />
                   </CardContent>
                 </>
               )}

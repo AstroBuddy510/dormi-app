@@ -23,6 +23,7 @@ import gatewaySettingsRouter from "./gatewaySettings";
 import riderMessagesRouter from "./riderMessages";
 import vendorMessagesRouter from "./vendorMessages";
 import vendorStatsRouter from "./vendor";
+import adminAccountsRouter from "./adminAccounts";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use("/settings/gateway", gatewaySettingsRouter);
 router.use("/rider-messages", riderMessagesRouter);
 router.use("/vendor-messages", vendorMessagesRouter);
 router.use("/vendor", vendorStatsRouter);
+router.use("/admin-accounts", adminAccountsRouter);
 
 export default router;

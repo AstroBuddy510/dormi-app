@@ -18,5 +18,6 @@ export * from "./finance_settings";
 export * from "./item_requests";
 export * from "./paymentGateway";
 export * from "./riderMessages";
+export * from "./admins";
 export * from "./vendorMessages";
 export * from "./agentCallLogs";

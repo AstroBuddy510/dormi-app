@@ -1,16 +1,16 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettingsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettingsTable, adminsTable } from "@workspace/db/schema";
+import { eq, count } from "drizzle-orm";
 import { LoginBody } from "@workspace/api-zod";
 import { createHash } from "crypto";
 
 const router: IRouter = Router();
 
-const ADMIN_PIN = "1234";
+const ADMIN_PIN  = "1234";
 const VENDOR_PIN = "5678";
-const RIDER_PIN = "9012";
-const AGENT_PIN = "3456";
+const RIDER_PIN  = "9012";
+const AGENT_PIN  = "3456";
 const ACCOUNTANT_PIN = "2468";
 
 function hashPin(pin: string): string {
@@ -29,20 +29,59 @@ async function getAccountantPin(): Promise<string | null> {
   return settings?.accountantPin ?? null;
 }
 
+/* ── Auto-seed default admin if table is empty ──────────────────────────── */
+export async function seedDefaultAdmin() {
+  try {
+    const [{ total }] = await db.select({ total: count() }).from(adminsTable);
+    if (total === 0) {
+      await db.insert(adminsTable).values({
+        name: "Admin",
+        phone: "0244567890",
+        pin: hashPin(ADMIN_PIN),
+      });
+      console.log("[auth] Default admin seeded — phone: 0244567890, PIN: 1234");
+    }
+  } catch (err) {
+    console.error("[auth] Failed to seed default admin:", err);
+  }
+}
+
 router.post("/login", async (req, res) => {
   try {
     const body = LoginBody.parse(req.body);
     const { phone, role, pin } = body;
 
     if (role === "admin") {
-      if (pin !== ADMIN_PIN) {
+      const [{ total }] = await db.select({ total: count() }).from(adminsTable);
+
+      if (total === 0) {
+        /* Legacy fallback: no admins in DB yet — any phone + default PIN */
+        if (pin !== ADMIN_PIN) {
+          res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
+          return;
+        }
+        res.json({ user: { id: 0, name: "Admin", phone, role: "admin" }, role: "admin", token: "admin-token" });
+        return;
+      }
+
+      /* DB-backed admin login */
+      const [admin] = await db.select().from(adminsTable).where(eq(adminsTable.phone, phone)).limit(1);
+      if (!admin) {
+        res.status(401).json({ error: "unauthorized", message: "Phone number not registered as admin." });
+        return;
+      }
+      if (!admin.isActive) {
+        res.status(401).json({ error: "unauthorized", message: "Your admin account has been suspended." });
+        return;
+      }
+      if (!verifyPin(pin ?? "", admin.pin, ADMIN_PIN)) {
         res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
         return;
       }
       res.json({
-        user: { id: 0, name: "Admin", phone, role: "admin" },
+        user: { id: admin.id, name: admin.name, phone: admin.phone, role: "admin" },
         role: "admin",
-        token: "admin-token",
+        token: `admin-${admin.id}`,
       });
       return;
     }
@@ -139,7 +178,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Admin: reset accountant PIN
+/* Admin: reset accountant PIN */
 router.put("/reset-accountant-pin", async (req, res) => {
   try {
     const { pin } = req.body;
