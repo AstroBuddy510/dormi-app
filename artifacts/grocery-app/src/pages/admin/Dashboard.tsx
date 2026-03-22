@@ -332,6 +332,21 @@ export default function AdminDashboard() {
 
   const fmt = (n: number) => `GH₵ ${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  /* ── Vendor Sales Breakdown (delivered orders) ────── */
+  const vendorSalesList = useMemo(() => {
+    const delivered = periodOrders.filter((o: any) => o.status === 'delivered' && o.vendorId);
+    const m: Record<number, { vendorId: number; vendorName: string; orders: number; revenue: number; subtotal: number }> = {};
+    for (const o of delivered) {
+      if (!m[o.vendorId]) m[o.vendorId] = { vendorId: o.vendorId, vendorName: o.vendorName ?? `Vendor #${o.vendorId}`, orders: 0, revenue: 0, subtotal: 0 };
+      m[o.vendorId].orders  += 1;
+      m[o.vendorId].revenue += o.total ?? 0;
+      m[o.vendorId].subtotal += o.subtotal ?? 0;
+    }
+    return Object.values(m).sort((a, b) => b.revenue - a.revenue);
+  }, [periodOrders]);
+
+  const vendorSalesTotal = vendorSalesList.reduce((s, v) => s + v.revenue, 0);
+
   /* ── Stat cards ──────────────────────────────────── */
   const statCards = [
     { title: 'Total Orders',  value: periodOrders.length,                                                         icon: ShoppingCart, color: 'text-blue-600 bg-blue-50' },
@@ -428,6 +443,72 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ── Vendor Sales Breakdown ── */}
+        {vendorSalesList.length > 0 && (
+          <Card className="rounded-2xl shadow-sm border-border/50">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-orange-50">
+                  <Package size={18} className="text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">Vendor Sales Breakdown</p>
+                  <p className="text-xs text-muted-foreground">Delivered orders · {periodLabel}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50">
+                      <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vendor</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Orders</th>
+                      <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Goods Value</th>
+                      <th className="text-right py-2 pl-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total Sales</th>
+                      <th className="text-right py-2 pl-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendorSalesList.map((v, i) => {
+                      const pct = vendorSalesTotal > 0 ? (v.revenue / vendorSalesTotal) * 100 : 0;
+                      const colors = ['bg-orange-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-amber-500', 'bg-rose-500'];
+                      return (
+                        <tr key={v.vendorId} className="border-b border-border/30 last:border-0 hover:bg-gray-50/60">
+                          <td className="py-2.5 pr-4">
+                            <div className="flex items-center gap-2">
+                              <span className={cn('inline-block w-2 h-2 rounded-full', colors[i % colors.length])} />
+                              <span className="font-medium text-foreground">{v.vendorName}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-medium">{v.orders}</td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground text-xs">{fmt(v.subtotal)}</td>
+                          <td className="py-2.5 pl-3 text-right font-semibold text-green-700">{fmt(v.revenue)}</td>
+                          <td className="py-2.5 pl-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                <div className={cn('h-full rounded-full', colors[i % colors.length])} style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-xs text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border/50">
+                      <td className="pt-2.5 pr-4 text-xs font-bold text-muted-foreground uppercase">Total</td>
+                      <td className="pt-2.5 px-3 text-right font-bold">{vendorSalesList.reduce((s, v) => s + v.orders, 0)}</td>
+                      <td className="pt-2.5 px-3 text-right text-xs text-muted-foreground">{fmt(vendorSalesList.reduce((s, v) => s + v.subtotal, 0))}</td>
+                      <td className="pt-2.5 pl-3 text-right font-bold text-green-700">{fmt(vendorSalesTotal)}</td>
+                      <td className="pt-2.5 pl-3 text-right text-xs text-muted-foreground">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Live Orders ── */}
         <div>

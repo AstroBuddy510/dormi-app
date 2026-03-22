@@ -47,41 +47,69 @@ function useReportData(fromDate: Date, toDate: Date) {
 
   /* ── Residents ── */
   const residentMap = useMemo(() => {
-    const m: Record<number, { id: number; name: string; phone: string; orders: number; spend: number; items: number }> = {};
+    const m: Record<number, {
+      id: number; name: string; phone: string; estate: string;
+      orders: number; delivered: number; spend: number; itemsCount: number; lastOrderDate: string;
+    }> = {};
     for (const o of orders) {
       if (!o.residentId) continue;
-      if (!m[o.residentId]) m[o.residentId] = { id: o.residentId, name: o.residentName || '—', phone: o.residentPhone || '', orders: 0, spend: 0, items: 0 };
+      if (!m[o.residentId]) m[o.residentId] = {
+        id: o.residentId, name: (o as any).residentName || '—', phone: (o as any).residentPhone || '',
+        estate: (o as any).residentEstate || '—',
+        orders: 0, delivered: 0, spend: 0, itemsCount: 0, lastOrderDate: o.createdAt,
+      };
       m[o.residentId].orders += 1;
-      m[o.residentId].spend  += o.total;
-      m[o.residentId].items  += o.items?.length ?? 0;
+      if (o.status === 'delivered') {
+        m[o.residentId].delivered += 1;
+        m[o.residentId].spend += o.total;
+      }
+      m[o.residentId].itemsCount += o.items?.length ?? 0;
+      if (o.createdAt > m[o.residentId].lastOrderDate) m[o.residentId].lastOrderDate = o.createdAt;
     }
     return Object.values(m).sort((a, b) => b.spend - a.spend);
   }, [orders]);
 
   /* ── Vendors ── */
   const vendorMap = useMemo(() => {
-    const m: Record<number, { id: number; name: string; orders: number; revenue: number }> = {};
-    for (const v of vendors as any[]) m[v.id] = { id: v.id, name: v.name, orders: 0, revenue: 0 };
+    const m: Record<number, {
+      id: number; name: string; orders: number; revenue: number;
+      subtotal: number; itemsSold: number; residents: Set<number>;
+    }> = {};
+    for (const v of vendors as any[]) m[v.id] = { id: v.id, name: v.name, orders: 0, revenue: 0, subtotal: 0, itemsSold: 0, residents: new Set() };
     for (const o of deliveredOrders) {
       if (o.vendorId && m[o.vendorId]) {
         m[o.vendorId].orders  += 1;
         m[o.vendorId].revenue += o.total;
+        m[o.vendorId].subtotal += o.subtotal ?? 0;
+        m[o.vendorId].itemsSold += o.items?.reduce((s: number, it: any) => s + (it.quantity ?? 1), 0) ?? 0;
+        if (o.residentId) m[o.vendorId].residents.add(o.residentId);
       }
     }
-    return Object.values(m).filter(v => v.orders > 0).sort((a, b) => b.revenue - a.revenue);
+    return Object.values(m)
+      .filter(v => v.orders > 0)
+      .map(v => ({ ...v, uniqueCustomers: v.residents.size, avgOrder: v.revenue / (v.orders || 1) }))
+      .sort((a, b) => b.revenue - a.revenue);
   }, [vendors, deliveredOrders]);
 
   /* ── Riders ── */
   const riderMap = useMemo(() => {
-    const m: Record<number, { id: number; name: string; deliveries: number; earnings: number }> = {};
-    for (const r of riders as any[]) m[r.id] = { id: r.id, name: r.name, deliveries: 0, earnings: 0 };
+    const m: Record<number, {
+      id: number; name: string; deliveries: number; earnings: number;
+      singleDeliveries: number; bulkDeliveries: number;
+    }> = {};
+    for (const r of riders as any[]) m[r.id] = { id: r.id, name: r.name, deliveries: 0, earnings: 0, singleDeliveries: 0, bulkDeliveries: 0 };
     for (const o of deliveredOrders) {
       if (o.riderId && m[o.riderId]) {
         m[o.riderId].deliveries += 1;
         m[o.riderId].earnings   += o.deliveryFee ?? 0;
+        if ((o as any).orderType === 'block') m[o.riderId].bulkDeliveries += 1;
+        else m[o.riderId].singleDeliveries += 1;
       }
     }
-    return Object.values(m).filter(r => r.deliveries > 0).sort((a, b) => b.deliveries - a.deliveries);
+    return Object.values(m)
+      .filter(r => r.deliveries > 0)
+      .map(r => ({ ...r, avgFee: r.earnings / (r.deliveries || 1) }))
+      .sort((a, b) => b.deliveries - a.deliveries);
   }, [riders, deliveredOrders]);
 
   /* ── Agents ── */
@@ -318,43 +346,58 @@ export default function AdminReports() {
               color="bg-violet-50 text-violet-800"
               count={residentMap.length}
               onExport={() => exportPDF('residents', residentMap.map((r, i) => [
-                i + 1, r.name, r.phone, r.orders, `GHs ${r.spend.toFixed(2)}`,
-                r.orders >= 20 ? '🏆 Gold' : r.orders >= 10 ? '🥈 Silver' : r.orders >= 5 ? '🥉 Bronze' : '—',
-              ]), ['Rank', 'Name', 'Phone', 'Orders', 'Total Spend', 'Award Tier'], 'Resident Patronage', dateLabel)}
+                i + 1, r.name, r.phone, r.estate, r.orders, r.delivered,
+                `GHs ${r.spend.toFixed(2)}`,
+                r.delivered > 0 ? `GHs ${(r.spend / r.delivered).toFixed(2)}` : '—',
+                format(parseISO(r.lastOrderDate), 'dd MMM yyyy'),
+                r.orders >= 20 ? 'Gold' : r.orders >= 10 ? 'Silver' : r.orders >= 5 ? 'Bronze' : '—',
+              ]), ['Rank', 'Name', 'Phone', 'Estate', 'Orders', 'Delivered', 'Total Spend', 'Avg/Order', 'Last Order', 'Award'], 'Resident Patronage', dateLabel)}
             >
               {residentMap.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">No resident orders in this period.</div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      <TH>Rank</TH>
-                      <TH>Resident</TH>
-                      <TH right>Orders</TH>
-                      <TH right>Total Spend</TH>
-                      <TH right>Avg / Order</TH>
-                      <TH>Award Tier</TH>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {residentMap.map((r, i) => {
-                      const tier = r.orders >= 20 ? { label: '🏆 Gold', cls: 'text-yellow-600 font-bold' }
-                                 : r.orders >= 10 ? { label: '🥈 Silver', cls: 'text-gray-500 font-bold' }
-                                 : r.orders >= 5  ? { label: '🥉 Bronze', cls: 'text-amber-600 font-bold' }
-                                 : { label: '—', cls: 'text-muted-foreground' };
-                      return (
-                        <tr key={r.id} className={cn('hover:bg-gray-50/70', i < 3 && 'bg-yellow-50/30')}>
-                          <TD><div className="flex items-center gap-1.5"><RankBadge rank={i + 1} /></div></TD>
-                          <TD><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.phone}</p></div></TD>
-                          <TD right bold>{r.orders}</TD>
-                          <TD green right>GHs {r.spend.toFixed(2)}</TD>
-                          <TD right muted>GHs {(r.spend / r.orders).toFixed(2)}</TD>
-                          <TD><span className={tier.cls}>{tier.label}</span></TD>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <TH>Rank</TH>
+                        <TH>Resident</TH>
+                        <TH>Estate</TH>
+                        <TH right>Orders</TH>
+                        <TH right>Delivered</TH>
+                        <TH right>Total Spend</TH>
+                        <TH right>Avg / Order</TH>
+                        <TH>Last Order</TH>
+                        <TH>Award</TH>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {residentMap.map((r, i) => {
+                        const tier = r.orders >= 20 ? { label: '🏆 Gold', cls: 'text-yellow-600 font-bold' }
+                                   : r.orders >= 10 ? { label: '🥈 Silver', cls: 'text-gray-500 font-bold' }
+                                   : r.orders >= 5  ? { label: '🥉 Bronze', cls: 'text-amber-600 font-bold' }
+                                   : { label: '—', cls: 'text-muted-foreground' };
+                        const completionRate = r.orders > 0 ? Math.round((r.delivered / r.orders) * 100) : 0;
+                        return (
+                          <tr key={r.id} className={cn('hover:bg-gray-50/70', i < 3 && 'bg-yellow-50/30')}>
+                            <TD><div className="flex items-center gap-1.5"><RankBadge rank={i + 1} /></div></TD>
+                            <TD><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.phone}</p></div></TD>
+                            <TD muted>{r.estate}</TD>
+                            <TD right bold>{r.orders}</TD>
+                            <TD right>
+                              <span className="text-green-700 font-semibold">{r.delivered}</span>
+                              <span className="text-xs text-muted-foreground ml-1">({completionRate}%)</span>
+                            </TD>
+                            <TD green right>GHs {r.spend.toFixed(2)}</TD>
+                            <TD right muted>{r.delivered > 0 ? `GHs ${(r.spend / r.delivered).toFixed(2)}` : '—'}</TD>
+                            <TD muted>{format(parseISO(r.lastOrderDate), 'dd MMM yy')}</TD>
+                            <TD><span className={tier.cls}>{tier.label}</span></TD>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </ReportCard>
           )}
@@ -367,27 +410,52 @@ export default function AdminReports() {
               color="bg-blue-50 text-blue-800"
               count={vendorMap.length}
               onExport={() => exportPDF('vendors', vendorMap.map((v, i) => [
-                i + 1, v.name, v.orders, `GHs ${v.revenue.toFixed(2)}`,
-              ]), ['Rank', 'Vendor', 'Orders Fulfilled', 'Revenue'], 'Vendor Performance', dateLabel)}
+                i + 1, v.name, v.orders,
+                `GHs ${v.revenue.toFixed(2)}`,
+                `GHs ${v.subtotal.toFixed(2)}`,
+                v.uniqueCustomers,
+                v.itemsSold,
+                `GHs ${v.avgOrder.toFixed(2)}`,
+              ]), ['Rank', 'Vendor', 'Orders', 'Total Sales', 'Goods Value', 'Customers', 'Items Sold', 'Avg Order'], 'Vendor Performance', dateLabel)}
             >
               {vendorMap.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">No vendor data in this period.</div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr><TH>Rank</TH><TH>Vendor</TH><TH right>Orders Fulfilled</TH><TH right>Revenue</TH></tr>
-                  </thead>
-                  <tbody>
-                    {vendorMap.map((v, i) => (
-                      <tr key={v.id} className="hover:bg-gray-50/70">
-                        <TD><RankBadge rank={i + 1} /></TD>
-                        <TD bold>{v.name}</TD>
-                        <TD right>{v.orders}</TD>
-                        <TD green right>GHs {v.revenue.toFixed(2)}</TD>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <TH>Rank</TH>
+                        <TH>Vendor</TH>
+                        <TH right>Orders</TH>
+                        <TH right>Total Sales</TH>
+                        <TH right>Goods Value</TH>
+                        <TH right>Customers</TH>
+                        <TH right>Items Sold</TH>
+                        <TH right>Avg / Order</TH>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {vendorMap.map((v, i) => (
+                        <tr key={v.id} className={cn('hover:bg-gray-50/70', i < 3 && 'bg-blue-50/20')}>
+                          <TD><RankBadge rank={i + 1} /></TD>
+                          <TD bold>{v.name}</TD>
+                          <TD right bold>{v.orders}</TD>
+                          <TD green right>GHs {v.revenue.toFixed(2)}</TD>
+                          <TD right muted>GHs {v.subtotal.toFixed(2)}</TD>
+                          <TD right>
+                            <span className="inline-flex items-center gap-1">
+                              <Users size={11} className="text-muted-foreground" />
+                              {v.uniqueCustomers}
+                            </span>
+                          </TD>
+                          <TD right muted>{v.itemsSold}</TD>
+                          <TD right muted>GHs {v.avgOrder.toFixed(2)}</TD>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </ReportCard>
           )}
@@ -400,27 +468,46 @@ export default function AdminReports() {
               color="bg-green-50 text-green-800"
               count={riderMap.length}
               onExport={() => exportPDF('riders', riderMap.map((r, i) => [
-                i + 1, r.name, r.deliveries, `GHs ${r.earnings.toFixed(2)}`,
-              ]), ['Rank', 'Rider', 'Deliveries', 'Delivery Fees'], 'Rider Deliveries', dateLabel)}
+                i + 1, r.name, r.deliveries, r.singleDeliveries, r.bulkDeliveries,
+                `GHs ${r.earnings.toFixed(2)}`,
+                `GHs ${r.avgFee.toFixed(2)}`,
+              ]), ['Rank', 'Rider', 'Total', 'Individual', 'Bulk', 'Total Fees', 'Avg Fee'], 'Rider Deliveries', dateLabel)}
             >
               {riderMap.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">No rider deliveries in this period.</div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr><TH>Rank</TH><TH>Rider</TH><TH right>Deliveries</TH><TH right>Delivery Fees</TH></tr>
-                  </thead>
-                  <tbody>
-                    {riderMap.map((r, i) => (
-                      <tr key={r.id} className="hover:bg-gray-50/70">
-                        <TD><RankBadge rank={i + 1} /></TD>
-                        <TD bold>{r.name}</TD>
-                        <TD right>{r.deliveries}</TD>
-                        <TD green right>GHs {r.earnings.toFixed(2)}</TD>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <TH>Rank</TH>
+                        <TH>Rider</TH>
+                        <TH right>Total Deliveries</TH>
+                        <TH right>Individual</TH>
+                        <TH right>Bulk Orders</TH>
+                        <TH right>Fees Earned</TH>
+                        <TH right>Avg / Delivery</TH>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {riderMap.map((r, i) => (
+                        <tr key={r.id} className={cn('hover:bg-gray-50/70', i < 3 && 'bg-green-50/20')}>
+                          <TD><RankBadge rank={i + 1} /></TD>
+                          <TD bold>{r.name}</TD>
+                          <TD right bold>{r.deliveries}</TD>
+                          <TD right muted>{r.singleDeliveries}</TD>
+                          <TD right>
+                            {r.bulkDeliveries > 0
+                              ? <span className="text-indigo-600 font-medium">{r.bulkDeliveries}</span>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TD>
+                          <TD green right>GHs {r.earnings.toFixed(2)}</TD>
+                          <TD right muted>GHs {r.avgFee.toFixed(2)}</TD>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </ReportCard>
           )}

@@ -62,6 +62,7 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     residentName: resident?.fullName ?? "",
     residentPhone: resident?.phone ?? "",
     residentAddress: address,
+    residentEstate: resident?.estate ?? "",
     vendorId: order.vendorId,
     vendorName: vendorName ?? null,
     vendorCommissionPercent,
