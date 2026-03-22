@@ -339,11 +339,11 @@ export default function AdminDashboard() {
   ];
 
   const nextStatus: Record<string, string | null> = {
-    pending: 'accepted', accepted: 'ready', ready: 'in_transit', in_transit: 'delivered',
+    pending: 'accepted', accepted: 'collecting', collecting: 'ready', ready: 'in_transit', in_transit: 'delivered',
     delivered: null, cancelled: null,
   };
   const nextStatusLabel: Record<string, string> = {
-    pending: 'Accept', accepted: 'Mark Ready', ready: 'In Transit', in_transit: 'Delivered',
+    pending: 'Accept', accepted: 'Collecting', collecting: 'Mark Ready', ready: 'In Transit', in_transit: 'Delivered',
   };
 
   /* ── Render ──────────────────────────────────────── */
@@ -750,7 +750,19 @@ function LiveOrdersTable({
                     ₵{entry.totalAmount?.toFixed(2)}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={entry.status} />
+                    <div className="flex flex-col gap-1">
+                      <StatusBadge status={entry.status} />
+                      {entry.riderAccepted && (
+                        <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap">
+                          ✓ Rider Accepted
+                        </span>
+                      )}
+                      {entry.riderId && !entry.riderAccepted && entry.status === 'pending' && (
+                        <span className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap">
+                          ⏳ Awaiting Rider
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="min-w-[160px]">
                     <Select

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff, BarChart3, MessageCircle } from 'lucide-react';
+import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff, BarChart3, MessageCircle, Boxes, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -48,7 +48,7 @@ function playAlertTone() {
     });
     setTimeout(() => ctx.close(), 1000);
   } catch {
-    // AudioContext unavailable (e.g. on some older devices) — fail silently
+    // AudioContext unavailable
   }
 }
 
@@ -75,15 +75,46 @@ async function respondToJob(orderId: number, accepted: boolean) {
   return res.json();
 }
 
+async function respondToBulkGroup(groupId: number, accepted: boolean) {
+  const res = await fetch(`${BASE}/api/block-groups/${groupId}/rider-response`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accepted }),
+  });
+  if (!res.ok) throw new Error((await res.json()).message ?? 'Request failed');
+  return res.json();
+}
+
+async function updateBulkGroupStatus(groupId: number, status: string) {
+  const res = await fetch(`${BASE}/api/block-groups/${groupId}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error((await res.json()).message ?? 'Request failed');
+  return res.json();
+}
+
 export default function RiderJobs() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: allJobs = [], isLoading } = useListOrders(
+  const { data: allJobsRaw = [], isLoading } = useListOrders(
     { riderId: user?.id },
     { query: { refetchInterval: 5000 } }
   );
+
+  /* Filter out block orders — they are shown via their bulk group card */
+  const allJobs = allJobsRaw.filter((j: any) => j.orderType !== 'block');
+
+  /* Fetch block groups assigned to this rider */
+  const { data: bulkGroups = [] } = useQuery<any[]>({
+    queryKey: ['block-groups-rider', user?.id],
+    queryFn: () => fetch(`${BASE}/api/block-groups?riderId=${user?.id}`).then(r => r.json()),
+    enabled: !!user?.id,
+    refetchInterval: 5000,
+  });
 
   const updateStatus = useUpdateOrderStatus({
     onSuccess: () => {
@@ -101,35 +132,53 @@ export default function RiderJobs() {
 
   const [uploading, setUploading] = useState<Record<number, boolean>>({});
   const [previews, setPreviews] = useState<Record<number, string>>({});
-  const [responding, setResponding] = useState<Record<number, boolean>>({});
+  const [responding, setResponding] = useState<Record<number | string, boolean>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  // Track which incoming-job IDs we've already played a sound for
   const alertedIds = useRef<Set<number>>(new Set());
+  const alertedBulkIds = useRef<Set<number>>(new Set());
 
-  // Categorise jobs
-  // pendingJobs  = assigned to this rider, awaiting their response, not yet active
-  const pendingJobs   = allJobs.filter(j =>
+  /* Individual order categories */
+  const pendingJobs = allJobs.filter((j: any) =>
     (j as any).riderAccepted === null &&
     !['in_transit', 'delivered', 'cancelled'].includes(j.status)
   );
-  // activeJobs = accepted ready-to-deliver orders, or already in_transit (handles legacy + new flow)
-  const activeJobs    = allJobs.filter(j =>
+  const activeJobs = allJobs.filter((j: any) =>
     ['ready', 'in_transit'].includes(j.status) &&
     (j as any).riderAccepted !== false
   );
-  const completedJobs = allJobs.filter(j => j.status === 'delivered');
+  const completedJobs = allJobs.filter((j: any) => j.status === 'delivered');
 
-  // Play alert sound for each new incoming job
-  const pendingKey = pendingJobs.map(j => j.id).join(',');
+  /* Bulk group categories */
+  const bulkPendingGroups = bulkGroups.filter((g: any) =>
+    g.status === 'pending' && g.riderId && !g.riderAccepted
+  );
+  const bulkActiveGroups = bulkGroups.filter((g: any) =>
+    ['accepted', 'collecting', 'ready', 'in_transit'].includes(g.status)
+  );
+  const bulkCompletedGroups = bulkGroups.filter((g: any) => g.status === 'delivered');
+
+  /* Alert tone for new individual jobs */
+  const pendingKey = pendingJobs.map((j: any) => j.id).join(',');
   useEffect(() => {
-    const newOnes = pendingJobs.filter(j => !alertedIds.current.has(j.id));
+    const newOnes = pendingJobs.filter((j: any) => !alertedIds.current.has(j.id));
     if (newOnes.length > 0) {
       playAlertTone();
-      newOnes.forEach(j => alertedIds.current.add(j.id));
+      newOnes.forEach((j: any) => alertedIds.current.add(j.id));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingKey]);
+
+  /* Alert tone for new bulk group jobs */
+  const bulkPendingKey = bulkPendingGroups.map((g: any) => g.id).join(',');
+  useEffect(() => {
+    const newOnes = bulkPendingGroups.filter((g: any) => !alertedBulkIds.current.has(g.id));
+    if (newOnes.length > 0) {
+      playAlertTone();
+      newOnes.forEach((g: any) => alertedBulkIds.current.add(g.id));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkPendingKey]);
 
   const handleUpdate = (id: number, status: OrderStatus) => {
     updateStatus.mutate({ id, data: { status } });
@@ -149,6 +198,40 @@ export default function RiderJobs() {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setResponding(prev => ({ ...prev, [jobId]: false }));
+    }
+  };
+
+  const handleBulkRespond = async (groupId: number, accepted: boolean) => {
+    const key = `bulk-${groupId}`;
+    setResponding(prev => ({ ...prev, [key]: true }));
+    try {
+      await respondToBulkGroup(groupId, accepted);
+      queryClient.invalidateQueries({ queryKey: ['block-groups-rider', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({
+        title: accepted ? 'Bulk Job Accepted!' : 'Bulk Job Declined',
+        description: accepted ? 'Head to the vendor to collect all orders.' : 'The admin will reassign.',
+        variant: accepted ? 'default' : 'destructive',
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setResponding(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleBulkStatus = async (groupId: number, status: string) => {
+    const key = `bulk-status-${groupId}`;
+    setResponding(prev => ({ ...prev, [key]: true }));
+    try {
+      await updateBulkGroupStatus(groupId, status);
+      queryClient.invalidateQueries({ queryKey: ['block-groups-rider', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({ title: 'Status Updated' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setResponding(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -178,6 +261,9 @@ export default function RiderJobs() {
   });
   const unreadCount = unreadData?.total ?? 0;
 
+  const totalIncoming = pendingJobs.length + bulkPendingGroups.length;
+  const totalActive   = activeJobs.length + bulkActiveGroups.length;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
@@ -190,10 +276,10 @@ export default function RiderJobs() {
             <h1 className="text-xl font-display font-bold">Rider App</h1>
             <p className="text-zinc-400 text-sm">Stay safe out there, {user?.name}</p>
           </div>
-          {pendingJobs.length > 0 && (
+          {totalIncoming > 0 && (
             <div className="ml-auto flex items-center gap-1.5 bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
               <Bell size={13} />
-              {pendingJobs.length} Incoming
+              {totalIncoming} Incoming
             </div>
           )}
         </div>
@@ -206,9 +292,9 @@ export default function RiderJobs() {
           <TabsList className="w-full grid grid-cols-3 mb-5 rounded-2xl bg-white border border-border shadow-sm h-11">
             <TabsTrigger value="jobs" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
               <Bike size={14} /> Jobs
-              {(pendingJobs.length + activeJobs.length) > 0 && (
+              {(totalIncoming + totalActive) > 0 && (
                 <span className="bg-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-                  {pendingJobs.length + activeJobs.length}
+                  {totalIncoming + totalActive}
                 </span>
               )}
             </TabsTrigger>
@@ -228,14 +314,14 @@ export default function RiderJobs() {
           {/* ── Jobs Tab ── */}
           <TabsContent value="jobs" className="space-y-6 mt-0">
 
-        {/* ── Incoming Jobs ── */}
+        {/* ── Incoming Jobs (individual) ── */}
         {pendingJobs.length > 0 && (
           <div>
             <h2 className="text-lg font-bold text-red-600 mb-3 flex items-center gap-2">
               <Bell size={20} className="animate-bounce" /> Incoming Jobs ({pendingJobs.length})
             </h2>
             <div className="space-y-4">
-              {pendingJobs.map(job => (
+              {pendingJobs.map((job: any) => (
                 <Card key={job.id} className="rounded-2xl border-2 border-red-400 shadow-lg overflow-hidden">
                   <div className="bg-red-50 p-4 border-b border-red-200 flex justify-between items-center">
                     <div>
@@ -246,7 +332,6 @@ export default function RiderJobs() {
                   </div>
 
                   <CardContent className="p-4 space-y-3 bg-white">
-                    {/* Address */}
                     <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 flex items-start gap-3">
                       <div className="mt-0.5 p-1.5 bg-primary/10 rounded-lg">
                         <MapPin size={16} className="text-primary" />
@@ -257,7 +342,6 @@ export default function RiderJobs() {
                       </div>
                     </div>
 
-                    {/* Items summary */}
                     <div className="space-y-1">
                       {(job.items as any[]).slice(0, 3).map((item: any, i: number) => (
                         <div key={i} className="flex justify-between text-xs text-muted-foreground">
@@ -270,12 +354,11 @@ export default function RiderJobs() {
                       )}
                     </div>
 
-                    {/* Accept / Decline */}
                     <div className="flex gap-2 pt-1">
                       <Button
                         className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-base"
                         onClick={() => handleRespond(job.id, true)}
-                        disabled={responding[job.id]}
+                        disabled={responding[job.id] as boolean}
                       >
                         <CheckCircle2 className="mr-2" size={18} />
                         {responding[job.id] ? 'Accepting…' : 'Accept'}
@@ -284,7 +367,7 @@ export default function RiderJobs() {
                         variant="outline"
                         className="flex-1 h-12 rounded-xl border-red-400 text-red-500 hover:bg-red-50 font-bold text-base"
                         onClick={() => handleRespond(job.id, false)}
-                        disabled={responding[job.id]}
+                        disabled={responding[job.id] as boolean}
                       >
                         <BellOff className="mr-2" size={18} />
                         Decline
@@ -300,17 +383,95 @@ export default function RiderJobs() {
           </div>
         )}
 
-        {/* ── Active Deliveries ── */}
+        {/* ── Incoming Bulk Group Jobs ── */}
+        {bulkPendingGroups.length > 0 && (
+          <div>
+            <h2 className="text-lg font-bold text-indigo-700 mb-3 flex items-center gap-2">
+              <Boxes size={20} className="animate-bounce" /> Bulk Delivery Jobs ({bulkPendingGroups.length})
+            </h2>
+            <div className="space-y-4">
+              {bulkPendingGroups.map((group: any) => {
+                const bulkKey = `bulk-${group.id}`;
+                const isResponding = responding[bulkKey] as boolean;
+                return (
+                  <Card key={group.id} className="rounded-2xl border-2 border-indigo-400 shadow-lg overflow-hidden">
+                    <div className="bg-indigo-50 p-4 border-b border-indigo-200 flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-lg text-indigo-700">
+                          Bulk Job BLK-{group.id}
+                        </p>
+                        <p className="text-sm text-indigo-500">
+                          {group.totalOrders} orders · {group.estate} · GH₵{group.totalAmount?.toFixed(2)}
+                        </p>
+                      </div>
+                      <Boxes className="text-indigo-500 animate-bounce" size={24} />
+                    </div>
+
+                    <CardContent className="p-4 space-y-3 bg-white">
+                      <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-3 flex items-start gap-3">
+                        <div className="mt-0.5 p-1.5 bg-indigo-100 rounded-lg">
+                          <MapPin size={16} className="text-indigo-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-sm text-indigo-800 leading-tight">{group.estate}</p>
+                          <p className="text-xs text-indigo-600 mt-0.5">
+                            {group.totalOrders} resident{group.totalOrders !== 1 ? 's' : ''} — single delivery run
+                          </p>
+                          {group.batchNumber && (
+                            <p className="text-xs text-muted-foreground mt-0.5 font-mono">Batch: {group.batchNumber}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-xl p-3 text-xs text-muted-foreground">
+                        <p className="font-semibold text-foreground mb-1">What you'll do:</p>
+                        <p>1. Collect all {group.totalOrders} orders from the vendor</p>
+                        <p>2. Deliver to each resident in {group.estate}</p>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          className="flex-1 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base"
+                          onClick={() => handleBulkRespond(group.id, true)}
+                          disabled={isResponding}
+                        >
+                          <CheckCircle2 className="mr-2" size={18} />
+                          {isResponding ? 'Accepting…' : 'Accept All'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1 h-12 rounded-xl border-red-400 text-red-500 hover:bg-red-50 font-bold text-base"
+                          onClick={() => handleBulkRespond(group.id, false)}
+                          disabled={isResponding}
+                        >
+                          <BellOff className="mr-2" size={18} />
+                          Decline
+                        </Button>
+                      </div>
+                      <p className="text-xs text-center text-muted-foreground">
+                        Accepting covers all {group.totalOrders} orders in this estate.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Active Individual Deliveries ── */}
         <div>
-          <h2 className="text-lg font-bold text-foreground mb-4">Active Deliveries ({activeJobs.length})</h2>
+          <h2 className="text-lg font-bold text-foreground mb-4">Active Deliveries ({totalActive})</h2>
           {isLoading ? <p className="text-muted-foreground text-center">Loading...</p> :
-           activeJobs.length === 0 ? (
+           totalActive === 0 ? (
              <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-8 text-center">
                <p className="text-muted-foreground">No active deliveries.</p>
              </div>
            ) : (
             <div className="space-y-4">
-              {activeJobs.map(job => {
+
+              {/* Individual active jobs */}
+              {activeJobs.map((job: any) => {
                 const hasProof = !!job.deliveryPhotoUrl || !!previews[job.id];
                 const isUploadingThis = uploading[job.id];
                 const previewUrl = previews[job.id] ?? job.deliveryPhotoUrl;
@@ -333,7 +494,6 @@ export default function RiderJobs() {
                     </div>
 
                     <CardContent className="p-4 space-y-4 bg-gray-50/50">
-                      {/* Delivery address */}
                       <div className="bg-white rounded-xl border border-border p-3.5 flex items-start gap-3">
                         <div className="mt-0.5 p-1.5 bg-primary/10 rounded-lg">
                           <MapPin size={18} className="text-primary" />
@@ -349,7 +509,6 @@ export default function RiderJobs() {
                         </div>
                       </div>
 
-                      {/* Navigation */}
                       <div className="space-y-2">
                         <a
                           href={googleMapsNavUrl(job.residentAddress || job.residentName || '')}
@@ -465,16 +624,92 @@ export default function RiderJobs() {
                   </Card>
                 );
               })}
+
+              {/* Bulk active group cards */}
+              {bulkActiveGroups.map((group: any) => {
+                const statusKey = `bulk-status-${group.id}`;
+                const isBusy = responding[statusKey] as boolean;
+                return (
+                  <Card key={`bulk-active-${group.id}`} className="rounded-2xl shadow-md border-2 border-indigo-200 overflow-hidden">
+                    <div className="p-4 border-b border-indigo-100 bg-indigo-50">
+                      <div className="flex justify-between items-start mb-1">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Boxes size={18} className="text-indigo-600" />
+                            <p className="font-bold text-lg text-indigo-800">Bulk Run BLK-{group.id}</p>
+                          </div>
+                          <p className="text-sm text-indigo-600">
+                            {group.totalOrders} orders · {group.estate} · GH₵{group.totalAmount?.toFixed(2)}
+                          </p>
+                        </div>
+                        <StatusBadge status={group.status} />
+                      </div>
+                    </div>
+
+                    <CardContent className="p-4 space-y-3 bg-white">
+                      <div className="bg-indigo-50 rounded-xl border border-indigo-100 p-3 flex items-center gap-3">
+                        <MapPin size={16} className="text-indigo-600 shrink-0" />
+                        <div>
+                          <p className="font-semibold text-sm text-indigo-800">{group.estate}</p>
+                          <p className="text-xs text-indigo-500">{group.totalOrders} stops in this estate</p>
+                        </div>
+                      </div>
+
+                      <a
+                        href={googleMapsNavUrl(group.estate)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-2.5 w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-bold text-sm transition-colors"
+                      >
+                        <Navigation size={16} />
+                        Navigate to {group.estate}
+                      </a>
+
+                      {(group.status === 'accepted' || group.status === 'collecting') && (
+                        <div className="rounded-xl bg-yellow-50 border border-yellow-200 p-3 text-xs text-yellow-800">
+                          <p className="font-semibold">Go collect from vendor</p>
+                          <p>Pick up all {group.totalOrders} orders before delivering.</p>
+                        </div>
+                      )}
+
+                      {group.status === 'ready' && (
+                        <Button
+                          className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-bold"
+                          onClick={() => handleBulkStatus(group.id, 'in_transit')}
+                          disabled={isBusy}
+                        >
+                          <Package className="mr-2" size={18} />
+                          {isBusy ? 'Updating…' : 'Collected — Now Delivering'}
+                        </Button>
+                      )}
+
+                      {group.status === 'in_transit' && (
+                        <Button
+                          className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold"
+                          onClick={() => handleBulkStatus(group.id, 'delivered')}
+                          disabled={isBusy}
+                        >
+                          <CheckCircle2 className="mr-2" size={18} />
+                          {isBusy ? 'Updating…' : 'All Delivered'}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
             </div>
           )}
         </div>
 
         {/* ── Completed Today ── */}
-        {completedJobs.length > 0 && (
+        {(completedJobs.length + bulkCompletedGroups.length) > 0 && (
           <div>
-            <h2 className="text-lg font-bold text-foreground mb-4">Completed Today ({completedJobs.length})</h2>
+            <h2 className="text-lg font-bold text-foreground mb-4">
+              Completed Today ({completedJobs.length + bulkCompletedGroups.length})
+            </h2>
             <div className="space-y-3">
-              {completedJobs.map(job => (
+              {completedJobs.map((job: any) => (
                 <Card key={job.id} className="rounded-2xl border-0 shadow-sm opacity-80">
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-2">
@@ -492,6 +727,22 @@ export default function RiderJobs() {
                   </CardContent>
                 </Card>
               ))}
+              {bulkCompletedGroups.map((group: any) => (
+                <Card key={`bulk-done-${group.id}`} className="rounded-2xl border-0 shadow-sm opacity-80">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2">
+                        <Boxes size={16} className="text-indigo-500" />
+                        <div>
+                          <p className="font-semibold">BLK-{group.id} — {group.estate}</p>
+                          <p className="text-sm text-muted-foreground">{group.totalOrders} orders · GH₵{group.totalAmount?.toFixed(2)}</p>
+                        </div>
+                      </div>
+                      <StatusBadge status={group.status} />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         )}
@@ -500,7 +751,7 @@ export default function RiderJobs() {
 
           {/* ── Stats Tab ── */}
           <TabsContent value="stats" className="mt-0">
-            <RiderStats allJobs={allJobs} />
+            <RiderStats allJobs={allJobsRaw as any} />
           </TabsContent>
 
           {/* ── Messages Tab ── */}

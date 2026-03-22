@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { blockOrderGroupsTable, ordersTable, residentsTable, ridersTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -11,6 +11,12 @@ async function mapGroupWithRider(g: typeof blockOrderGroupsTable.$inferSelect) {
     const [rider] = await db.select({ name: ridersTable.name }).from(ridersTable).where(eq(ridersTable.id, g.riderId)).limit(1);
     riderName = rider?.name ?? null;
   }
+
+  const childOrders = await db.select({ riderAccepted: ordersTable.riderAccepted })
+    .from(ordersTable)
+    .where(eq(ordersTable.blockGroupId, g.id));
+  const riderAccepted = childOrders.length > 0 && childOrders.every(o => o.riderAccepted === true);
+
   return {
     id: g.id,
     batchNumber: g.batchNumber ?? null,
@@ -19,6 +25,7 @@ async function mapGroupWithRider(g: typeof blockOrderGroupsTable.$inferSelect) {
     status: g.status,
     riderId: g.riderId,
     riderName,
+    riderAccepted,
     totalOrders: g.totalOrders,
     totalAmount: parseFloat(g.totalAmount),
     scheduledDate: g.scheduledDate?.toISOString() ?? null,
@@ -28,8 +35,13 @@ async function mapGroupWithRider(g: typeof blockOrderGroupsTable.$inferSelect) {
   };
 }
 
-router.get("/", async (_req, res) => {
-  const groups = await db.select().from(blockOrderGroupsTable).orderBy(desc(blockOrderGroupsTable.createdAt));
+router.get("/", async (req, res) => {
+  const { riderId } = req.query;
+  const conditions: any[] = [];
+  if (riderId) conditions.push(eq(blockOrderGroupsTable.riderId, parseInt(riderId as string)));
+  const groups = conditions.length > 0
+    ? await db.select().from(blockOrderGroupsTable).where(and(...conditions)).orderBy(desc(blockOrderGroupsTable.createdAt))
+    : await db.select().from(blockOrderGroupsTable).orderBy(desc(blockOrderGroupsTable.createdAt));
   const mapped = await Promise.all(groups.map(mapGroupWithRider));
   res.json(mapped);
 });
@@ -61,6 +73,7 @@ router.get("/:id/orders", async (req, res) => {
       deliveryFee: parseFloat(row.orders.deliveryFee),
       total: parseFloat(row.orders.total),
       status: row.orders.status,
+      riderAccepted: row.orders.riderAccepted,
       paymentMethod: row.orders.paymentMethod,
       notes: row.orders.notes,
       createdAt: row.orders.createdAt.toISOString(),
@@ -98,6 +111,45 @@ router.put("/:id/assign-rider", async (req, res) => {
   }
 });
 
+router.put("/:id/rider-response", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { accepted } = req.body;
+
+    if (accepted === undefined) {
+      res.status(400).json({ error: "bad_request", message: "accepted is required" });
+      return;
+    }
+
+    const [group] = await db.select().from(blockOrderGroupsTable).where(eq(blockOrderGroupsTable.id, id)).limit(1);
+    if (!group) {
+      res.status(404).json({ error: "not_found", message: "Group not found" });
+      return;
+    }
+
+    if (accepted) {
+      await db.update(blockOrderGroupsTable)
+        .set({ status: "accepted" })
+        .where(eq(blockOrderGroupsTable.id, id));
+      await db.update(ordersTable)
+        .set({ riderAccepted: true, riderAcceptedAt: new Date(), status: "accepted", updatedAt: new Date() })
+        .where(eq(ordersTable.blockGroupId, id));
+    } else {
+      await db.update(blockOrderGroupsTable)
+        .set({ riderId: null })
+        .where(eq(blockOrderGroupsTable.id, id));
+      await db.update(ordersTable)
+        .set({ riderId: null, riderAccepted: null, riderAcceptedAt: null, updatedAt: new Date() })
+        .where(eq(ordersTable.blockGroupId, id));
+    }
+
+    const [updated] = await db.select().from(blockOrderGroupsTable).where(eq(blockOrderGroupsTable.id, id)).limit(1);
+    res.json(await mapGroupWithRider(updated));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
 router.put("/:id/status", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -117,8 +169,12 @@ router.put("/:id/status", async (req, res) => {
       return;
     }
 
+    const orderUpdateData: any = { status, updatedAt: new Date() };
+    if (status === 'in_transit') orderUpdateData.pickedUpAt = new Date();
+    if (status === 'delivered')  orderUpdateData.deliveredAt = new Date();
+
     await db.update(ordersTable)
-      .set({ status, updatedAt: new Date() })
+      .set(orderUpdateData)
       .where(eq(ordersTable.blockGroupId, id));
 
     res.json(await mapGroupWithRider(group));
