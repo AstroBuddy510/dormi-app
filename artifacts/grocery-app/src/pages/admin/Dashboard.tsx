@@ -47,18 +47,18 @@ export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing]   = useState(false);
 
   /* History filters */
-  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('today');
   const [fromDate, setFromDate]     = useState('');
   const [toDate, setToDate]         = useState('');
   const [historyPage, setHistoryPage] = useState(1);
 
   /* ── Data ─────────────────────────────────────────── */
   const { data: stats, refetch: refetchStats } = useGetAdminStats({
-    query: { refetchInterval: 10_000 },
+    query: { refetchInterval: 30_000 },
   });
   const { data: allOrdersRaw = [], isLoading: ordersLoading, refetch: refetchOrders } = useListOrders(
     undefined,
-    { query: { refetchInterval: 10_000 } },
+    { query: { refetchInterval: 30_000 } },
   );
 
   /* Filter out block-type orders — those are represented by their group instead */
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
   const { data: blockGroups = [], refetch: refetchGroups } = useQuery<any[]>({
     queryKey: ['/api/block-groups'],
     queryFn: () => fetch('/api/block-groups').then(r => r.json()),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   /* ── Auto-detect rider-delivered orders ──────────────── */
