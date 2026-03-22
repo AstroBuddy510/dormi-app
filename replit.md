@@ -11,6 +11,7 @@ Full-stack grocery delivery app for gated estates in Accra, Ghana. Supports 6 us
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **Frontend**: React + Vite, Tailwind CSS, shadcn/ui, Zustand, TanStack Query, Wouter
+- **PWA**: `vite-plugin-pwa` — installable via browser, service worker (generateSW), icons at 192×192 & 512×512 generated from `dormi-icon-nobg.png`
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
