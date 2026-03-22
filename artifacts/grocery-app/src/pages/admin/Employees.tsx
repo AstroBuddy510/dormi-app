@@ -71,9 +71,9 @@ export default function AdminEmployees() {
   const isRider = form.role === 'Rider';
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-background">
       <AdminSidebar />
-      <div className="flex-1 p-6 md:p-8 overflow-auto">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div>

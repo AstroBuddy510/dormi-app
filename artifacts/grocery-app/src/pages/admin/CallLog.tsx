@@ -70,9 +70,9 @@ export default function AdminCallLog() {
   const resident = residents.find((r) => r.id.toString() === selectedResident);
 
   return (
-    <div className="flex min-h-screen bg-gray-50/50">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 overflow-auto py-8 px-12">
+      <div className="flex-1 overflow-auto py-4 px-4 md:py-6 md:px-8 lg:py-8 lg:px-12">
         <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Call Log</h1>

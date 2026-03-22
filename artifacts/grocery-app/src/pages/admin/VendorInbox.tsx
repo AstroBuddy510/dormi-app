@@ -104,9 +104,9 @@ export default function VendorInbox() {
   const totalUnread = threads.reduce((s, t) => s + t.unread, 0);
 
   return (
-    <div className="flex min-h-screen bg-gray-50/50">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 p-6 md:p-8 max-w-4xl">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 max-w-4xl">
         <div className="flex items-center gap-3 mb-6">
           {selectedVendorId && (
             <button

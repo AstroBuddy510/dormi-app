@@ -606,9 +606,9 @@ export default function AdminCatalogue() {
   const pendingCount = (requests as any[]).filter((r: any) => r.status === 'pending').length;
 
   return (
-    <div className="flex min-h-screen bg-gray-50/50">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 p-6 md:p-8 overflow-auto">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="max-w-5xl mx-auto">
           <div className="mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">

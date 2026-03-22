@@ -1544,9 +1544,9 @@ export default function AdminUsers() {
   const { data: agents = [] } = useQuery<any[]>({ queryKey: ['agents'], queryFn: () => fetch('/api/agents').then((r) => r.json()) });
 
   return (
-    <div className="flex min-h-screen bg-gray-50/50">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 p-6 md:p-8 overflow-auto">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">User Management</h1>
           <p className="text-muted-foreground mt-1 text-sm">

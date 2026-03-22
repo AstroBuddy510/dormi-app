@@ -1033,9 +1033,9 @@ export default function AdminSettings() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-gray-50/50">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 overflow-auto flex flex-col py-8 px-12">
+      <div className="flex-1 overflow-auto flex flex-col py-4 px-4 md:py-6 md:px-8 lg:py-8 lg:px-12">
         <div className="w-full">
           <h1 className="text-3xl font-display font-bold text-foreground mb-8 text-center">Settings</h1>
 
