@@ -167,8 +167,8 @@ router.get("/stats", async (req, res) => {
     const { from, to } = req.query as { from?: string; to?: string };
 
     const orderConditions: any[] = [eq(ordersTable.status, "delivered")];
-    if (from) orderConditions.push(gte(ordersTable.createdAt, new Date(from)));
-    if (to) orderConditions.push(lte(ordersTable.createdAt, new Date(to)));
+    if (from) orderConditions.push(gte(ordersTable.deliveredAt, new Date(from)));
+    if (to) orderConditions.push(lte(ordersTable.deliveredAt, new Date(to)));
 
     const expenseConditions: any[] = [];
     if (from) expenseConditions.push(gte(expensesTable.expenseDate, from.slice(0, 10)));
@@ -287,8 +287,8 @@ router.get("/export/csv", async (req, res) => {
   try {
     const { from, to } = req.query as { from?: string; to?: string };
     const orderConditions: any[] = [eq(ordersTable.status, "delivered")];
-    if (from) orderConditions.push(gte(ordersTable.createdAt, new Date(from)));
-    if (to) orderConditions.push(lte(ordersTable.createdAt, new Date(to)));
+    if (from) orderConditions.push(gte(ordersTable.deliveredAt, new Date(from)));
+    if (to) orderConditions.push(lte(ordersTable.deliveredAt, new Date(to)));
 
     const orders = await db.select().from(ordersTable).where(and(...orderConditions));
     const expenseConditions: any[] = [];
@@ -316,7 +316,7 @@ router.get("/export/csv", async (req, res) => {
       const courierComms = o.orderType === "third_party" ? courierComm : 0;
       lines.push([
         "Order",
-        new Date(o.createdAt).toISOString().slice(0, 10),
+        new Date(o.deliveredAt!).toISOString().slice(0, 10),
         `Order #${o.id}`,
         parseFloat(o.serviceFee).toFixed(2),
         parseFloat(o.deliveryFee).toFixed(2),
