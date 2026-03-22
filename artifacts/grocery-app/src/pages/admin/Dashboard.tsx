@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils';
 interface DeliveryPartner { id: number; name: string; commissionPercent: number; isActive: boolean; }
 
 type LiveFilter  = 'all' | 'pending' | 'in_progress';
-type DatePreset  = 'today' | 'week' | 'custom';
+type DatePreset  = 'all' | 'today' | 'week' | 'custom';
 
 const HISTORY_PAGE_SIZE = 10;
 
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing]   = useState(false);
 
   /* History filters */
-  const [datePreset, setDatePreset] = useState<DatePreset>('today');
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [fromDate, setFromDate]     = useState('');
   const [toDate, setToDate]         = useState('');
   const [historyPage, setHistoryPage] = useState(1);
@@ -250,9 +250,12 @@ export default function AdminDashboard() {
     const combined: any[] = [...deliveredSingle, ...deliveredBulk];
     return combined
       .filter((o) => {
-        const date = parseISO(o.createdAt);
-        if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
-        if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
+        if (datePreset === 'all') return true;
+        /* Use deliveredAt for individual orders, updatedAt for bulk groups, fall back to createdAt */
+        const rawDate = o.deliveredAt ?? o.updatedAt ?? o.createdAt;
+        const date = parseISO(rawDate);
+        if (datePreset === 'today') return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
+        if (datePreset === 'week')  return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
         if (datePreset === 'custom') {
           if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
           if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
@@ -260,7 +263,11 @@ export default function AdminDashboard() {
         }
         return true;
       })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => {
+        const aDate = a.deliveredAt ?? a.updatedAt ?? a.createdAt;
+        const bDate = b.deliveredAt ?? b.updatedAt ?? b.createdAt;
+        return new Date(bDate).getTime() - new Date(aDate).getTime();
+      });
   }, [deliveredSingle, deliveredBulk, datePreset, fromDate, toDate]);
 
   const historyTotalPages = Math.max(1, Math.ceil(deliveredFiltered.length / HISTORY_PAGE_SIZE));
@@ -276,14 +283,16 @@ export default function AdminDashboard() {
 
   /* ── Period label ─────────────────────────────────── */
   const periodLabel =
+    datePreset === 'all'    ? 'All Time' :
     datePreset === 'today'  ? 'Today' :
     datePreset === 'week'   ? 'This Week' :
-    (fromDate && toDate)    ? `${fromDate} – ${toDate}` : 'All Time';
+    (fromDate && toDate)    ? `${fromDate} – ${toDate}` : 'Custom';
 
   /* ── Period-scoped (all statuses, within date range, individual only) ── */
   const periodOrders = useMemo(() => {
     const now = new Date();
     return allOrders.filter((o: any) => {
+      if (datePreset === 'all') return true;
       const date = parseISO(o.createdAt);
       if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
       if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
@@ -493,16 +502,20 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {(['today', 'week'] as const).map((p) => (
-                <button key={p} onClick={() => { setDatePreset(p); setHistoryPage(1); }}
+              {([
+                { key: 'all',   label: 'All Time' },
+                { key: 'today', label: 'Today' },
+                { key: 'week',  label: 'This Week' },
+              ] as const).map(({ key, label }) => (
+                <button key={key} onClick={() => { setDatePreset(key); setHistoryPage(1); }}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
-                    datePreset === p
+                    datePreset === key
                       ? 'bg-green-600 text-white border-green-600 shadow-sm'
                       : 'bg-white border-border text-muted-foreground hover:text-foreground',
                   )}>
                   <Clock3 size={11} />
-                  {p === 'today' ? 'Today' : 'This Week'}
+                  {label}
                 </button>
               ))}
               <button onClick={() => { setDatePreset('custom'); setHistoryPage(1); }}
