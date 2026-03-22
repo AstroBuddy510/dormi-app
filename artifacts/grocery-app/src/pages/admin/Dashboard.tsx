@@ -811,6 +811,27 @@ export default function AdminDashboard() {
   );
 }
 
+/* ── Status-flow maps (module-level so they never re-create) ────────────── */
+/** Bulk / block-group flow includes a "collecting" step */
+const BULK_NEXT_STATUS: Record<string, string | null> = {
+  pending: 'accepted', accepted: 'collecting', collecting: 'ready',
+  ready: 'in_transit', in_transit: 'delivered', delivered: null, cancelled: null,
+};
+const BULK_NEXT_LABEL: Record<string, string> = {
+  pending: 'Accept', accepted: 'Collecting', collecting: 'Mark Ready',
+  ready: 'In Transit', in_transit: 'Delivered',
+};
+
+/** Individual order flow skips "collecting" entirely */
+const SINGLE_NEXT_STATUS: Record<string, string | null> = {
+  pending: 'accepted', accepted: 'ready',
+  ready: 'in_transit', in_transit: 'delivered', delivered: null, cancelled: null,
+};
+const SINGLE_NEXT_LABEL: Record<string, string> = {
+  pending: 'Accept', accepted: 'Mark Ready',
+  ready: 'In Transit', in_transit: 'Delivered',
+};
+
 /* ── Live Orders Table ─────────────────────────────── */
 function LiveOrdersTable({
   orders, riders, activePartners, nextStatus, nextStatusLabel,
@@ -841,7 +862,9 @@ function LiveOrdersTable({
         <TableBody>
           {orders.map((entry: any) => {
             const isBulk = !!entry.isBulkGroup;
-            const next = nextStatus[entry.status];
+            const statusMap = isBulk ? BULK_NEXT_STATUS : SINGLE_NEXT_STATUS;
+            const labelMap  = isBulk ? BULK_NEXT_LABEL  : SINGLE_NEXT_LABEL;
+            const next = statusMap[entry.status];
 
             if (isBulk) {
               return (
@@ -920,7 +943,7 @@ function LiveOrdersTable({
                         onClick={() => onBulkStatusUpdate(entry.id, next)}
                         disabled={updateBulkStatusMutation.isPending}
                       >
-                        {nextStatusLabel[entry.status]}
+                        {labelMap[entry.status]}
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground capitalize">{entry.status}</span>
@@ -1038,7 +1061,7 @@ function LiveOrdersTable({
                       onClick={() => onStatusUpdate(entry.id, next)}
                       disabled={updateStatusMutation.isPending}
                     >
-                      {nextStatusLabel[entry.status]}
+                      {labelMap[entry.status]}
                     </Button>
                   ) : (
                     <span className="text-xs text-muted-foreground capitalize">{entry.status}</span>
