@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import {
   useGetAdminStats,
@@ -288,33 +288,48 @@ export default function AdminDashboard() {
     datePreset === 'week'   ? 'This Week' :
     (fromDate && toDate)    ? `${fromDate} – ${toDate}` : 'Custom';
 
-  /* ── Period-scoped (all statuses, within date range, individual only) ──
-     Uses deliveredAt when available, falling back to createdAt — consistent
-     with the Delivered Orders History section so stats and history always agree. */
-  const periodOrders = useMemo(() => {
+  /* ── Helper: period date predicate (shared by all period filters) ── */
+  const inPeriod = useCallback((rawDate: string | null | undefined): boolean => {
+    if (!rawDate) return datePreset === 'all';
+    if (datePreset === 'all') return true;
     const now = new Date();
-    return allOrders.filter((o: any) => {
-      if (datePreset === 'all') return true;
-      const date = parseISO(o.deliveredAt ?? o.updatedAt ?? o.createdAt);
-      if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
-      if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
-      if (datePreset === 'custom') {
-        if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
-        if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
-        return true;
-      }
+    const date = parseISO(rawDate);
+    if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
+    if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
+    if (datePreset === 'custom') {
+      if (fromDate && date < startOfDay(parseISO(fromDate))) return false;
+      if (toDate   && date > endOfDay(parseISO(toDate)))     return false;
       return true;
-    });
-  }, [allOrders, datePreset, fromDate, toDate]);
+    }
+    return true;
+  }, [datePreset, fromDate, toDate]);
 
-  /* ── Net Revenue (individual delivered orders) ──────── */
+  /* ── Period-scoped individual orders (non-block, for display/live section) ── */
+  const periodOrders = useMemo(
+    () => allOrders.filter((o: any) => inPeriod(o.deliveredAt ?? o.updatedAt ?? o.createdAt)),
+    [allOrders, inPeriod],
+  );
+
+  /* ── Period-scoped ALL orders including block sub-orders (for financials) ── */
+  const periodOrdersAll = useMemo(
+    () => allOrdersRaw.filter((o: any) => inPeriod(o.deliveredAt ?? o.updatedAt ?? o.createdAt)),
+    [allOrdersRaw, inPeriod],
+  );
+
+  /* ── Period-scoped bulk groups (for stat counts, treated as single order events) ── */
+  const periodBulkGroupsFiltered = useMemo(
+    () => blockGroups.filter((g: any) => inPeriod(g.updatedAt ?? g.createdAt)),
+    [blockGroups, inPeriod],
+  );
+
+  /* ── Net Revenue (all delivered orders including block sub-orders) ── */
   const partnerMap = useMemo(
     () => new Map(deliveryPartners.map((p: DeliveryPartner) => [p.id, p.commissionPercent ?? 0])),
     [deliveryPartners],
   );
 
   const periodNetRevenue = useMemo(() => {
-    const delivered = periodOrders.filter((o: any) => o.status === 'delivered');
+    const delivered = periodOrdersAll.filter((o: any) => o.status === 'delivered');
     const serviceFeeTotal        = delivered.reduce((s: number, o: any) => s + (o.serviceFee ?? 0), 0);
     const inHouseDeliveryTotal   = delivered.filter((o: any) => o.riderId && !o.deliveryPartnerId)
                                             .reduce((s: number, o: any) => s + (o.deliveryFee ?? 0), 0);
@@ -330,13 +345,13 @@ export default function AdminDashboard() {
                                             }, 0);
     return { serviceFeeTotal, inHouseDeliveryTotal, partnerCommissionTotal, vendorCommissionTotal,
              total: serviceFeeTotal + inHouseDeliveryTotal + partnerCommissionTotal + vendorCommissionTotal };
-  }, [periodOrders, partnerMap]);
+  }, [periodOrdersAll, partnerMap]);
 
   const fmt = (n: number) => `GH₵ ${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  /* ── Vendor Sales Breakdown (delivered orders) ────── */
+  /* ── Vendor Sales Breakdown (all delivered orders including block sub-orders) ── */
   const vendorSalesList = useMemo(() => {
-    const delivered = periodOrders.filter((o: any) => o.status === 'delivered' && o.vendorId);
+    const delivered = periodOrdersAll.filter((o: any) => o.status === 'delivered' && o.vendorId);
     const m: Record<number, { vendorId: number; vendorName: string; orders: number; revenue: number; subtotal: number }> = {};
     for (const o of delivered) {
       if (!m[o.vendorId]) m[o.vendorId] = { vendorId: o.vendorId, vendorName: o.vendorName ?? `Vendor #${o.vendorId}`, orders: 0, revenue: 0, subtotal: 0 };
@@ -345,17 +360,36 @@ export default function AdminDashboard() {
       m[o.vendorId].subtotal += o.subtotal ?? 0;
     }
     return Object.values(m).sort((a, b) => b.revenue - a.revenue);
-  }, [periodOrders]);
+  }, [periodOrdersAll]);
 
   const vendorSalesTotal = vendorSalesList.reduce((s, v) => s + v.revenue, 0);
 
-  /* ── Stat cards ──────────────────────────────────── */
+  /* ── Stat cards (individual orders + bulk groups combined) ── */
   const statCards = [
-    { title: 'Total Orders',  value: periodOrders.length,                                                         icon: ShoppingCart, color: 'text-blue-600 bg-blue-50' },
-    { title: 'Pending',       value: periodOrders.filter((o: any) => o.status === 'pending').length,              icon: Activity,     color: 'text-red-600 bg-red-50' },
-    { title: 'In Progress',   value: periodOrders.filter((o: any) => ['accepted','ready','in_transit'].includes(o.status)).length, icon: Package, color: 'text-amber-600 bg-amber-50' },
-    { title: 'Delivered',     value: periodOrders.filter((o: any) => o.status === 'delivered').length,            icon: CheckCircle,  color: 'text-green-600 bg-green-50' },
-    { title: 'Subscribers',   value: stats?.subscriberCount ?? 0,                                                 icon: Users,        color: 'text-purple-600 bg-purple-50' },
+    {
+      title: 'Total Orders',
+      value: periodOrders.length + periodBulkGroupsFiltered.length,
+      icon: ShoppingCart, color: 'text-blue-600 bg-blue-50',
+    },
+    {
+      title: 'Pending',
+      value: periodOrders.filter((o: any) => o.status === 'pending').length
+           + periodBulkGroupsFiltered.filter((g: any) => g.status === 'pending').length,
+      icon: Activity, color: 'text-red-600 bg-red-50',
+    },
+    {
+      title: 'In Progress',
+      value: periodOrders.filter((o: any) => ['accepted','ready','in_transit'].includes(o.status)).length
+           + periodBulkGroupsFiltered.filter((g: any) => ['accepted','collecting','ready','in_transit'].includes(g.status)).length,
+      icon: Package, color: 'text-amber-600 bg-amber-50',
+    },
+    {
+      title: 'Delivered',
+      value: periodOrders.filter((o: any) => o.status === 'delivered').length
+           + periodBulkGroupsFiltered.filter((g: any) => g.status === 'delivered').length,
+      icon: CheckCircle, color: 'text-green-600 bg-green-50',
+    },
+    { title: 'Subscribers', value: stats?.subscriberCount ?? 0, icon: Users, color: 'text-purple-600 bg-purple-50' },
   ];
 
   const liveTabs: { label: string; value: LiveFilter }[] = [
