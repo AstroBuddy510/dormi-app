@@ -145,7 +145,7 @@ async function resolveVendor(items: any[]) {
 
 router.post("/orders/single", async (req, res) => {
   try {
-    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId, deliveryZoneId, deliveryTownId } = req.body;
+    const { residentId, rawItems, notes, paymentMethod, isUrgent, vendorId: explicitVendorId, deliveryZoneId, deliveryTownId, agentId } = req.body;
     if (!residentId || !rawItems) {
       res.status(400).json({ error: "bad_request", message: "residentId and rawItems are required" });
       return;
@@ -200,6 +200,7 @@ router.post("/orders/single", async (req, res) => {
       pickupDeadline: addHours(isUrgent ? 1 : 3),
       eta: isUrgent ? "30-60 mins" : "2-3 hours",
       notes: notes ?? null,
+      agentId: agentId ? parseInt(agentId) : null,
     }).returning();
 
     res.status(201).json(await enrichOrder(order));
