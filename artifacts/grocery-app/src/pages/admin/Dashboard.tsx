@@ -288,12 +288,14 @@ export default function AdminDashboard() {
     datePreset === 'week'   ? 'This Week' :
     (fromDate && toDate)    ? `${fromDate} – ${toDate}` : 'Custom';
 
-  /* ── Period-scoped (all statuses, within date range, individual only) ── */
+  /* ── Period-scoped (all statuses, within date range, individual only) ──
+     Uses deliveredAt when available, falling back to createdAt — consistent
+     with the Delivered Orders History section so stats and history always agree. */
   const periodOrders = useMemo(() => {
     const now = new Date();
     return allOrders.filter((o: any) => {
       if (datePreset === 'all') return true;
-      const date = parseISO(o.createdAt);
+      const date = parseISO(o.deliveredAt ?? o.updatedAt ?? o.createdAt);
       if (datePreset === 'today')  return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(now) });
       if (datePreset === 'week')   return isWithinInterval(date, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
       if (datePreset === 'custom') {
