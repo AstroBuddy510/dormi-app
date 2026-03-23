@@ -10,7 +10,19 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  keepAlive: true,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+// Handle idle client errors gracefully — prevents the server from crashing
+// when the database drops a connection due to idle timeout or TLS expiry.
+pool.on("error", (err) => {
+  console.error("[DB Pool] Unexpected client error:", err.message);
+});
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
