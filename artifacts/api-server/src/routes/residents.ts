@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { residentsTable } from "@workspace/db/schema";
+import { residentsTable, estatesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { ResidentSignupBody, UpdateSubscriptionBody } from "@workspace/api-zod";
 
@@ -60,6 +60,10 @@ router.post("/signup", async (req, res) => {
       zone: autoZone,
       subscribeWeekly: false,
     }).returning();
+
+    // Auto-add estate to estates table if not already tracked
+    await db.insert(estatesTable).values({ name: body.estate }).onConflictDoNothing();
+
     res.status(201).json(mapResident(resident));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
@@ -67,9 +71,14 @@ router.post("/signup", async (req, res) => {
 });
 
 router.get("/estates", async (_req, res) => {
-  const rows = await db.select({ estate: residentsTable.estate }).from(residentsTable);
-  const estates = [...new Set(rows.map(r => r.estate).filter(Boolean))].sort();
-  res.json(estates);
+  const [adminEstates, residentRows] = await Promise.all([
+    db.select({ name: estatesTable.name }).from(estatesTable),
+    db.select({ estate: residentsTable.estate }).from(residentsTable),
+  ]);
+  const names = new Set<string>();
+  adminEstates.forEach((e) => { if (e.name) names.add(e.name); });
+  residentRows.forEach((r) => { if (r.estate) names.add(r.estate); });
+  res.json([...names].sort());
 });
 
 router.get("/", async (_req, res) => {

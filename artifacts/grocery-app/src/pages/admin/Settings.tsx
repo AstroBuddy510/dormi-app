@@ -13,12 +13,12 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle, ChevronsUpDown, CreditCard, Eye, EyeOff, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CheckCircle, AlertCircle, Truck, Phone, Mail, MapPin, Edit2, Trash2, XCircle, PlusCircle, ChevronsUpDown, CreditCard, Eye, EyeOff, RefreshCw, ShieldCheck, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
-type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner' | 'payment-gateway' | 'admin-accounts';
+type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner' | 'payment-gateway' | 'admin-accounts' | 'estates';
 
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`/api${path}`, {
@@ -1019,6 +1019,98 @@ function AdminAccountsTab() {
   );
 }
 
+function EstatesTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [newEstate, setNewEstate] = useState('');
+
+  const { data: estates = [], isLoading } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['estates-admin'],
+    queryFn: () => apiFetch('/estates/list'),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (name: string) => apiFetch('/estates', { method: 'POST', body: JSON.stringify({ name }) }),
+    onSuccess: () => {
+      toast({ title: 'Estate added!' });
+      setNewEstate('');
+      qc.invalidateQueries({ queryKey: ['estates-admin'] });
+      qc.invalidateQueries({ queryKey: ['estates'] });
+    },
+    onError: (err: any) => {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/estates/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast({ title: 'Estate removed.' });
+      qc.invalidateQueries({ queryKey: ['estates-admin'] });
+      qc.invalidateQueries({ queryKey: ['estates'] });
+    },
+    onError: (err: any) => {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    },
+  });
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newEstate.trim();
+    if (!trimmed) return;
+    addMutation.mutate(trimmed);
+  };
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleAdd} className="flex gap-3">
+        <Input
+          placeholder="e.g. East Legon Hills, Trasacco Valley..."
+          value={newEstate}
+          onChange={(e) => setNewEstate(e.target.value)}
+          className="h-11 rounded-xl flex-1"
+        />
+        <Button type="submit" disabled={!newEstate.trim() || addMutation.isPending} className="h-11 rounded-xl px-5">
+          <PlusCircle size={16} className="mr-2" />
+          Add Estate
+        </Button>
+      </form>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading estates…</p>
+      ) : estates.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground">
+          <Building2 size={32} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No estates added yet. Add your first one above.</p>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {estates.map((estate) => (
+            <div key={estate.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-white hover:bg-gray-50/60 transition-colors">
+              <div className="flex items-center gap-3">
+                <Building2 size={16} className="text-primary shrink-0" />
+                <span className="text-sm font-medium text-foreground">{estate.name}</span>
+              </div>
+              <button
+                onClick={() => deleteMutation.mutate(estate.id)}
+                disabled={deleteMutation.isPending}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors"
+                title="Remove estate"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+        Estates listed here will appear in the resident sign-up dropdown. Estates are also automatically added when a resident registers with a new estate name.
+      </p>
+    </div>
+  );
+}
+
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<Tab>('rider');
 
@@ -1030,6 +1122,7 @@ export default function AdminSettings() {
     { id: 'delivery-partner', label: 'Delivery Companies' },
     { id: 'payment-gateway', label: '💳 Payment Gateway' },
     { id: 'admin-accounts', label: '🔐 Admin Accounts' },
+    { id: 'estates', label: '🏘️ Estates' },
   ];
 
   return (
@@ -1151,6 +1244,25 @@ export default function AdminSettings() {
                   </CardHeader>
                   <CardContent className="p-6">
                     <AdminAccountsTab />
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === 'estates' && (
+                <>
+                  <CardHeader className="bg-white rounded-t-2xl border-b border-border/50">
+                    <div className="flex items-center gap-2">
+                      <Building2 size={20} className="text-primary" />
+                      <div>
+                        <CardTitle>Manage Estates</CardTitle>
+                        <CardDescription>
+                          Add or remove gated estates. These appear in the resident sign-up dropdown so new residents can find their estate.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <EstatesTab />
                   </CardContent>
                 </>
               )}

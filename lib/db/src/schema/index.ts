@@ -21,3 +21,4 @@ export * from "./riderMessages";
 export * from "./admins";
 export * from "./vendorMessages";
 export * from "./agentCallLogs";
+export * from "./estates";

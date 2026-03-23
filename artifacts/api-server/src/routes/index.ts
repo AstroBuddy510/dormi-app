@@ -24,6 +24,7 @@ import riderMessagesRouter from "./riderMessages";
 import vendorMessagesRouter from "./vendorMessages";
 import vendorStatsRouter from "./vendor";
 import adminAccountsRouter from "./adminAccounts";
+import estatesRouter from "./estates";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use("/rider-messages", riderMessagesRouter);
 router.use("/vendor-messages", vendorMessagesRouter);
 router.use("/vendor", vendorStatsRouter);
 router.use("/admin-accounts", adminAccountsRouter);
+router.use("/estates", estatesRouter);
 
 export default router;
