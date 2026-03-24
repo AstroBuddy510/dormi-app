@@ -203,12 +203,20 @@ export default function OrderPage() {
                 <Card className="p-3 border-0 shadow-sm rounded-2xl h-full flex flex-col justify-between bg-white hover:shadow-md transition-shadow">
                   <div>
                     <div className="aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
-                      <span className="text-4xl">
-                        {item.category === 'Vegetables' ? '🥦' : 
-                         item.category === 'Fruits' ? '🍎' : 
-                         item.category === 'Meat' ? '🥩' : 
-                         item.category === 'Dairy' ? '🥛' : '📦'}
-                      </span>
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-4xl">
+                          {item.category === 'Vegetables' ? '🥦' :
+                           item.category === 'Fruits' ? '🍎' :
+                           item.category === 'Meat' ? '🥩' :
+                           item.category === 'Dairy' ? '🥛' : '📦'}
+                        </span>
+                      )}
                     </div>
                     <h3 className="font-semibold text-foreground text-sm leading-tight line-clamp-2">{item.name}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{item.unit}</p>
