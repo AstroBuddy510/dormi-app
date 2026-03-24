@@ -5,11 +5,22 @@ import { useCart } from '@/store';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ShoppingBag, ArrowLeft, Plus, Minus, Search, PackagePlus, Send } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -18,7 +29,7 @@ export default function OrderPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: items = [], isLoading } = useListItems();
-  const { items: cartItems, addItem, removeItem, getCartTotal } = useCart();
+  const { items: cartItems, addItem, removeItem, getCartTotal, clearCart } = useCart();
   
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [search, setSearch] = useState('');
@@ -331,10 +342,35 @@ export default function OrderPage() {
       {totalCartItems > 0 && (
         <motion.div 
           initial={{ y: 100 }} animate={{ y: 0 }}
-          className="fixed bottom-20 left-4 right-4 z-40 max-w-md mx-auto"
+          className="fixed bottom-20 left-4 right-4 z-40 max-w-md mx-auto flex gap-2"
         >
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button className="h-14 w-14 shrink-0 bg-white border border-border rounded-2xl shadow-lg flex items-center justify-center text-red-500 hover:bg-red-50 transition-colors">
+                <Trash2 size={20} />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="rounded-2xl max-w-xs mx-auto">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear your cart?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  All {totalCartItems} item{totalCartItems !== 1 ? 's' : ''} will be removed. You can start a new order anytime.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="rounded-xl">Keep items</AlertDialogCancel>
+                <AlertDialogAction
+                  className="rounded-xl bg-red-500 hover:bg-red-600"
+                  onClick={clearCart}
+                >
+                  Clear cart
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           <Button 
-            className="w-full h-14 bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-between px-6"
+            className="flex-1 h-14 bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-between px-6"
             onClick={() => setLocation('/checkout')}
           >
             <div className="flex items-center gap-2">

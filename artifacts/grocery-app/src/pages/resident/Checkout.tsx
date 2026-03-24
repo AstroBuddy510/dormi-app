@@ -6,9 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, MapPin, Receipt, CheckCircle, Smartphone, Loader2, ShieldCheck, Banknote } from 'lucide-react';
+import { ArrowLeft, MapPin, Receipt, CheckCircle, Smartphone, Loader2, ShieldCheck, Banknote, Trash2 } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface DeliveryTown { id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null; }
 
@@ -325,6 +336,33 @@ export default function CheckoutPage() {
             ? 'You will be taken to a secure Paystack page to complete payment.'
             : 'Your rider will collect payment on delivery.'}
         </p>
+
+        {/* Cancel & clear cart */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button className="w-full flex items-center justify-center gap-1.5 text-sm text-red-500 hover:text-red-600 py-2 transition-colors">
+              <Trash2 size={14} />
+              Cancel order &amp; clear cart
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="rounded-2xl max-w-xs mx-auto">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancel this order?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your cart will be cleared and you'll be taken back to the home screen. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="rounded-xl">Go back</AlertDialogCancel>
+              <AlertDialogAction
+                className="rounded-xl bg-red-500 hover:bg-red-600"
+                onClick={() => { clearCart(); setLocation('/'); }}
+              >
+                Yes, cancel
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
