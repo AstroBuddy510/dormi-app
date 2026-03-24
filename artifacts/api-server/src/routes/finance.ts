@@ -101,6 +101,16 @@ router.post("/zones", async (req, res) => {
   }
 });
 
+router.delete("/zones/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.delete(deliveryZonesTable).where(eq(deliveryZonesTable.id, id));
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
 // ─── Delivery Towns ───────────────────────────────────────────────────────────
 
 const TownBody = z.object({
