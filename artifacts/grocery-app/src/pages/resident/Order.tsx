@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useListItems, GroceryItemCategory } from '@workspace/api-client-react';
 import { useCart } from '@/store';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2, X, ChevronLeft, ChevronRight, ShoppingCart, ZoomIn } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2, X, ShoppingCart, ZoomIn, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +27,10 @@ export default function OrderPage() {
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+
+  // Infinite scroll — how many items are currently visible
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Item request state
   const [requestDesc, setRequestDesc] = useState('');
@@ -48,22 +51,40 @@ export default function OrderPage() {
   const categories = ['All', ...Object.values(GroceryItemCategory)];
 
   const filteredItems = useMemo(() => {
-    const result = items.filter(item => {
+    return items.filter(item => {
       const matchCat = activeCategory === 'All' || item.category === activeCategory;
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     });
-    return result;
   }, [items, activeCategory, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pagedItems = filteredItems.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  // Slice to the visible window
+  const visibleItems = filteredItems.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredItems.length;
 
-  const resetPage = useCallback(() => setPage(1), []);
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [activeCategory, search]);
 
-  const handleCategoryChange = (cat: string) => { setActiveCategory(cat); resetPage(); };
-  const handleSearchChange = (val: string) => { setSearch(val); resetPage(); };
+  // IntersectionObserver — load more when sentinel enters viewport
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisibleCount(prev => prev + PAGE_SIZE);
+        }
+      },
+      { rootMargin: '200px', threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, visibleCount]); // re-attach after each load so new sentinel position is observed
+
+  const handleCategoryChange = (cat: string) => setActiveCategory(cat);
+  const handleSearchChange = (val: string) => setSearch(val);
 
   const totalCartItems = Object.values(cartItems).reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = getCartTotal();
@@ -78,7 +99,6 @@ export default function OrderPage() {
     return (cartItems as any)[key]?.quantity || 0;
   };
 
-  // When tapping + on a no-brand item for the first time → open quick-add
   const handlePlusClick = (item: any) => {
     if (item.brands && item.brands.length > 0) {
       setBrandPickerItem(item);
@@ -119,9 +139,14 @@ export default function OrderPage() {
     }
   };
 
+  const openLightbox = (url: string, alt: string) => {
+    setLightboxUrl(url);
+    setLightboxAlt(alt);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-32">
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="bg-white sticky top-0 z-40 border-b border-border shadow-sm">
         <div className="px-4 h-16 flex items-center gap-4">
           <button onClick={() => setLocation('/')} className="p-2 -ml-2 text-muted-foreground hover:text-foreground">
@@ -142,7 +167,7 @@ export default function OrderPage() {
           </div>
         </div>
 
-        {/* Categories */}
+        {/* Category pills */}
         <div className="px-4 pb-4 overflow-x-auto hide-scrollbar flex gap-2">
           {categories.map(cat => (
             <button
@@ -160,7 +185,7 @@ export default function OrderPage() {
         </div>
       </div>
 
-      {/* Items Grid */}
+      {/* ── Items Grid ─────────────────────────────────────────────────────── */}
       <div className="p-4 max-w-md mx-auto">
         {isLoading ? (
           <div className="grid grid-cols-2 gap-4">
@@ -214,21 +239,21 @@ export default function OrderPage() {
           </div>
         ) : (
           <>
-            {/* Item count + page info */}
-            <div className="flex items-center justify-between mb-3 text-xs text-muted-foreground">
-              <span>{filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}</span>
-              {totalPages > 1 && <span>Page {safePage} of {totalPages}</span>}
-            </div>
+            {/* Subtle item count */}
+            <p className="text-xs text-muted-foreground mb-3">
+              {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
+            </p>
 
+            {/* 2-column grid */}
             <div className="grid grid-cols-2 gap-4">
-              {pagedItems.map(item => {
+              {visibleItems.map(item => {
                 const quantity = getItemQuantity(item.id);
                 const hasBrands = item.brands && item.brands.length > 0;
                 return (
                   <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                     <Card className="p-3 border-0 shadow-sm rounded-2xl h-full flex flex-col justify-between bg-white hover:shadow-md transition-shadow">
                       <div>
-                        {/* Image — tap to lightbox */}
+                        {/* Thumbnail with zoom icon top-right */}
                         <div className="relative aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
                           {item.imageUrl ? (
                             <>
@@ -238,15 +263,15 @@ export default function OrderPage() {
                                 loading="lazy"
                                 className="w-full h-full object-cover"
                               />
-                              {/* Magnifier overlay — bottom-right, fires lightbox */}
+                              {/* Zoom icon — top-right, green circle, 70% opacity */}
                               <button
                                 type="button"
                                 aria-label={`Zoom ${item.name}`}
-                                className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-lg bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
-                                onClick={e => { e.stopPropagation(); setLightboxUrl(item.imageUrl!); setLightboxAlt(item.name); }}
-                                onTouchStart={e => { e.stopPropagation(); setLightboxUrl(item.imageUrl!); setLightboxAlt(item.name); }}
+                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary/70 flex items-center justify-center text-white shadow-sm hover:bg-primary transition-colors"
+                                onClick={e => { e.stopPropagation(); openLightbox(item.imageUrl!, item.name); }}
+                                onTouchStart={e => { e.stopPropagation(); openLightbox(item.imageUrl!, item.name); }}
                               >
-                                <ZoomIn size={14} strokeWidth={2.5} />
+                                <ZoomIn size={13} strokeWidth={2.5} />
                               </button>
                             </>
                           ) : (
@@ -258,6 +283,7 @@ export default function OrderPage() {
                             </span>
                           )}
                         </div>
+
                         <h3 className="font-semibold text-foreground text-sm leading-tight line-clamp-2">{item.name}</h3>
                         <p className="text-xs text-muted-foreground mt-1">{item.unit}</p>
                         {hasBrands && (
@@ -302,25 +328,16 @@ export default function OrderPage() {
               })}
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 mt-6">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={safePage === 1}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  <ChevronLeft size={16} /> Previous
-                </button>
-                <span className="text-sm font-medium text-muted-foreground">{safePage} / {totalPages}</span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={safePage === totalPages}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  Next <ChevronRight size={16} />
-                </button>
+            {/* Infinite scroll sentinel */}
+            {hasMore && (
+              <div ref={sentinelRef} className="flex justify-center py-6">
+                <Loader2 size={20} className="animate-spin text-muted-foreground/40" />
               </div>
+            )}
+
+            {/* All-loaded indicator */}
+            {!hasMore && filteredItems.length > PAGE_SIZE && (
+              <p className="text-center text-xs text-muted-foreground/50 py-4">All {filteredItems.length} items shown</p>
             )}
           </>
         )}
@@ -329,49 +346,46 @@ export default function OrderPage() {
       {/* ── Image Lightbox Modal ─────────────────────────────────────────── */}
       <AnimatePresence>
         {lightboxUrl && (
-          <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lightboxAlt}
+            onClick={() => setLightboxUrl(null)}
+          >
             <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4"
-              role="dialog"
-              aria-modal="true"
-              aria-label={lightboxAlt}
-              onClick={() => setLightboxUrl(null)}
+              initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
+              onClick={e => e.stopPropagation()}
             >
-              <motion.div
-                initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
-                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-                className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
-                onClick={e => e.stopPropagation()}
+              <img
+                src={lightboxUrl}
+                alt={lightboxAlt}
+                className="max-w-[90vw] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+              />
+              <button
+                onClick={() => setLightboxUrl(null)}
+                className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white shadow-lg flex items-center justify-center text-foreground hover:bg-gray-100 transition-colors"
+                aria-label="Close image"
               >
-                <img
-                  src={lightboxUrl}
-                  alt={lightboxAlt}
-                  className="max-w-[90vw] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
-                />
-                <button
-                  onClick={() => setLightboxUrl(null)}
-                  className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white shadow-lg flex items-center justify-center text-foreground hover:bg-gray-100 transition-colors"
-                  aria-label="Close image"
-                >
-                  <X size={18} />
-                </button>
-                {lightboxAlt && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-sm font-medium px-4 py-2 rounded-b-2xl text-center">
-                    {lightboxAlt}
-                  </div>
-                )}
-              </motion.div>
+                <X size={18} />
+              </button>
+              {lightboxAlt && (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-sm font-medium px-4 py-2 rounded-b-2xl text-center">
+                  {lightboxAlt}
+                </div>
+              )}
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Quick-Add Quantity Selector (no-brand items) ─────────────────── */}
+      {/* ── Quick-Add Quantity Selector ───────────────────────────────────── */}
       <AnimatePresence>
         {quickAddItem && (
           <>
-            {/* Backdrop — z-[55] to sit above BottomNav (z-50) */}
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/40 z-[55]"
@@ -397,7 +411,6 @@ export default function OrderPage() {
                   </div>
                 </div>
               </div>
-              {/* pb-20 clears the 64px BottomNav on mobile */}
               <div className="px-5 pt-6 pb-20">
                 <p className="text-xs text-muted-foreground mb-4 text-center">How many would you like?</p>
                 <div className="flex items-center justify-center gap-6 mb-6">
@@ -418,7 +431,6 @@ export default function OrderPage() {
                 <div className="text-center text-sm text-muted-foreground mb-5">
                   Total: <span className="font-bold text-foreground">₵{(quickAddItem.price * quickAddQty).toFixed(2)}</span>
                 </div>
-                {/* onTouchStart+preventDefault = immediate response without double-fire */}
                 <Button
                   className="w-full h-14 rounded-2xl text-base font-bold gap-2 bg-primary hover:bg-primary/90 active:scale-[0.98] transition-transform"
                   onClick={handleQuickAddConfirm}
