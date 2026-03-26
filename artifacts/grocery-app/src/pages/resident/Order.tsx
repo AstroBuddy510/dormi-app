@@ -5,7 +5,7 @@ import { useCart } from '@/store';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2, X, ChevronLeft, ChevronRight, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2, X, ChevronLeft, ChevronRight, ShoppingCart, ZoomIn } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -229,24 +229,26 @@ export default function OrderPage() {
                     <Card className="p-3 border-0 shadow-sm rounded-2xl h-full flex flex-col justify-between bg-white hover:shadow-md transition-shadow">
                       <div>
                         {/* Image — tap to lightbox */}
-                        <div
-                          className="aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden cursor-pointer"
-                          onClick={() => {
-                            if (item.imageUrl) {
-                              setLightboxUrl(item.imageUrl);
-                              setLightboxAlt(item.name);
-                            }
-                          }}
-                        >
+                        <div className="relative aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
                           {item.imageUrl ? (
-                            <img
-                              src={item.imageUrl}
-                              alt={item.name}
-                              loading="lazy"
-                              className="w-full h-full object-cover"
-                              style={{ filter: 'blur(0px)', transition: 'filter 0.3s' }}
-                              onLoad={e => { (e.target as HTMLImageElement).style.filter = 'blur(0px)'; }}
-                            />
+                            <>
+                              <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                loading="lazy"
+                                className="w-full h-full object-cover"
+                              />
+                              {/* Magnifier overlay — bottom-right, fires lightbox */}
+                              <button
+                                type="button"
+                                aria-label={`Zoom ${item.name}`}
+                                className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-lg bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+                                onClick={e => { e.stopPropagation(); setLightboxUrl(item.imageUrl!); setLightboxAlt(item.name); }}
+                                onTouchStart={e => { e.stopPropagation(); setLightboxUrl(item.imageUrl!); setLightboxAlt(item.name); }}
+                              >
+                                <ZoomIn size={14} strokeWidth={2.5} />
+                              </button>
+                            </>
                           ) : (
                             <span className="text-4xl">
                               {item.category === 'Vegetables' ? '🥦' :
@@ -369,15 +371,16 @@ export default function OrderPage() {
       <AnimatePresence>
         {quickAddItem && (
           <>
+            {/* Backdrop — z-[55] to sit above BottomNav (z-50) */}
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-50"
+              className="fixed inset-0 bg-black/40 z-[55]"
               onClick={() => setQuickAddItem(null)}
             />
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
+              className="fixed bottom-0 left-0 right-0 z-[56] bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
               role="dialog"
               aria-modal="true"
             >
@@ -394,7 +397,8 @@ export default function OrderPage() {
                   </div>
                 </div>
               </div>
-              <div className="px-5 py-6">
+              {/* pb-20 clears the 64px BottomNav on mobile */}
+              <div className="px-5 pt-6 pb-20">
                 <p className="text-xs text-muted-foreground mb-4 text-center">How many would you like?</p>
                 <div className="flex items-center justify-center gap-6 mb-6">
                   <button
@@ -414,9 +418,11 @@ export default function OrderPage() {
                 <div className="text-center text-sm text-muted-foreground mb-5">
                   Total: <span className="font-bold text-foreground">₵{(quickAddItem.price * quickAddQty).toFixed(2)}</span>
                 </div>
+                {/* onTouchStart+preventDefault = immediate response without double-fire */}
                 <Button
-                  className="w-full h-13 rounded-2xl text-base font-bold gap-2 bg-primary hover:bg-primary/90"
+                  className="w-full h-14 rounded-2xl text-base font-bold gap-2 bg-primary hover:bg-primary/90 active:scale-[0.98] transition-transform"
                   onClick={handleQuickAddConfirm}
+                  onTouchStart={e => { e.preventDefault(); handleQuickAddConfirm(); }}
                 >
                   <ShoppingCart size={18} />
                   Add {quickAddQty} to Cart · ₵{(quickAddItem.price * quickAddQty).toFixed(2)}
@@ -433,13 +439,13 @@ export default function OrderPage() {
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-50"
+              className="fixed inset-0 bg-black/40 z-[55]"
               onClick={() => setBrandPickerItem(null)}
             />
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
+              className="fixed bottom-0 left-0 right-0 z-[56] bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
               role="dialog"
               aria-modal="true"
             >
@@ -479,7 +485,7 @@ export default function OrderPage() {
                   );
                 })}
               </div>
-              <div className="px-5 pb-6 pt-2">
+              <div className="px-5 pb-20 pt-2">
                 <Button variant="outline" className="w-full rounded-2xl" onClick={() => setBrandPickerItem(null)}>Done</Button>
               </div>
             </motion.div>
