@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,8 +35,12 @@ import {
 import {
   ShoppingBasket, Plus, Trash2, Search, CheckCircle2, XCircle,
   PackagePlus, Bell, Boxes, Filter, X, Tag, ImagePlus, Loader2,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
+
 import { useToast } from '@/hooks/use-toast';
+
+const ADMIN_PAGE_SIZE = 20;
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -310,12 +314,20 @@ function CatalogueTab() {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => items.filter(i => {
     const matchCat = filterCat === 'All' || i.category === filterCat;
     const matchSearch = i.name.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   }), [items, search, filterCat]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [search, filterCat]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedItems = filtered.slice((safePage - 1) * ADMIN_PAGE_SIZE, safePage * ADMIN_PAGE_SIZE);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -364,6 +376,9 @@ function CatalogueTab() {
         <span>·</span>
         <span><strong className="text-foreground">{filtered.length}</strong> shown</span>
         {filterCat !== 'All' && <Badge variant="outline" className="text-xs">{filterCat}</Badge>}
+        {totalPages > 1 && (
+          <span className="ml-auto">Page <strong className="text-foreground">{safePage}</strong> of {totalPages}</span>
+        )}
       </div>
 
       {/* Items table */}
@@ -388,12 +403,12 @@ function CatalogueTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {filtered.map((item: any) => (
+              {pagedItems.map((item: any) => (
                 <tr key={item.id} className="bg-white hover:bg-secondary/30 transition-colors">
                   <td className="px-4 py-3 font-medium">
                     <div className="flex items-center gap-2.5">
                       {item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
+                        <img src={item.imageUrl} alt={item.name} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
                       ) : (
                         <span className="text-xl leading-none">{CATEGORY_EMOJI[item.category] || '📦'}</span>
                       )}
@@ -431,6 +446,31 @@ function CatalogueTab() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-4">
+          <Button
+            variant="outline" size="sm"
+            className="rounded-xl gap-1.5"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage === 1}
+          >
+            <ChevronLeft size={15} /> Previous
+          </Button>
+          <span className="text-sm text-muted-foreground font-medium">
+            {safePage} / {totalPages}
+          </span>
+          <Button
+            variant="outline" size="sm"
+            className="rounded-xl gap-1.5"
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage === totalPages}
+          >
+            Next <ChevronRight size={15} />
+          </Button>
         </div>
       )}
 

@@ -1,81 +1,98 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { useListItems, GroceryItemCategory } from '@workspace/api-client-react';
 import { useCart } from '@/store';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ShoppingBag, ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Search, PackagePlus, Send, Trash2, X, ChevronLeft, ChevronRight, ShoppingCart } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const PAGE_SIZE = 20;
 
 export default function OrderPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: items = [], isLoading } = useListItems();
-  const { items: cartItems, addItem, removeItem, getCartTotal, clearCart } = useCart();
-  
+  const { items: cartItems, addItem, getCartTotal, clearCart } = useCart();
+
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   // Item request state
   const [requestDesc, setRequestDesc] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
 
+  // Image lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxAlt, setLightboxAlt] = useState('');
+
+  // Brand picker
+  const [brandPickerItem, setBrandPickerItem] = useState<any>(null);
+
+  // Quick-add quantity selector (non-brand items)
+  const [quickAddItem, setQuickAddItem] = useState<any>(null);
+  const [quickAddQty, setQuickAddQty] = useState(1);
+
   const categories = ['All', ...Object.values(GroceryItemCategory)];
 
   const filteredItems = useMemo(() => {
-    return items.filter(item => {
+    const result = items.filter(item => {
       const matchCat = activeCategory === 'All' || item.category === activeCategory;
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     });
+    return result;
   }, [items, activeCategory, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedItems = filteredItems.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const resetPage = useCallback(() => setPage(1), []);
+
+  const handleCategoryChange = (cat: string) => { setActiveCategory(cat); resetPage(); };
+  const handleSearchChange = (val: string) => { setSearch(val); resetPage(); };
 
   const totalCartItems = Object.values(cartItems).reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = getCartTotal();
-
-  // Brand picker state
-  const [brandPickerItem, setBrandPickerItem] = useState<any>(null);
 
   const getItemQuantity = (itemId: number) =>
     Object.entries(cartItems)
       .filter(([key]) => key === String(itemId) || key.startsWith(`${itemId}::`))
       .reduce((sum, [, ci]) => sum + ci.quantity, 0);
 
-  const getBrandQuantity = (itemId: number, brand?: string) => {
-    const key = brand ? `${itemId}::${brand}` : String(itemId);
+  const getBrandQuantity = (itemId: number, brand: string) => {
+    const key = `${itemId}::${brand}`;
     return (cartItems as any)[key]?.quantity || 0;
   };
 
-  const handleAddItem = (item: any, qty: number, brand?: string) => {
-    addItem(item, qty, brand);
-  };
-
+  // When tapping + on a no-brand item for the first time → open quick-add
   const handlePlusClick = (item: any) => {
-    const hasBrands = item.brands && item.brands.length > 0;
-    if (hasBrands) {
+    if (item.brands && item.brands.length > 0) {
       setBrandPickerItem(item);
     } else {
-      addItem(item, 1);
+      setQuickAddItem(item);
+      setQuickAddQty(1);
     }
+  };
+
+  const handleQuickAddConfirm = () => {
+    if (!quickAddItem) return;
+    addItem(quickAddItem, quickAddQty);
+    setQuickAddItem(null);
+    setQuickAddQty(1);
   };
 
   const handleSubmitRequest = async () => {
@@ -112,15 +129,15 @@ export default function OrderPage() {
           </button>
           <h1 className="text-xl font-display font-bold flex-1">Shop Groceries</h1>
         </div>
-        
+
         <div className="px-4 pb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input 
-              placeholder="Search items..." 
+            <Input
+              placeholder="Search items..."
               className="pl-10 h-12 bg-gray-100 border-transparent rounded-xl focus-visible:ring-primary/20 focus-visible:border-primary"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
             />
           </div>
         </div>
@@ -130,10 +147,10 @@ export default function OrderPage() {
           {categories.map(cat => (
             <button
               key={cat}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => handleCategoryChange(cat)}
               className={`whitespace-nowrap px-5 py-2 rounded-full font-medium text-sm transition-all duration-200 ${
-                activeCategory === cat 
-                  ? 'bg-primary text-white shadow-md shadow-primary/20' 
+                activeCategory === cat
+                  ? 'bg-primary text-white shadow-md shadow-primary/20'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -144,11 +161,15 @@ export default function OrderPage() {
       </div>
 
       {/* Items Grid */}
-      <div className="p-4 grid grid-cols-2 gap-4 max-w-md mx-auto">
+      <div className="p-4 max-w-md mx-auto">
         {isLoading ? (
-          <div className="col-span-2 text-center py-12 text-muted-foreground">Loading fresh items...</div>
+          <div className="grid grid-cols-2 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl shadow-sm h-52 animate-pulse" />
+            ))}
+          </div>
         ) : filteredItems.length === 0 ? (
-          <div className="col-span-2 py-6">
+          <div className="py-6">
             <div className="text-center mb-5">
               <PackagePlus size={36} className="mx-auto mb-2 text-muted-foreground/40" />
               <p className="font-semibold text-foreground">
@@ -156,125 +177,257 @@ export default function OrderPage() {
               </p>
               {search && <p className="text-xs text-muted-foreground mt-1">Can't find what you need? Request it below.</p>}
             </div>
-
             <AnimatePresence>
               {search && !requestSent && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="bg-white rounded-2xl shadow-sm border border-border/50 p-4 space-y-3"
                 >
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <PackagePlus size={16} className="text-primary" /> Request this item
                   </div>
-                  <div className="bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 text-sm font-semibold text-primary">
-                    {search}
-                  </div>
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 text-sm font-semibold text-primary">{search}</div>
                   <Textarea
                     placeholder="Any details? (brand, size, quantity…) — optional"
                     className="rounded-xl text-sm resize-none h-20"
                     value={requestDesc}
                     onChange={e => setRequestDesc(e.target.value)}
                   />
-                  <Button
-                    className="w-full rounded-xl bg-primary hover:bg-primary/90 gap-2"
-                    onClick={handleSubmitRequest}
-                    disabled={submittingRequest}
-                  >
+                  <Button className="w-full rounded-xl bg-primary hover:bg-primary/90 gap-2" onClick={handleSubmitRequest} disabled={submittingRequest}>
                     <Send size={15} /> {submittingRequest ? 'Sending…' : 'Send Request'}
                   </Button>
                 </motion.div>
               )}
               {search && requestSent && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                  initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
                   className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center"
                 >
                   <p className="text-2xl mb-2">✅</p>
                   <p className="font-semibold text-green-800">Request sent!</p>
                   <p className="text-xs text-green-700 mt-1">We'll notify you when it's available.</p>
-                  <button
-                    onClick={() => { setRequestSent(false); setSearch(''); setRequestDesc(''); }}
-                    className="mt-3 text-xs underline text-green-700"
-                  >
-                    Browse more items
-                  </button>
+                  <button onClick={() => { setRequestSent(false); setSearch(''); setRequestDesc(''); }}
+                    className="mt-3 text-xs underline text-green-700">Browse more items</button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         ) : (
-          filteredItems.map(item => {
-            const quantity = getItemQuantity(item.id);
-            const hasBrands = item.brands && item.brands.length > 0;
-            return (
-              <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Card className="p-3 border-0 shadow-sm rounded-2xl h-full flex flex-col justify-between bg-white hover:shadow-md transition-shadow">
-                  <div>
-                    <div className="aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-4xl">
-                          {item.category === 'Vegetables' ? '🥦' :
-                           item.category === 'Fruits' ? '🍎' :
-                           item.category === 'Meat' ? '🥩' :
-                           item.category === 'Dairy' ? '🥛' : '📦'}
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-semibold text-foreground text-sm leading-tight line-clamp-2">{item.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{item.unit}</p>
-                    {hasBrands && (
-                      <p className="text-xs text-primary/70 mt-0.5 font-medium">
-                        {item.brands.length} brand{item.brands.length > 1 ? 's' : ''} available
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="font-bold text-primary">₵{item.price.toFixed(2)}</span>
-                    
-                    {!hasBrands && quantity > 0 ? (
-                      <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                        <button onClick={() => addItem(item, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-foreground hover:bg-gray-50">
-                          <Minus size={14} />
-                        </button>
-                        <span className="font-medium text-sm w-4 text-center">{quantity}</span>
-                        <button onClick={() => addItem(item, 1)} className="w-6 h-6 flex items-center justify-center bg-primary text-white rounded shadow-sm hover:bg-primary/90">
-                          <Plus size={14} />
-                        </button>
+          <>
+            {/* Item count + page info */}
+            <div className="flex items-center justify-between mb-3 text-xs text-muted-foreground">
+              <span>{filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}</span>
+              {totalPages > 1 && <span>Page {safePage} of {totalPages}</span>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {pagedItems.map(item => {
+                const quantity = getItemQuantity(item.id);
+                const hasBrands = item.brands && item.brands.length > 0;
+                return (
+                  <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <Card className="p-3 border-0 shadow-sm rounded-2xl h-full flex flex-col justify-between bg-white hover:shadow-md transition-shadow">
+                      <div>
+                        {/* Image — tap to lightbox */}
+                        <div
+                          className="aspect-square bg-gray-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden cursor-pointer"
+                          onClick={() => {
+                            if (item.imageUrl) {
+                              setLightboxUrl(item.imageUrl);
+                              setLightboxAlt(item.name);
+                            }
+                          }}
+                        >
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                              style={{ filter: 'blur(0px)', transition: 'filter 0.3s' }}
+                              onLoad={e => { (e.target as HTMLImageElement).style.filter = 'blur(0px)'; }}
+                            />
+                          ) : (
+                            <span className="text-4xl">
+                              {item.category === 'Vegetables' ? '🥦' :
+                               item.category === 'Fruits' ? '🍎' :
+                               item.category === 'Meat' ? '🥩' :
+                               item.category === 'Dairy' ? '🥛' : '📦'}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-semibold text-foreground text-sm leading-tight line-clamp-2">{item.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1">{item.unit}</p>
+                        {hasBrands && (
+                          <p className="text-xs text-primary/70 mt-0.5 font-medium">
+                            {item.brands.length} brand{item.brands.length > 1 ? 's' : ''} available
+                          </p>
+                        )}
                       </div>
-                    ) : hasBrands && quantity > 0 ? (
-                      <button
-                        onClick={() => setBrandPickerItem(item)}
-                        className="flex items-center gap-1 bg-primary text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 hover:bg-primary/90 transition-colors"
-                      >
-                        <Plus size={12} /> {quantity} in cart
-                      </button>
-                    ) : (
-                      <button 
-                        onClick={() => handlePlusClick(item)}
-                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
-                      >
-                        <Plus size={18} />
-                      </button>
-                    )}
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="font-bold text-primary">₵{item.price.toFixed(2)}</span>
+
+                        {!hasBrands && quantity > 0 ? (
+                          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                            <button onClick={() => addItem(item, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-foreground hover:bg-gray-50">
+                              <Minus size={14} />
+                            </button>
+                            <span className="font-medium text-sm w-4 text-center">{quantity}</span>
+                            <button onClick={() => addItem(item, 1)} className="w-6 h-6 flex items-center justify-center bg-primary text-white rounded shadow-sm hover:bg-primary/90">
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        ) : hasBrands && quantity > 0 ? (
+                          <button
+                            onClick={() => setBrandPickerItem(item)}
+                            className="flex items-center gap-1 bg-primary text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 hover:bg-primary/90 transition-colors"
+                          >
+                            <Plus size={12} /> {quantity} in cart
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handlePlusClick(item)}
+                            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
+                          >
+                            <Plus size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  <ChevronLeft size={16} /> Previous
+                </button>
+                <span className="text-sm font-medium text-muted-foreground">{safePage} / {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Brand Picker Bottom Sheet */}
+      {/* ── Image Lightbox Modal ─────────────────────────────────────────── */}
+      <AnimatePresence>
+        {lightboxUrl && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label={lightboxAlt}
+              onClick={() => setLightboxUrl(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
+                onClick={e => e.stopPropagation()}
+              >
+                <img
+                  src={lightboxUrl}
+                  alt={lightboxAlt}
+                  className="max-w-[90vw] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+                />
+                <button
+                  onClick={() => setLightboxUrl(null)}
+                  className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white shadow-lg flex items-center justify-center text-foreground hover:bg-gray-100 transition-colors"
+                  aria-label="Close image"
+                >
+                  <X size={18} />
+                </button>
+                {lightboxAlt && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-sm font-medium px-4 py-2 rounded-b-2xl text-center">
+                    {lightboxAlt}
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Quick-Add Quantity Selector (no-brand items) ─────────────────── */}
+      <AnimatePresence>
+        {quickAddItem && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-50"
+              onClick={() => setQuickAddItem(null)}
+            />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="px-5 pt-4 pb-2 border-b border-border">
+                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3" />
+                <div className="flex items-center gap-3">
+                  {quickAddItem.imageUrl && (
+                    <img src={quickAddItem.imageUrl} alt={quickAddItem.name} loading="lazy"
+                      className="w-12 h-12 rounded-xl object-cover border border-border shrink-0" />
+                  )}
+                  <div>
+                    <h3 className="font-bold text-foreground text-base leading-tight">{quickAddItem.name}</h3>
+                    <p className="text-sm text-primary font-semibold">₵{quickAddItem.price.toFixed(2)} · {quickAddItem.unit}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-6">
+                <p className="text-xs text-muted-foreground mb-4 text-center">How many would you like?</p>
+                <div className="flex items-center justify-center gap-6 mb-6">
+                  <button
+                    onClick={() => setQuickAddQty(q => Math.max(1, q - 1))}
+                    className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-foreground hover:bg-gray-200 transition-colors"
+                  >
+                    <Minus size={20} />
+                  </button>
+                  <span className="text-3xl font-bold text-foreground w-12 text-center">{quickAddQty}</span>
+                  <button
+                    onClick={() => setQuickAddQty(q => Math.min(20, q + 1))}
+                    className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-colors"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </div>
+                <div className="text-center text-sm text-muted-foreground mb-5">
+                  Total: <span className="font-bold text-foreground">₵{(quickAddItem.price * quickAddQty).toFixed(2)}</span>
+                </div>
+                <Button
+                  className="w-full h-13 rounded-2xl text-base font-bold gap-2 bg-primary hover:bg-primary/90"
+                  onClick={handleQuickAddConfirm}
+                >
+                  <ShoppingCart size={18} />
+                  Add {quickAddQty} to Cart · ₵{(quickAddItem.price * quickAddQty).toFixed(2)}
+                </Button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Brand Picker Bottom Sheet ─────────────────────────────────────── */}
       <AnimatePresence>
         {brandPickerItem && (
           <>
@@ -287,6 +440,8 @@ export default function OrderPage() {
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-md mx-auto"
+              role="dialog"
+              aria-modal="true"
             >
               <div className="px-5 pt-4 pb-2 border-b border-border">
                 <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3" />
@@ -304,17 +459,17 @@ export default function OrderPage() {
                       </div>
                       {bQty > 0 ? (
                         <div className="flex items-center gap-2 bg-white rounded-xl p-1 border border-border">
-                          <button onClick={() => handleAddItem(brandPickerItem, -1, brand)} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-lg text-foreground hover:bg-gray-200">
+                          <button onClick={() => addItem(brandPickerItem, -1, brand)} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-lg text-foreground hover:bg-gray-200">
                             <Minus size={13} />
                           </button>
                           <span className="font-semibold text-sm w-5 text-center">{bQty}</span>
-                          <button onClick={() => handleAddItem(brandPickerItem, 1, brand)} className="w-7 h-7 flex items-center justify-center bg-primary text-white rounded-lg hover:bg-primary/90">
+                          <button onClick={() => addItem(brandPickerItem, 1, brand)} className="w-7 h-7 flex items-center justify-center bg-primary text-white rounded-lg hover:bg-primary/90">
                             <Plus size={13} />
                           </button>
                         </div>
                       ) : (
                         <button
-                          onClick={() => handleAddItem(brandPickerItem, 1, brand)}
+                          onClick={() => { addItem(brandPickerItem, 1, brand); setBrandPickerItem(null); }}
                           className="bg-primary text-white text-xs font-semibold rounded-xl px-3 py-2 hover:bg-primary/90 transition-colors flex items-center gap-1"
                         >
                           <Plus size={12} /> Add
@@ -325,22 +480,16 @@ export default function OrderPage() {
                 })}
               </div>
               <div className="px-5 pb-6 pt-2">
-                <Button
-                  variant="outline"
-                  className="w-full rounded-2xl"
-                  onClick={() => setBrandPickerItem(null)}
-                >
-                  Done
-                </Button>
+                <Button variant="outline" className="w-full rounded-2xl" onClick={() => setBrandPickerItem(null)}>Done</Button>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* Floating Cart Bar */}
+      {/* ── Floating Cart Bar ─────────────────────────────────────────────── */}
       {totalCartItems > 0 && (
-        <motion.div 
+        <motion.div
           initial={{ y: 100 }} animate={{ y: 0 }}
           className="fixed bottom-20 left-4 right-4 z-40 max-w-md mx-auto flex gap-2"
         >
@@ -359,17 +508,12 @@ export default function OrderPage() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel className="rounded-xl">Keep items</AlertDialogCancel>
-                <AlertDialogAction
-                  className="rounded-xl bg-red-500 hover:bg-red-600"
-                  onClick={clearCart}
-                >
-                  Clear cart
-                </AlertDialogAction>
+                <AlertDialogAction className="rounded-xl bg-red-500 hover:bg-red-600" onClick={clearCart}>Clear cart</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
 
-          <Button 
+          <Button
             className="flex-1 h-14 bg-primary hover:bg-primary/90 text-white rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-between px-6"
             onClick={() => setLocation('/checkout')}
           >
