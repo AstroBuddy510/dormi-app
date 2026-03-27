@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
 import { LayoutDashboard, Receipt, CreditCard, Wallet, LogOut } from 'lucide-react';
-import { cn } from '@/components/ui/StatusBadge';
+import { cn } from '@/lib/utils';
 
 export function AccountantSidebar() {
   const [location] = useLocation();

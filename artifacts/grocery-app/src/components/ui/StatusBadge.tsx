@@ -1,40 +1,30 @@
-import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { OrderStatus } from '@workspace/api-client-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '@/lib/utils';
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+const STATUS_LABEL: Record<string, string> = {
+  pending:    'Pending',
+  accepted:   'Order Received',
+  ready:      'Being Prepared',
+  in_transit: 'On the Way',
+  delivered:  'Delivered',
+  cancelled:  'Cancelled',
+};
 
-export function StatusBadge({ status, className }: { status: string, className?: string }) {
-  const getStatusColor = (s: string) => {
-    switch (s) {
-      case OrderStatus.pending:
-        return 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200';
-      case OrderStatus.accepted:
-        return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200';
-      case OrderStatus.ready:
-        return 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200';
-      case OrderStatus.in_transit:
-        return 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200';
-      case OrderStatus.delivered:
-        return 'bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-200';
-      case OrderStatus.cancelled:
-        return 'bg-zinc-100 text-zinc-800 hover:bg-zinc-200 border-zinc-200';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+const STATUS_COLOR: Record<string, string> = {
+  pending:    'bg-amber-50 text-amber-700 border-amber-200',
+  accepted:   'bg-blue-50 text-blue-700 border-blue-200',
+  ready:      'bg-indigo-50 text-indigo-700 border-indigo-200',
+  in_transit: 'bg-purple-50 text-purple-700 border-purple-200',
+  delivered:  'bg-green-50 text-green-700 border-green-200',
+  cancelled:  'bg-red-50 text-red-600 border-red-200',
+};
 
-  const getStatusText = (s: string) => {
-    return s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-  };
-
+export function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const label = STATUS_LABEL[status] ?? status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const color = STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-700 border-gray-200';
   return (
-    <Badge variant="outline" className={cn("font-medium px-2.5 py-0.5", getStatusColor(status), className)}>
-      {getStatusText(status)}
+    <Badge variant="outline" className={cn('font-medium px-2.5 py-0.5', color, className)}>
+      {label}
     </Badge>
   );
 }

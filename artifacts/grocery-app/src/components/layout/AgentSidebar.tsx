@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
 import { LayoutDashboard, PackagePlus, MessageSquareWarning, LogOut, Headphones, PhoneCall } from 'lucide-react';
-import { cn } from '@/components/ui/StatusBadge';
+import { cn } from '@/lib/utils';
 
 export function AgentSidebar() {
   const [location] = useLocation();

@@ -6,8 +6,10 @@ import { format } from 'date-fns';
 import {
   Receipt, MapPin, User, Phone, Store, Bike, Clock,
   CreditCard, Package, Camera, FileText, Printer, X,
+  ShoppingBag, CheckCheck, UtensilsCrossed, Home,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   Vegetables: '🥦', Fruits: '🍎', Meat: '🥩', Dairy: '🥛',
@@ -30,6 +32,105 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
     </div>
   );
 }
+
+// ── Order Progress Tracker ──────────────────────────────────────────────────
+
+const PROGRESS_STEPS = [
+  { key: 'pending',    label: 'Order Placed',    Icon: ShoppingBag },
+  { key: 'accepted',   label: 'Order Received',  Icon: CheckCheck },
+  { key: 'ready',      label: 'Being Prepared',  Icon: UtensilsCrossed },
+  { key: 'in_transit', label: 'On the Way',      Icon: Bike },
+  { key: 'delivered',  label: 'Delivered',       Icon: Home },
+] as const;
+
+const STEP_ORDER = PROGRESS_STEPS.map(s => s.key);
+
+function getStepIndex(status: string): number {
+  const idx = STEP_ORDER.indexOf(status as typeof STEP_ORDER[number]);
+  return idx === -1 ? 0 : idx;
+}
+
+function OrderProgressTracker({ status }: { status: string }) {
+  const cancelled = status === 'cancelled';
+  const currentIdx = cancelled ? -1 : getStepIndex(status);
+
+  return (
+    <div className="bg-white rounded-2xl border border-border/60 px-4 pt-4 pb-5 shadow-sm">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+        Order Status
+      </p>
+
+      {cancelled ? (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <span className="text-red-500 text-lg">✕</span>
+          <div>
+            <p className="font-semibold text-red-700 text-sm">Order Cancelled</p>
+            <p className="text-xs text-red-400">This order was cancelled.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start justify-between gap-1">
+          {PROGRESS_STEPS.map((step, idx) => {
+            const done    = idx < currentIdx;
+            const active  = idx === currentIdx;
+            const future  = idx > currentIdx;
+
+            return (
+              <div key={step.key} className="flex flex-col items-center flex-1 relative">
+                {/* Connector line – left half */}
+                {idx > 0 && (
+                  <div
+                    className={cn(
+                      'absolute left-0 top-4 w-1/2 h-0.5 -translate-y-1/2',
+                      done || active ? 'bg-primary' : 'bg-gray-200',
+                    )}
+                  />
+                )}
+                {/* Connector line – right half */}
+                {idx < PROGRESS_STEPS.length - 1 && (
+                  <div
+                    className={cn(
+                      'absolute right-0 top-4 w-1/2 h-0.5 -translate-y-1/2',
+                      done ? 'bg-primary' : 'bg-gray-200',
+                    )}
+                  />
+                )}
+
+                {/* Circle icon */}
+                <div
+                  className={cn(
+                    'relative z-10 flex items-center justify-center rounded-full w-8 h-8 shrink-0 transition-all',
+                    done   && 'bg-primary text-white shadow-sm',
+                    active && 'bg-primary text-white shadow-md ring-4 ring-primary/20',
+                    future && 'bg-gray-100 text-gray-400',
+                  )}
+                >
+                  <step.Icon size={14} />
+                  {active && (
+                    <span className="absolute inset-0 rounded-full bg-primary/30 animate-ping" />
+                  )}
+                </div>
+
+                {/* Label */}
+                <p
+                  className={cn(
+                    'mt-2 text-center leading-tight',
+                    done || active ? 'text-primary font-semibold' : 'text-gray-400 font-medium',
+                    'text-[9px]',
+                  )}
+                >
+                  {step.label}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 interface OrderDetailModalProps {
   order: any | null;
@@ -184,6 +285,9 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
         </div>
 
         <div className="px-5 py-4 space-y-5">
+
+          {/* Progress tracker */}
+          <OrderProgressTracker status={order.status} />
 
           {/* Resident Info */}
           <Section title="Customer" icon={User}>

@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { Home, ShoppingBag, User, ListOrdered, PhoneCall, Truck, LogOut } from 'lucide-react';
 import { useAuth } from '@/store';
-import { cn } from '@/components/ui/StatusBadge';
+import { cn } from '@/lib/utils';
 
 export function BottomNav() {
   const [location] = useLocation();

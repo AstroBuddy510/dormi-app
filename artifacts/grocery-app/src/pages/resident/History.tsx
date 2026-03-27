@@ -52,7 +52,7 @@ export default function ResidentHistory() {
   const { user } = useAuth();
   const { data: orders = [], isLoading } = useListOrders(
     { residentId: user?.id },
-    { query: { enabled: !!user?.id } }
+    { query: { enabled: !!user?.id, refetchInterval: 15000 } }
   );
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -78,9 +78,17 @@ export default function ResidentHistory() {
     setPage(1);
   }
 
+  const IN_PROGRESS_STATUSES = ['accepted', 'ready', 'in_transit'];
+
   const filtered = useMemo(() => {
     return orders.filter((order) => {
-      if (statusFilter !== 'all' && order.status !== statusFilter) return false;
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'in_progress') {
+          if (!IN_PROGRESS_STATUSES.includes(order.status)) return false;
+        } else if (order.status !== statusFilter) {
+          return false;
+        }
+      }
 
       const orderDate = parseISO(order.createdAt);
       if (fromDate) {
@@ -356,7 +364,7 @@ export default function ResidentHistory() {
       )}
 
       <OrderDetailModal
-        order={selectedOrder}
+        order={selectedOrder ? (orders.find(o => o.id === selectedOrder.id) ?? selectedOrder) : null}
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
       />

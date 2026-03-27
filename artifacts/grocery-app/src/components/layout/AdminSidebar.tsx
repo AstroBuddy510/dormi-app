@@ -7,7 +7,7 @@ import {
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { cn } from '@/components/ui/StatusBadge';
+import { cn } from '@/lib/utils';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
