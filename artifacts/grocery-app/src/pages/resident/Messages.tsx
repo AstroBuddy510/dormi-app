@@ -249,7 +249,7 @@ export default function ResidentMessages() {
 
   if (selected) {
     return (
-      <div className="fixed inset-0 bg-white z-40 flex flex-col" style={{ paddingBottom: '0' }}>
+      <div className="fixed inset-0 bg-white z-[60] flex flex-col" style={{ paddingBottom: '0' }}>
         <div className="flex-1 min-h-0 flex flex-col">
           <ChatThread
             conv={selected}
