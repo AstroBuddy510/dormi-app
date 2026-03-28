@@ -289,7 +289,7 @@ export default function AgentMessages() {
 
   return (
     <AgentLayout>
-      <div className="h-[calc(100vh-4rem)] flex rounded-2xl overflow-hidden border border-border shadow-sm bg-white">
+      <div className="h-[calc(100vh-8rem)] md:h-[calc(100vh-4rem)] flex rounded-2xl overflow-hidden border border-border shadow-sm bg-white">
         {/* Left panel — conversations list (always visible on desktop, hidden on mobile when thread open) */}
         <div className={cn('w-full lg:w-80 xl:w-96 shrink-0 flex flex-col', (selected || pickingNew) && 'hidden lg:flex')}>
           {pickingNew
