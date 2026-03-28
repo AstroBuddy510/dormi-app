@@ -2,9 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageCircle, ChevronLeft, Headphones } from 'lucide-react';
+import { Send, MessageCircle, ChevronLeft, Headphones, Smile } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -23,9 +22,56 @@ function formatTime(dateStr: string) {
   return format(d, 'MMM d');
 }
 
+// ─── Emoji Picker ─────────────────────────────────────────────────────────────
+const EMOJI_GROUPS = [
+  { label: 'Faces', emojis: ['😊','😂','😅','😍','🥰','😮','😢','😡','🤔','😬','😎','🥳'] },
+  { label: 'Gestures', emojis: ['👍','👎','👋','🙏','💪','✌️','👏','🤝','☝️','🤞','🫡','❤️'] },
+  { label: 'Grocery', emojis: ['🛒','📦','🚚','🏠','🌿','🍎','🥦','🥕','🧅','🍗','🧴','🥫'] },
+  { label: 'Symbols', emojis: ['✅','❌','⚠️','🔔','📞','💬','🎉','⭐','🔥','⏰','💰','📝'] },
+];
+
+function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute bottom-full mb-2 right-0 bg-white rounded-2xl shadow-xl border border-border p-3 w-72 z-50"
+    >
+      {EMOJI_GROUPS.map(group => (
+        <div key={group.label} className="mb-2 last:mb-0">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 px-1">{group.label}</p>
+          <div className="flex flex-wrap gap-0.5">
+            {group.emojis.map(em => (
+              <button
+                key={em}
+                onClick={() => onSelect(em)}
+                className="w-9 h-9 text-xl hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors"
+              >
+                {em}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Chat Thread ──────────────────────────────────────────────────────────────
-function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; residentId: number; residentName: string; onBack: () => void }) {
+function ChatThread({ conv, residentId, residentName, onBack }: {
+  conv: any; residentId: number; residentName: string; onBack: () => void;
+}) {
   const [text, setText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -33,7 +79,7 @@ function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; res
   const { data: messages = [] } = useQuery<any[]>({
     queryKey: ['res-agent-messages', conv.residentId, conv.agentId],
     queryFn: () => apiFetch(`/agent-messages?residentId=${conv.residentId}&agentId=${conv.agentId}`),
-    refetchInterval: 6000,
+    refetchInterval: 5000,
   });
 
   const sendMutation = useMutation({
@@ -46,25 +92,28 @@ function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; res
       qc.invalidateQueries({ queryKey: ['res-agent-messages', conv.residentId, conv.agentId] });
       qc.invalidateQueries({ queryKey: ['res-conversations', residentId] });
       setText('');
+      setShowEmoji(false);
     },
     onError: () => toast({ title: 'Failed to send', variant: 'destructive' }),
   });
 
-  // Mark agent messages as read when opening thread
   useEffect(() => {
     const unread = (messages as any[]).filter(m => m.senderRole === 'agent' && !m.readAt);
-    unread.forEach(m => {
-      fetch(`${BASE}/api/agent-messages/${m.id}/read`, { method: 'PUT' });
-    });
-    if (unread.length > 0) {
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['res-conversations', residentId] }), 500);
-    }
+    unread.forEach(m => fetch(`${BASE}/api/agent-messages/${m.id}/read`, { method: 'PUT' }));
+    if (unread.length > 0) setTimeout(() => qc.invalidateQueries({ queryKey: ['res-conversations', residentId] }), 500);
   }, [messages]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }, [text]);
+
   const handleSend = () => {
-    if (!text.trim()) return;
+    if (!text.trim() || sendMutation.isPending) return;
     sendMutation.mutate(text.trim());
   };
 
@@ -72,11 +121,28 @@ function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; res
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  const insertEmoji = (emoji: string) => {
+    const el = textareaRef.current;
+    if (el) {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const newText = text.slice(0, start) + emoji + text.slice(end);
+      setText(newText);
+      setTimeout(() => { el.selectionStart = el.selectionEnd = start + emoji.length; el.focus(); }, 0);
+    } else {
+      setText(prev => prev + emoji);
+    }
+    setShowEmoji(false);
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-white shrink-0">
-        <button onClick={onBack} className="text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          onClick={onBack}
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-muted-foreground transition-colors"
+        >
           <ChevronLeft size={18} />
         </button>
         <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -84,18 +150,17 @@ function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; res
         </div>
         <div>
           <p className="font-semibold text-sm">{conv.agentName ?? 'Dormi Support'}</p>
-          <p className="text-xs text-muted-foreground">Call Agent</p>
+          <p className="text-xs text-muted-foreground">Call Agent · online</p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
-        {/* Intro note */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-3 bg-gray-50">
         <div className="flex justify-center">
-          <div className="bg-white border border-border rounded-xl px-4 py-3 max-w-xs text-center shadow-sm">
-            <Headphones size={20} className="text-primary mx-auto mb-1.5" />
+          <div className="bg-white border border-border rounded-xl px-4 py-3 max-w-[260px] text-center shadow-sm">
+            <Headphones size={18} className="text-primary mx-auto mb-1.5" />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              You're messaging a <strong className="text-foreground">Dormi Call Agent</strong>. They can help you place orders, answer questions, and schedule calls.
+              You're messaging a <strong className="text-foreground">Dormi Call Agent</strong>. They can help you with orders, questions, and more.
             </p>
           </div>
         </div>
@@ -110,9 +175,10 @@ function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; res
                   ? 'bg-primary text-white rounded-br-sm'
                   : 'bg-white text-gray-800 border border-border rounded-bl-sm',
               )}>
-                <p className="leading-snug whitespace-pre-wrap break-words">{msg.content}</p>
-                <p className={cn('text-[10px] mt-1', isResident ? 'text-white/70' : 'text-muted-foreground')}>
+                <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+                <p className={cn('text-[10px] mt-1 text-right', isResident ? 'text-white/70' : 'text-muted-foreground')}>
                   {formatTime(msg.createdAt)}
+                  {isResident && msg.readAt && <span className="ml-1">· seen</span>}
                 </p>
               </div>
             </div>
@@ -121,21 +187,40 @@ function ChatThread({ conv, residentId, residentName, onBack }: { conv: any; res
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 py-3 border-t border-border bg-white shrink-0 pb-safe">
+      {/* Input bar */}
+      <div className="px-4 py-3 border-t border-border bg-white shrink-0">
         <div className="flex gap-2 items-end">
-          <Input
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message…"
-            className="rounded-xl flex-1 text-sm"
-            disabled={sendMutation.isPending}
-          />
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message…"
+              rows={1}
+              disabled={sendMutation.isPending}
+              className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2.5 pr-9 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
+              style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '100px' }}
+            />
+            <div className="absolute right-2 bottom-2">
+              <div className="relative">
+                <button
+                  onClick={() => setShowEmoji(v => !v)}
+                  type="button"
+                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-100 transition-colors"
+                >
+                  <Smile size={15} />
+                </button>
+                {showEmoji && (
+                  <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />
+                )}
+              </div>
+            </div>
+          </div>
           <Button
             onClick={handleSend}
             disabled={!text.trim() || sendMutation.isPending}
-            className="rounded-xl h-10 w-10 p-0 bg-primary hover:bg-primary/90 shrink-0"
+            className="rounded-xl h-10 w-10 p-0 bg-primary hover:bg-primary/90 shrink-0 active:scale-95 transition-transform"
           >
             <Send size={15} />
           </Button>
@@ -150,14 +235,13 @@ export default function ResidentMessages() {
   const { user } = useAuth();
   const residentId = user?.id!;
   const residentName = user?.name ?? 'Resident';
-  const qc = useQueryClient();
 
   const [selected, setSelected] = useState<any>(null);
 
   const { data: convs = [] } = useQuery<any[]>({
     queryKey: ['res-conversations', residentId],
     queryFn: () => apiFetch(`/agent-messages/conversations?residentId=${residentId}`),
-    refetchInterval: 10000,
+    refetchInterval: 8000,
     enabled: !!residentId,
   });
 
@@ -165,8 +249,8 @@ export default function ResidentMessages() {
 
   if (selected) {
     return (
-      <div className="min-h-screen bg-white flex flex-col pb-20">
-        <div className="flex-1 flex flex-col" style={{ height: 'calc(100vh - 5rem)' }}>
+      <div className="fixed inset-0 bg-white z-40 flex flex-col" style={{ paddingBottom: '0' }}>
+        <div className="flex-1 min-h-0 flex flex-col">
           <ChatThread
             conv={selected}
             residentId={residentId}
@@ -220,8 +304,8 @@ export default function ResidentMessages() {
                     <Headphones size={18} className="text-primary" />
                   </div>
                   {conv.unread > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
-                      {conv.unread}
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                      {conv.unread > 9 ? '9+' : conv.unread}
                     </span>
                   )}
                 </div>

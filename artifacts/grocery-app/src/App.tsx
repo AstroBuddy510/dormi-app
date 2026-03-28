@@ -36,6 +36,7 @@ import AgentComplaints from "@/pages/agent/Complaints";
 import AgentCallLog from "@/pages/agent/CallLog";
 import AgentMessages from "@/pages/agent/Messages";
 import ResidentMessages from "@/pages/resident/Messages";
+import ResidentProfile from "@/pages/resident/Profile";
 import RiderJobs from "@/pages/rider/Jobs";
 import AccountantOverview from "@/pages/accountant/Overview";
 import AccountantPayroll from "@/pages/accountant/Payroll";
@@ -72,6 +73,7 @@ function RoleBasedRouter() {
         <Route path="/checkout" component={ResidentCheckout} />
         <Route path="/history" component={ResidentHistory} />
         <Route path="/messages" component={ResidentMessages} />
+        <Route path="/profile" component={ResidentProfile} />
         <Route component={NotFound} />
       </Switch>
     );
