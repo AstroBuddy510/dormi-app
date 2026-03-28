@@ -1,16 +1,28 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
-import { LayoutDashboard, PackagePlus, MessageSquareWarning, LogOut, Headphones, PhoneCall } from 'lucide-react';
+import { LayoutDashboard, PackagePlus, MessageSquareWarning, LogOut, Headphones, PhoneCall, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export function AgentSidebar() {
   const [location] = useLocation();
   const { logout, user } = useAuth();
 
+  const { data: convs = [] } = useQuery<any[]>({
+    queryKey: ['agent-conversations', user?.id],
+    queryFn: () => fetch(`${BASE}/api/agent-messages/conversations?agentId=${user?.id}`).then(r => r.json()),
+    refetchInterval: 15000,
+    enabled: !!user?.id,
+  });
+  const unreadCount = (convs as any[]).reduce((sum, c) => sum + (c.unread ?? 0), 0);
+
   const links = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: PhoneCall,        label: 'Call Log',    path: '/call-log' },
     { icon: PackagePlus,      label: 'Create Order', path: '/create-order' },
+    { icon: MessageCircle,    label: 'Messages',     path: '/messages', badge: unreadCount },
     { icon: MessageSquareWarning, label: 'Complaints', path: '/complaints' },
   ];
 
@@ -46,7 +58,14 @@ export function AgentSidebar() {
                   : "text-muted-foreground hover:bg-blue-50 hover:text-blue-700"
               )}
             >
-              <Icon size={20} className={cn("transition-transform duration-200", !isActive && "group-hover:scale-110")} />
+              <div className="relative shrink-0">
+                <Icon size={20} className={cn("transition-transform duration-200", !isActive && "group-hover:scale-110")} />
+                {(link as any).badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {(link as any).badge}
+                  </span>
+                )}
+              </div>
               {link.label}
             </Link>
           );

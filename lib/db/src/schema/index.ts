@@ -22,3 +22,4 @@ export * from "./admins";
 export * from "./vendorMessages";
 export * from "./agentCallLogs";
 export * from "./estates";
+export * from "./agentMessages";
