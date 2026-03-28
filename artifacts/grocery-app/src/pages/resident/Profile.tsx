@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, MapPin, Home, Phone, User, Save, Building } from 'lucide-react';
+import { ChevronLeft, MapPin, Home, Phone, User, Save, Camera, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -29,6 +29,9 @@ export default function ResidentProfile() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
 
   const { data: resident, isLoading } = useQuery<ResidentProfile>({
     queryKey: ['resident-profile', user?.id],
@@ -82,6 +85,55 @@ export default function ResidentProfile() {
     'Far': 'bg-orange-100 text-orange-700',
   };
 
+  const uploadPhoto = async (file: File) => {
+    if (!user?.id) return;
+    setIsUploading(true);
+    try {
+      // Step 1: get presigned upload URL
+      const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!urlRes.ok) throw new Error('Failed to get upload URL');
+      const { uploadURL, objectPath } = await urlRes.json();
+
+      // Step 2: upload file directly to GCS
+      const putRes = await fetch(uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error('Upload to storage failed');
+
+      // Build the full serving URL and store it directly
+      const servingUrl = `${BASE}/api/storage${objectPath}`;
+
+      // Step 3: save the full serving URL as the resident's photoUrl
+      const saveRes = await fetch(`${BASE}/api/residents/${user.id}/photo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoUrl: servingUrl }),
+      });
+      if (!saveRes.ok) throw new Error('Failed to save photo');
+
+      // Show image immediately, then refresh query
+      setLocalPhotoUrl(servingUrl);
+      qc.invalidateQueries({ queryKey: ['resident-profile', user.id] });
+      toast({ title: 'Photo updated', description: 'Your profile picture has been saved.' });
+    } catch {
+      toast({ title: 'Upload failed', description: 'Please try again.', variant: 'destructive' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadPhoto(file);
+    e.target.value = '';
+  };
+
   const handleSave = () => {
     if (!form.fullName.trim()) {
       toast({ title: 'Name is required', variant: 'destructive' });
@@ -114,16 +166,63 @@ export default function ResidentProfile() {
 
         {/* Avatar */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-24 h-24 rounded-full overflow-hidden shadow-lg ring-4 ring-white">
-            {resident?.photoUrl
-              ? <img src={resident.photoUrl} alt={resident.fullName} className="w-full h-full object-cover" />
-              : (
-                <div className="w-full h-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-4xl font-bold">
-                  {avatarLetter}
-                </div>
-              )
-            }
-          </div>
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+
+          {/* Clickable avatar */}
+          <button
+            type="button"
+            onClick={() => !isUploading && fileInputRef.current?.click()}
+            className="relative w-24 h-24 rounded-full shadow-lg ring-4 ring-white group focus:outline-none"
+            title="Change profile photo"
+          >
+            {/* Photo or initial */}
+            <div className="w-full h-full rounded-full overflow-hidden">
+              {(localPhotoUrl || resident?.photoUrl)
+                ? (
+                  <img
+                    src={localPhotoUrl || resident!.photoUrl}
+                    alt={resident?.fullName}
+                    className="w-full h-full object-cover"
+                  />
+                )
+                : (
+                  <div className="w-full h-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-4xl font-bold">
+                    {avatarLetter}
+                  </div>
+                )
+              }
+            </div>
+
+            {/* Camera overlay */}
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {isUploading
+                ? <Loader2 size={24} className="text-white animate-spin" />
+                : <Camera size={24} className="text-white" />
+              }
+            </div>
+
+            {/* Uploading spinner shown even without hover */}
+            {isUploading && (
+              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                <Loader2 size={24} className="text-white animate-spin" />
+              </div>
+            )}
+
+            {/* Camera badge (always visible at bottom) */}
+            {!isUploading && (
+              <span className="absolute bottom-0 right-0 w-7 h-7 bg-primary rounded-full flex items-center justify-center shadow-md ring-2 ring-white">
+                <Camera size={13} className="text-white" />
+              </span>
+            )}
+          </button>
+
           <div className="text-center">
             <p className="font-bold text-lg text-foreground">{resident?.fullName}</p>
             <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
@@ -134,6 +233,7 @@ export default function ResidentProfile() {
                 <MapPin size={10} /> {resident.zone}
               </span>
             )}
+            <p className="text-[11px] text-muted-foreground mt-1">Tap photo to change</p>
           </div>
         </div>
       </div>
