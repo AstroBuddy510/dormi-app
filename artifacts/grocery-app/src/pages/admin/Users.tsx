@@ -95,7 +95,8 @@ async function uploadPhoto(file: File): Promise<string> {
     headers: { 'Content-Type': file.type },
   });
   if (!putRes.ok) throw new Error('Failed to upload photo');
-  return objectPath as string;
+  // Return full serving URL so it can be stored and used directly as img src
+  return `/api/storage${objectPath}` as string;
 }
 
 // ─── Shared UI pieces ─────────────────────────────────────────────────────────
@@ -110,10 +111,17 @@ function StatusPill({ active, suspended }: { active?: boolean; suspended?: boole
 }
 
 function Avatar({ name, photoUrl, color, size = 'md' }: { name: string; photoUrl?: string | null; color: string; size?: 'sm' | 'md' }) {
+  const [imgError, setImgError] = useState(false);
   const sz = size === 'sm' ? 'w-9 h-9 text-sm' : 'w-12 h-12 text-base';
-  if (photoUrl) {
-    const src = `/api/storage${photoUrl}`;
-    return <img src={src} alt={name} className={`${sz} rounded-full object-cover shrink-0 ring-2 ring-white shadow`} />;
+  if (photoUrl && !imgError) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        className={`${sz} rounded-full object-cover shrink-0 ring-2 ring-white shadow`}
+        onError={() => setImgError(true)}
+      />
+    );
   }
   return (
     <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold shrink-0 ring-2 ring-white shadow`}>
@@ -356,8 +364,8 @@ function ResidentsTab() {
 
   const handlePhotoUpload = async (r: any, file: File) => {
     try {
-      const objectPath = await uploadPhoto(file);
-      await apiFetch(`/residents/${r.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      const photoUrl = await uploadPhoto(file);
+      await apiFetch(`/residents/${r.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl }) });
       queryClient.invalidateQueries();
       toast({ title: 'Photo updated' });
     } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
@@ -729,8 +737,8 @@ function VendorsTab() {
 
   const handlePhotoUpload = async (v: any, file: File) => {
     try {
-      const objectPath = await uploadPhoto(file);
-      await apiFetch(`/vendors/${v.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      const photoUrl = await uploadPhoto(file);
+      await apiFetch(`/vendors/${v.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl }) });
       queryClient.invalidateQueries();
       toast({ title: 'Photo updated' });
     } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
@@ -958,8 +966,8 @@ function RidersTab() {
 
   const handlePhotoUpload = async (r: any, file: File) => {
     try {
-      const objectPath = await uploadPhoto(file);
-      await apiFetch(`/riders/${r.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      const photoUrl = await uploadPhoto(file);
+      await apiFetch(`/riders/${r.id}/photo`, { method: 'PUT', body: JSON.stringify({ photoUrl }) });
       queryClient.invalidateQueries();
       toast({ title: 'Photo updated' });
     } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
@@ -1199,8 +1207,8 @@ function AgentsTab() {
 
   const handlePhotoUpload = async (a: any, file: File) => {
     try {
-      const objectPath = await uploadPhoto(file);
-      await apiFetch(`/agents/${a.id}`, { method: 'PUT', body: JSON.stringify({ photoUrl: objectPath }) });
+      const photoUrl = await uploadPhoto(file);
+      await apiFetch(`/agents/${a.id}`, { method: 'PUT', body: JSON.stringify({ photoUrl }) });
       invalidate();
       toast({ title: 'Photo updated' });
     } catch (e: any) { toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
