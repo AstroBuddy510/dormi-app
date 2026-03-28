@@ -17,6 +17,7 @@ export default function ResidentHome() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [avatarImgError, setAvatarImgError] = useState(false);
 
   const { data: resident } = useGetResident(user?.id || 0, {
     query: { enabled: !!user?.id }
@@ -162,8 +163,15 @@ export default function ResidentHome() {
             <CardContent className="p-4 flex flex-col gap-3">
               {/* Avatar: photo if available, else coloured initial */}
               <div className="h-10 w-10 rounded-full overflow-hidden shrink-0">
-                {(resident as any)?.photoUrl
-                  ? <img src={(resident as any).photoUrl} alt={firstName} className="w-full h-full object-cover" />
+                {(resident as any)?.photoUrl && !avatarImgError
+                  ? (
+                    <img
+                      src={(resident as any).photoUrl}
+                      alt={firstName}
+                      className="w-full h-full object-cover"
+                      onError={() => setAvatarImgError(true)}
+                    />
+                  )
                   : (
                     <div className="w-full h-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-white font-bold text-lg">
                       {avatarLetter}

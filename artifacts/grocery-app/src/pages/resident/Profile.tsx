@@ -32,6 +32,7 @@ export default function ResidentProfile() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
+  const [photoImgError, setPhotoImgError] = useState(false);
 
   const { data: resident, isLoading } = useQuery<ResidentProfile>({
     queryKey: ['resident-profile', user?.id],
@@ -117,7 +118,8 @@ export default function ResidentProfile() {
       });
       if (!saveRes.ok) throw new Error('Failed to save photo');
 
-      // Show image immediately, then refresh query
+      // Show image immediately, reset any prior error, then refresh query
+      setPhotoImgError(false);
       setLocalPhotoUrl(servingUrl);
       qc.invalidateQueries({ queryKey: ['resident-profile', user.id] });
       toast({ title: 'Photo updated', description: 'Your profile picture has been saved.' });
@@ -184,12 +186,13 @@ export default function ResidentProfile() {
           >
             {/* Photo or initial */}
             <div className="w-full h-full rounded-full overflow-hidden">
-              {(localPhotoUrl || resident?.photoUrl)
+              {(localPhotoUrl || resident?.photoUrl) && !photoImgError
                 ? (
                   <img
                     src={localPhotoUrl || resident!.photoUrl}
                     alt={resident?.fullName}
                     className="w-full h-full object-cover"
+                    onError={() => setPhotoImgError(true)}
                   />
                 )
                 : (
