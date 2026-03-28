@@ -24,14 +24,52 @@ function formatTime(dateStr: string) {
 
 // ─── Emoji Picker ─────────────────────────────────────────────────────────────
 const EMOJI_GROUPS = [
-  { label: 'Faces', emojis: ['😊','😂','😅','😍','🥰','😮','😢','😡','🤔','😬','😎','🥳'] },
-  { label: 'Gestures', emojis: ['👍','👎','👋','🙏','💪','✌️','👏','🤝','☝️','🤞','🫡','❤️'] },
-  { label: 'Grocery', emojis: ['🛒','📦','🚚','🏠','🌿','🍎','🥦','🥕','🧅','🍗','🧴','🥫'] },
-  { label: 'Symbols', emojis: ['✅','❌','⚠️','🔔','📞','💬','🎉','⭐','🔥','⏰','💰','📝'] },
+  {
+    label: 'Faces', icon: '😊',
+    emojis: [
+      '😊','😂','😅','😍','🥰','😮','😢','😡','🤔','😬',
+      '😎','🥳','😴','🤩','😤','🥺','😁','😜','🤭','😇',
+      '🙃','😑','🤗','😏','🫠',
+    ],
+  },
+  {
+    label: 'Hands', icon: '👍',
+    emojis: [
+      '👍','👎','👋','🙏','💪','✌️','👏','🤝','☝️','🤞',
+      '🫡','❤️','🫶','🤙','👌','✋','💯','🙌','🤜','🤛',
+      '🫸','🫷','🖐️','✍️','🤌',
+    ],
+  },
+  {
+    label: 'Produce', icon: '🍎',
+    emojis: [
+      '🍎','🥦','🥕','🧅','🥬','🍋','🍅','🧄','🥒','🌽',
+      '🥑','🫑','🍇','🍓','🫐','🥝','🍊','🥭','🥥','🍒',
+      '🍑','🥜','🌰','🫛','🫚','🍈','🥦','🌿','🪴','🌱',
+    ],
+  },
+  {
+    label: 'Grocery', icon: '🛒',
+    emojis: [
+      '🛒','🥫','🧴','🧃','🥚','🧀','🧈','🥩','🍗','🥐',
+      '🍞','🫙','🥓','🍖','🐟','🦐','🥗','🍳','🧆','🫕',
+      '🧂','🍯','🫖','☕','🥞','🧇','🍫','🍬','🧁','🥤',
+    ],
+  },
+  {
+    label: 'Delivery', icon: '🚚',
+    emojis: [
+      '📦','🚚','🏠','📍','⏰','💰','💳','🛍️','🏪','🧺',
+      '🔔','📞','💬','✅','❌','⚠️','🎉','⭐','🔥','📝',
+      '🗓️','📋','🔑','🚦','🛵',
+    ],
+  },
 ];
 
 function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
+  const [activeGroup, setActiveGroup] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -40,27 +78,53 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
     return () => document.removeEventListener('mousedown', onClick);
   }, [onClose]);
 
+  const group = EMOJI_GROUPS[activeGroup];
+
   return (
     <div
       ref={ref}
-      className="absolute bottom-full mb-2 right-0 bg-white rounded-2xl shadow-xl border border-border p-3 w-72 z-50"
+      className="absolute bottom-full mb-2 right-0 bg-white rounded-2xl shadow-xl border border-border z-50 w-72 overflow-hidden"
     >
-      {EMOJI_GROUPS.map(group => (
-        <div key={group.label} className="mb-2 last:mb-0">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 px-1">{group.label}</p>
-          <div className="flex flex-wrap gap-0.5">
-            {group.emojis.map(em => (
-              <button
-                key={em}
-                onClick={() => onSelect(em)}
-                className="w-9 h-9 text-xl hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors"
-              >
-                {em}
-              </button>
-            ))}
-          </div>
+      {/* Category tabs */}
+      <div className="flex border-b border-border bg-gray-50/80">
+        {EMOJI_GROUPS.map((g, i) => (
+          <button
+            key={g.label}
+            onClick={() => setActiveGroup(i)}
+            title={g.label}
+            className={cn(
+              'flex-1 py-2 text-lg transition-colors hover:bg-gray-100',
+              i === activeGroup
+                ? 'bg-white border-b-2 border-primary'
+                : 'text-gray-400',
+            )}
+          >
+            {g.icon}
+          </button>
+        ))}
+      </div>
+
+      {/* Category label */}
+      <div className="px-3 pt-2 pb-1">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {group.label}
+        </p>
+      </div>
+
+      {/* Scrollable emoji grid */}
+      <div className="px-2 pb-2 max-h-44 overflow-y-auto">
+        <div className="grid grid-cols-7 gap-0.5">
+          {group.emojis.map(em => (
+            <button
+              key={em}
+              onClick={() => onSelect(em)}
+              className="w-9 h-9 text-xl hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors"
+            >
+              {em}
+            </button>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 }
