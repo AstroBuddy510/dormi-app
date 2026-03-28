@@ -45,6 +45,37 @@ router.post("/", async (req, res) => {
   }
 });
 
+const UpdateItemBody = z.object({
+  name: z.string().min(1).optional(),
+  category: z.string().min(1).optional(),
+  price: z.number().positive().optional(),
+  unit: z.string().min(1).optional(),
+  brands: z.array(z.string()).optional(),
+  imageUrl: z.string().optional().nullable(),
+});
+
+router.put("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = UpdateItemBody.parse(req.body);
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (body.name !== undefined)     updates.name = body.name;
+    if (body.category !== undefined) updates.category = body.category;
+    if (body.price !== undefined)    updates.price = body.price.toString();
+    if (body.unit !== undefined)     updates.unit = body.unit;
+    if (body.brands !== undefined)   updates.brands = body.brands;
+    if ("imageUrl" in body)          updates.imageUrl = body.imageUrl ?? null;
+    const [item] = await db.update(itemsTable).set(updates).where(eq(itemsTable.id, id)).returning();
+    if (!item) {
+      res.status(404).json({ error: "not_found", message: "Item not found" });
+      return;
+    }
+    res.json(mapItem(item));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
 router.put("/:id/price", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

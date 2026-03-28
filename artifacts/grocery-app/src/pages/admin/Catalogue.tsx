@@ -35,7 +35,7 @@ import {
 import {
   ShoppingBasket, Plus, Trash2, Search, CheckCircle2, XCircle,
   PackagePlus, Bell, Boxes, Filter, X, Tag, ImagePlus, Loader2,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Pencil,
 } from 'lucide-react';
 
 import { useToast } from '@/hooks/use-toast';
@@ -300,6 +300,259 @@ function AddItemDialog({
   );
 }
 
+// ─── Edit Item Dialog ─────────────────────────────────────────────────────────
+function EditItemDialog({
+  item, open, onClose, onSaved,
+}: { item: any | null; open: boolean; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState('');
+  const [categorySelect, setCategorySelect] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [price, setPrice] = useState('');
+  const [unit, setUnit] = useState('');
+  const [brands, setBrands] = useState<string[]>([]);
+  const [brandInput, setBrandInput] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageObjectPath, setImageObjectPath] = useState<string | null>(null);
+  const [imageCleared, setImageCleared] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+
+  const isCustomCategory = categorySelect === NEW_CATEGORY_VALUE;
+  const resolvedCategory = isCustomCategory ? newCategory.trim() : categorySelect;
+
+  // Pre-fill form when item changes
+  useEffect(() => {
+    if (item && open) {
+      setName(item.name ?? '');
+      const knownCat = CATEGORIES.includes(item.category);
+      setCategorySelect(knownCat ? item.category : NEW_CATEGORY_VALUE);
+      setNewCategory(knownCat ? '' : (item.category ?? ''));
+      setPrice(item.price != null ? String(item.price) : '');
+      setUnit(item.unit ?? '1 unit');
+      setBrands(item.brands ?? []);
+      setBrandInput('');
+      setImagePreview(item.imageUrl ?? null);
+      setImageObjectPath(null);
+      setImageCleared(false);
+      setImageUploading(false);
+    }
+  }, [item, open]);
+
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      toast({ title: 'Unsupported format', description: 'Use PNG, JPG, SVG, or WebP.', variant: 'destructive' });
+      return;
+    }
+    setImagePreview(URL.createObjectURL(file));
+    setImageUploading(true);
+    try {
+      const res = await apiFetch('/storage/uploads/request-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      await fetch(res.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      setImageObjectPath(res.objectPath);
+      setImageCleared(false);
+    } catch {
+      toast({ title: 'Upload failed', description: 'Could not upload image. Try again.', variant: 'destructive' });
+      setImagePreview(null);
+    } finally {
+      setImageUploading(false);
+    }
+    e.target.value = '';
+  };
+
+  const handleClearImage = () => {
+    setImagePreview(null);
+    setImageObjectPath(null);
+    setImageCleared(true);
+  };
+
+  const addBrand = () => {
+    const b = brandInput.trim();
+    if (!b || brands.includes(b)) { setBrandInput(''); return; }
+    setBrands(prev => [...prev, b]);
+    setBrandInput('');
+  };
+
+  const removeBrand = (b: string) => setBrands(prev => prev.filter(x => x !== b));
+
+  const handleBrandKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addBrand(); }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolvedCategory) { toast({ title: 'Select or enter a category', variant: 'destructive' }); return; }
+    if (imageUploading) { toast({ title: 'Image still uploading', description: 'Please wait…', variant: 'destructive' }); return; }
+    setSaving(true);
+
+    let imageUrl: string | null | undefined;
+    if (imageObjectPath) {
+      imageUrl = `${BASE}/api/storage${imageObjectPath}`;
+    } else if (imageCleared) {
+      imageUrl = null;
+    } else {
+      imageUrl = item?.imageUrl ?? null;
+    }
+
+    try {
+      await apiFetch(`/items/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          category: resolvedCategory,
+          price: parseFloat(price),
+          unit,
+          brands,
+          imageUrl,
+        }),
+      });
+      toast({ title: 'Item updated', description: `"${name}" has been saved.` });
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="rounded-2xl max-w-sm max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil size={16} className="text-primary" /> Edit Item
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+          {/* Name */}
+          <div className="space-y-1">
+            <Label>Item Name *</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Tomatoes" className="rounded-xl" />
+          </div>
+
+          {/* Category */}
+          <div className="space-y-1">
+            <Label>Category *</Label>
+            <Select value={categorySelect} onValueChange={setCategorySelect}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {CATEGORIES.map(c => (
+                  <SelectItem key={c} value={c}>{CATEGORY_EMOJI[c] || '📦'} {c}</SelectItem>
+                ))}
+                <SelectItem value={NEW_CATEGORY_VALUE}>➕ Add new category…</SelectItem>
+              </SelectContent>
+            </Select>
+            {isCustomCategory && (
+              <Input
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                placeholder="Type new category name"
+                className="rounded-xl mt-1.5"
+                autoFocus
+                required={isCustomCategory}
+              />
+            )}
+          </div>
+
+          {/* Price + Unit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Price (GHs) *</Label>
+              <Input value={price} onChange={e => setPrice(e.target.value)} required type="number" min="0.01" step="0.01" placeholder="0.00" className="rounded-xl font-mono" />
+            </div>
+            <div className="space-y-1">
+              <Label>Unit</Label>
+              <Input value={unit} onChange={e => setUnit(e.target.value)} placeholder="1 kg" className="rounded-xl" />
+            </div>
+          </div>
+
+          {/* Brands */}
+          <div className="space-y-1.5">
+            <Label>Available Brands <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <div className="flex gap-2">
+              <Input
+                value={brandInput}
+                onChange={e => setBrandInput(e.target.value)}
+                onKeyDown={handleBrandKeyDown}
+                placeholder="e.g. Mamador, Gino… press Enter"
+                className="rounded-xl flex-1"
+              />
+              <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0" onClick={addBrand}>
+                <Plus size={14} />
+              </Button>
+            </div>
+            {brands.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {brands.map(b => (
+                  <span key={b} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
+                    {b}
+                    <button type="button" onClick={() => removeBrand(b)} className="hover:text-destructive transition-colors ml-0.5">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Image */}
+          <div className="space-y-1.5">
+            <Label>Item Image <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <div className="flex items-start gap-3">
+              {imagePreview ? (
+                <div className="relative shrink-0">
+                  <img src={imagePreview} alt="Preview" className="w-16 h-16 rounded-xl object-cover border border-border" />
+                  {imageUploading && (
+                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-xl">
+                      <Loader2 size={16} className="animate-spin text-primary" />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleClearImage}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-16 h-16 rounded-xl border-2 border-dashed border-border bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors shrink-0">
+                  <ImagePlus size={18} className="text-muted-foreground" />
+                  <span className="text-[9px] text-muted-foreground mt-0.5">Upload</span>
+                  <input type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp" className="hidden" onChange={handleImagePick} />
+                </label>
+              )}
+              {imageObjectPath && !imageUploading && (
+                <p className="text-xs text-green-600 font-medium mt-1">✓ New image uploaded</p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" className="rounded-xl">Cancel</Button>
+            </DialogClose>
+            <Button type="submit" className="rounded-xl bg-primary hover:bg-primary/90" disabled={saving || imageUploading}>
+              {saving ? 'Saving…' : imageUploading ? 'Uploading…' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Catalogue Tab ────────────────────────────────────────────────────────────
 function CatalogueTab() {
   const { toast } = useToast();
@@ -312,6 +565,7 @@ function CatalogueTab() {
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('All');
   const [addOpen, setAddOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [page, setPage] = useState(1);
@@ -399,7 +653,7 @@ function CatalogueTab() {
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Brands</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Unit</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide text-right">Price</th>
-                <th className="px-4 py-3 w-12"></th>
+                <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
@@ -435,12 +689,22 @@ function CatalogueTab() {
                   <td className="px-4 py-3 text-muted-foreground">{item.unit}</td>
                   <td className="px-4 py-3 font-mono text-right font-semibold">GHs {item.price.toFixed(2)}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => setDeleteTarget(item)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditTarget(item)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Edit item"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(item)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Delete item"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -475,6 +739,13 @@ function CatalogueTab() {
       )}
 
       <AddItemDialog open={addOpen} onClose={() => setAddOpen(false)} onAdded={() => qc.invalidateQueries({ queryKey: ['items'] })} />
+
+      <EditItemDialog
+        item={editTarget}
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ['items'] })}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={o => { if (!o) setDeleteTarget(null); }}>
         <AlertDialogContent className="rounded-2xl">
