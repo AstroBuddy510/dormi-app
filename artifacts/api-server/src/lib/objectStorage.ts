@@ -160,6 +160,7 @@ export class ObjectStorageService {
     }
 
     const url = new URL(rawPath);
+    // url.pathname includes a leading slash, e.g. "/bucket-name/private/uploads/uuid"
     const rawObjectPath = url.pathname;
 
     let objectEntityDir = this.getPrivateObjectDir();
@@ -167,11 +168,16 @@ export class ObjectStorageService {
       objectEntityDir = `${objectEntityDir}/`;
     }
 
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
+    // Prepend "/" so both sides of the comparison have consistent format.
+    // rawObjectPath  = "/bucket-name/private/uploads/uuid"
+    // objectEntityDir = "bucket-name/private/"
+    // prefixed       = "/bucket-name/private/"
+    const prefixedDir = `/${objectEntityDir}`;
+    if (!rawObjectPath.startsWith(prefixedDir)) {
       return rawObjectPath;
     }
 
-    const entityId = rawObjectPath.slice(objectEntityDir.length);
+    const entityId = rawObjectPath.slice(prefixedDir.length);
     return `/objects/${entityId}`;
   }
 
