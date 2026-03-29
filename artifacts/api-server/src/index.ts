@@ -1,5 +1,7 @@
 import app from "./app";
 import { seedDefaultAdmin } from "./routes/auth";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
 
@@ -15,7 +17,23 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+async function ensureTables() {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      resident_id INTEGER REFERENCES residents(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL,
+      body TEXT NOT NULL,
+      type VARCHAR(50) NOT NULL DEFAULT 'info',
+      read_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  console.log("Tables verified.");
+}
+
 app.listen(port, async () => {
   console.log(`Server listening on port ${port}`);
+  await ensureTables();
   await seedDefaultAdmin();
 });

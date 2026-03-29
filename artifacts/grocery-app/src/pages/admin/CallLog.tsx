@@ -1,235 +1,260 @@
 import { useState } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
+import { useQuery } from '@tanstack/react-query';
+import { Card, CardContent } from '@/components/ui/card';
 import {
-  useCreateCallLogOrder,
-  useListResidents,
-  useListOrders,
-  useUpdateOrderStatus,
-} from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { PhoneCall, Plus, CheckCheck } from 'lucide-react';
-import { format } from 'date-fns';
+  PhoneCall, MessageCircle, ShoppingBag, ChevronDown, ChevronUp,
+  Clock, CheckCircle, XCircle, PhoneMissed, PhoneForwarded, User,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-export default function AdminCallLog() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-  const [selectedResident, setSelectedResident] = useState('');
-  const [rawItems, setRawItems] = useState('');
-  const [notes, setNotes] = useState('');
-
-  const { data: residents = [] } = useListResidents();
-  const { data: callOnlyOrders = [], isLoading } = useListOrders({ callOnly: true });
-
-  const createMutation = useCreateCallLogOrder();
-  const updateStatusMutation = useUpdateOrderStatus();
-
-  const handleCreateOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedResident || !rawItems.trim()) {
-      toast({ title: 'Missing fields', description: 'Please select a resident and enter items.', variant: 'destructive' });
-      return;
-    }
-    createMutation.mutate(
-      { data: { residentId: parseInt(selectedResident), rawItems, notes: notes || undefined } },
-      {
-        onSuccess: () => {
-          toast({ title: 'Order Created', description: 'Call-only order has been placed successfully.' });
-          setSelectedResident('');
-          setRawItems('');
-          setNotes('');
-          queryClient.invalidateQueries();
-        },
-        onError: (err: any) => {
-          toast({ title: 'Error', description: err.message, variant: 'destructive' });
-        },
-      }
-    );
+type AgentStats = {
+  id: number;
+  name: string;
+  phone: string;
+  photoUrl: string | null;
+  isActive: boolean;
+  createdAt: string;
+  lastActive: string | null;
+  stats: {
+    ordersCreated: number;
+    callLogs: number;
+    messagesSent: number;
   };
+  recentLogs: {
+    id: number;
+    residentName: string;
+    residentPhone: string;
+    outcome: string;
+    notes: string | null;
+    createdAt: string;
+  }[];
+  recentOrders: {
+    id: number;
+    residentName?: string;
+    total: string;
+    status: string;
+    createdAt: string;
+  }[];
+};
 
-  const handleAccept = (orderId: number) => {
-    updateStatusMutation.mutate(
-      { id: orderId, data: { status: 'accepted', callAccepted: true } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries();
-          toast({ title: 'Marked Accepted', description: `Order #${orderId} marked as called & accepted.` });
-        },
-      }
-    );
-  };
+const OUTCOME_CONFIG: Record<string, { label: string; Icon: React.ElementType; color: string }> = {
+  completed:          { label: 'Completed',        Icon: CheckCircle,    color: 'text-green-600 bg-green-50' },
+  no_answer:          { label: 'No Answer',         Icon: PhoneMissed,    color: 'text-amber-600 bg-amber-50' },
+  callback_requested: { label: 'Callback',          Icon: PhoneForwarded, color: 'text-blue-600 bg-blue-50' },
+  cancelled:          { label: 'Cancelled',         Icon: XCircle,        color: 'text-red-600 bg-red-50' },
+};
 
-  const resident = residents.find((r) => r.id.toString() === selectedResident);
+function timeAgo(date: string) {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(date).toLocaleDateString('en-GH', { month: 'short', day: 'numeric' });
+}
+
+function StatPill({ icon: Icon, value, label, color }: { icon: React.ElementType; value: number; label: string; color: string }) {
+  return (
+    <div className={cn('flex flex-col items-center px-4 py-2.5 rounded-xl', color)}>
+      <Icon size={15} className="mb-0.5 opacity-70" />
+      <span className="text-lg font-bold leading-none">{value}</span>
+      <span className="text-[10px] font-medium opacity-70 mt-0.5">{label}</span>
+    </div>
+  );
+}
+
+function AgentCard({ agent }: { agent: AgentStats }) {
+  const [expanded, setExpanded] = useState(false);
+  const initials = agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const [imgErr, setImgErr] = useState(false);
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
-      <AdminSidebar />
-      <div className="flex-1 overflow-auto py-4 px-4 md:py-6 md:px-8 lg:py-8 lg:px-12">
-        <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Call Log</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Create orders on behalf of residents via phone call</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-          {/* Create Order Form */}
-          <div className="lg:col-span-2">
-            <Card className="rounded-2xl shadow-sm border-border/50 sticky top-6">
-              <CardHeader className="border-b border-border/50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                    <PhoneCall size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">New Call Order</CardTitle>
-                    <CardDescription className="text-xs">Log a phone-in order manually</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-5">
-                <form onSubmit={handleCreateOrder} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="resident">Select Resident *</Label>
-                    <Select value={selectedResident} onValueChange={setSelectedResident}>
-                      <SelectTrigger id="resident" className="h-11 rounded-xl">
-                        <SelectValue placeholder="Choose resident…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {residents.map((r) => (
-                          <SelectItem key={r.id} value={r.id.toString()}>
-                            <div>
-                              <span className="font-medium">{r.fullName}</span>
-                              <span className="ml-2 text-xs text-muted-foreground">{r.phone}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {resident && (
-                      <p className="text-xs text-muted-foreground pl-1">
-                        📍 {resident.estate}, Block {resident.blockNumber}, House {resident.houseNumber}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="items">Items & Quantities *</Label>
-                    <Textarea
-                      id="items"
-                      placeholder={`One item per line:\nTomatoes, 2, 8.00\nRice 5kg, 1, 95.00\nEggs, 1, 24.00`}
-                      className="min-h-[140px] rounded-xl text-sm font-mono"
-                      value={rawItems}
-                      onChange={(e) => setRawItems(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">Format: Item Name, Quantity, Unit Price</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="notes">Notes (optional)</Label>
-                    <Textarea
-                      id="notes"
-                      placeholder="Special instructions or delivery notes…"
-                      className="min-h-[70px] rounded-xl text-sm"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full h-11 rounded-xl font-bold gap-2"
-                    disabled={createMutation.isPending}
-                  >
-                    <Plus size={18} />
-                    {createMutation.isPending ? 'Creating…' : 'Create Call Order'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+    <Card className="border-0 shadow-md overflow-hidden">
+      <CardContent className="p-0">
+        {/* Agent header */}
+        <div className="p-4 flex items-center gap-4">
+          {/* Avatar */}
+          <div className="h-14 w-14 rounded-full overflow-hidden shrink-0 border-2 border-border shadow-sm">
+            {agent.photoUrl && !imgErr
+              ? <img src={agent.photoUrl} alt={agent.name} className="w-full h-full object-cover" onError={() => setImgErr(true)} />
+              : <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">{initials}</div>
+            }
           </div>
 
-          {/* Call-Only Orders List */}
-          <div className="lg:col-span-3">
-            <Card className="rounded-2xl shadow-sm border-border/50">
-              <CardHeader className="border-b border-border/50">
-                <CardTitle className="text-base">
-                  Call-Only Orders
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">({callOnlyOrders.length})</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {isLoading ? (
-                  <div className="py-12 text-center text-muted-foreground">Loading…</div>
-                ) : callOnlyOrders.length === 0 ? (
-                  <div className="py-12 text-center text-muted-foreground">
-                    <PhoneCall size={32} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No call-only orders yet</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border/50">
-                    {callOnlyOrders.map((order) => (
-                      <div key={order.id} className="p-4 hover:bg-gray-50/50">
-                        <div className="flex justify-between items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-medium text-primary">#{order.id}</span>
-                              <StatusBadge status={order.status} />
-                              {order.callAccepted && (
-                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                                  ✓ Called & Accepted
-                                </span>
-                              )}
-                            </div>
-                            <p className="font-semibold text-sm">{order.residentName}</p>
-                            <p className="text-xs text-muted-foreground">{order.residentPhone} · {order.residentAddress}</p>
-                            <div className="mt-2 space-y-0.5">
-                              {Array.isArray(order.items) && order.items.map((item: any, i: number) => (
-                                <p key={i} className="text-xs text-foreground">
-                                  {item.itemName} × {item.quantity} — ₵{item.totalPrice?.toFixed(2)}
-                                </p>
-                              ))}
-                            </div>
-                            <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                              <span>Subtotal: ₵{order.subtotal.toFixed(2)}</span>
-                              <span>Fee: ₵{order.serviceFee.toFixed(2)}</span>
-                              <span>Delivery: ₵{order.deliveryFee.toFixed(2)}</span>
-                              <span className="font-bold text-foreground">Total: ₵{order.total.toFixed(2)}</span>
-                            </div>
-                            {order.notes && <p className="text-xs text-muted-foreground mt-1 italic">"{order.notes}"</p>}
-                            <p className="text-xs text-muted-foreground mt-1">{format(new Date(order.createdAt), 'dd MMM yyyy, HH:mm')}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-foreground text-base truncate">{agent.name}</h3>
+              <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full', agent.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+                {agent.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">{agent.phone}</p>
+            {agent.lastActive && (
+              <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1 mt-0.5">
+                <Clock size={9} /> Last active {timeAgo(agent.lastActive)}
+              </p>
+            )}
+          </div>
+
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground shrink-0"
+          >
+            {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div className="px-4 pb-4 flex gap-2">
+          <StatPill icon={ShoppingBag}   value={agent.stats.ordersCreated} label="Orders"   color="bg-green-50 text-green-700" />
+          <StatPill icon={PhoneCall}     value={agent.stats.callLogs}      label="Calls"    color="bg-blue-50 text-blue-700" />
+          <StatPill icon={MessageCircle} value={agent.stats.messagesSent}  label="Messages" color="bg-purple-50 text-purple-700" />
+        </div>
+
+        {/* Expanded: recent activity */}
+        {expanded && (
+          <div className="border-t border-border/60 bg-muted/20 px-4 py-4 space-y-4">
+            {/* Recent call logs */}
+            {agent.recentLogs.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Recent Calls</p>
+                <div className="space-y-2">
+                  {agent.recentLogs.map(log => {
+                    const cfg = OUTCOME_CONFIG[log.outcome] ?? OUTCOME_CONFIG.completed;
+                    const Icon = cfg.Icon;
+                    return (
+                      <div key={log.id} className="flex items-start gap-3 bg-white rounded-xl p-3 border border-border/50">
+                        <div className={cn('h-7 w-7 rounded-full flex items-center justify-center shrink-0', cfg.color)}>
+                          <Icon size={13} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-sm font-semibold text-foreground truncate">{log.residentName}</span>
+                            <span className="text-[10px] text-muted-foreground/60 shrink-0">{timeAgo(log.createdAt)}</span>
                           </div>
-                          <div className="shrink-0">
-                            {!order.callAccepted && order.status === 'pending' && (
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs rounded-lg gap-1 bg-green-600 hover:bg-green-700"
-                                onClick={() => handleAccept(order.id)}
-                                disabled={updateStatusMutation.isPending}
-                              >
-                                <CheckCheck size={14} />
-                                Called & Accepted
-                              </Button>
-                            )}
-                          </div>
+                          <p className="text-[10px] text-muted-foreground">{log.residentPhone}</p>
+                          {log.notes && <p className="text-xs text-muted-foreground mt-0.5 italic line-clamp-1">"{log.notes}"</p>}
+                          <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-md mt-1 inline-block', cfg.color)}>{cfg.label}</span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recent orders */}
+            {agent.recentOrders.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Recent Orders Created</p>
+                <div className="space-y-2">
+                  {agent.recentOrders.map(order => (
+                    <div key={order.id} className="flex items-center gap-3 bg-white rounded-xl p-3 border border-border/50">
+                      <div className="h-7 w-7 rounded-full bg-green-50 text-green-700 flex items-center justify-center shrink-0">
+                        <ShoppingBag size={13} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-sm font-semibold text-foreground">Order #{order.id}</span>
+                          <span className="text-[10px] text-muted-foreground/60">{timeAgo(order.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">GH₵ {parseFloat(order.total).toFixed(2)}</span>
+                          <span className="text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded-md capitalize">{order.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {agent.recentLogs.length === 0 && agent.recentOrders.length === 0 && (
+              <div className="text-center py-4 text-muted-foreground">
+                <User size={24} className="mx-auto mb-1 opacity-30" />
+                <p className="text-xs">No activity recorded yet</p>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function AdminCallLog() {
+  const { data: agents = [], isLoading } = useQuery<AgentStats[]>({
+    queryKey: ['agents-overview'],
+    queryFn: () => fetch(`${BASE}/api/agents/overview`).then(r => r.json()),
+    refetchInterval: 30000,
+  });
+
+  const totalOrders   = agents.reduce((s, a) => s + a.stats.ordersCreated, 0);
+  const totalCalls    = agents.reduce((s, a) => s + a.stats.callLogs, 0);
+  const totalMessages = agents.reduce((s, a) => s + a.stats.messagesSent, 0);
+  const activeCount   = agents.filter(a => a.isActive).length;
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <AdminSidebar />
+      <main className="flex-1 overflow-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+
+          {/* Page header */}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center">
+              <PhoneCall size={20} className="text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold font-display text-foreground">Agent Activities</h1>
+              <p className="text-sm text-muted-foreground">Overview of all call agents and their performance</p>
+            </div>
+          </div>
+
+          {/* Summary banner */}
+          {!isLoading && agents.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Active Agents',  value: activeCount,   Icon: User,          color: 'bg-indigo-50 text-indigo-700' },
+                { label: 'Total Orders',   value: totalOrders,   Icon: ShoppingBag,   color: 'bg-green-50 text-green-700' },
+                { label: 'Total Calls',    value: totalCalls,    Icon: PhoneCall,     color: 'bg-blue-50 text-blue-700' },
+                { label: 'Total Messages', value: totalMessages, Icon: MessageCircle, color: 'bg-purple-50 text-purple-700' },
+              ].map(({ label, value, Icon, color }) => (
+                <div key={label} className={cn('rounded-2xl p-4 flex flex-col gap-1', color)}>
+                  <Icon size={18} className="opacity-70" />
+                  <span className="text-2xl font-bold leading-none">{value}</span>
+                  <span className="text-xs font-medium opacity-70">{label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Agent cards */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <PhoneCall size={28} className="animate-pulse mr-2" /> Loading agents…
+            </div>
+          )}
+
+          {!isLoading && agents.length === 0 && (
+            <div className="text-center py-20 text-muted-foreground">
+              <User size={40} className="mx-auto mb-2 opacity-30" />
+              <p>No call agents registered yet.</p>
+              <p className="text-sm mt-1">Add agents from the Users page.</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {agents.map(agent => <AgentCard key={agent.id} agent={agent} />)}
           </div>
         </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

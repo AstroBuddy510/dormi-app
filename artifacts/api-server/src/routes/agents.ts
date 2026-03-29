@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, ordersTable, agentCallLogsTable, agentScheduledCallsTable, agentTempCallListTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { agentsTable, ordersTable, agentCallLogsTable, agentScheduledCallsTable, agentTempCallListTable, agentMessagesTable } from "@workspace/db/schema";
+import { eq, and, desc, count } from "drizzle-orm";
 import { createHash } from "crypto";
 
 const router: IRouter = Router();
@@ -24,6 +24,65 @@ function mapAgent(a: typeof agentsTable.$inferSelect) {
 router.get("/", async (_req, res) => {
   const agents = await db.select().from(agentsTable).orderBy(agentsTable.createdAt);
   res.json(agents.map(mapAgent));
+});
+
+// ─── Agent overview for admin (all agents + aggregated stats) ─────────────────
+router.get("/overview", async (_req, res) => {
+  try {
+    const agents = await db.select().from(agentsTable).orderBy(agentsTable.createdAt);
+
+    const overview = await Promise.all(agents.map(async (agent) => {
+      const [orderStats] = await db
+        .select({ total: count() })
+        .from(ordersTable)
+        .where(eq(ordersTable.agentId, agent.id));
+
+      const [callStats] = await db
+        .select({ total: count() })
+        .from(agentCallLogsTable)
+        .where(eq(agentCallLogsTable.agentId, agent.id));
+
+      const [msgStats] = await db
+        .select({ total: count() })
+        .from(agentMessagesTable)
+        .where(and(
+          eq(agentMessagesTable.agentId, agent.id),
+          eq(agentMessagesTable.senderRole, 'agent')
+        ));
+
+      const recentLogs = await db
+        .select()
+        .from(agentCallLogsTable)
+        .where(eq(agentCallLogsTable.agentId, agent.id))
+        .orderBy(desc(agentCallLogsTable.createdAt))
+        .limit(5);
+
+      const recentOrders = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.agentId, agent.id))
+        .orderBy(desc(ordersTable.createdAt))
+        .limit(3);
+
+      const lastActive = recentLogs[0]?.createdAt ?? recentOrders[0]?.createdAt ?? null;
+
+      return {
+        ...mapAgent(agent),
+        stats: {
+          ordersCreated: orderStats?.total ?? 0,
+          callLogs: callStats?.total ?? 0,
+          messagesSent: msgStats?.total ?? 0,
+        },
+        recentLogs,
+        recentOrders,
+        lastActive: lastActive ? new Date(lastActive).toISOString() : null,
+      };
+    }));
+
+    res.json(overview);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/", async (req, res) => {
