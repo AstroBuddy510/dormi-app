@@ -57,6 +57,7 @@ export default function ResidentHome() {
   const queryClient = useQueryClient();
   const [avatarImgError, setAvatarImgError] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [selectedNotif, setSelectedNotif] = useState<Notification | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const { data: resident } = useGetResident(user?.id || 0, {
@@ -104,6 +105,7 @@ export default function ResidentHome() {
     function handler(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setPanelOpen(false);
+        setSelectedNotif(null);
       }
     }
     document.addEventListener('mousedown', handler);
@@ -172,9 +174,18 @@ export default function ResidentHome() {
             >
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                <h2 className="font-bold text-base text-foreground">Notifications</h2>
+                {selectedNotif ? (
+                  <button
+                    onClick={() => setSelectedNotif(null)}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+                  >
+                    <ChevronRight size={14} className="rotate-180" /> Back
+                  </button>
+                ) : (
+                  <h2 className="font-bold text-base text-foreground">Notifications</h2>
+                )}
                 <div className="flex items-center gap-2">
-                  {unreadNotifs > 0 && (
+                  {!selectedNotif && unreadNotifs > 0 && (
                     <button
                       onClick={() => markAllRead.mutate()}
                       className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline"
@@ -183,7 +194,7 @@ export default function ResidentHome() {
                     </button>
                   )}
                   <button
-                    onClick={() => setPanelOpen(false)}
+                    onClick={() => { setPanelOpen(false); setSelectedNotif(null); }}
                     className="p-1 rounded-full hover:bg-muted transition-colors text-muted-foreground"
                   >
                     <X size={16} />
@@ -191,63 +202,88 @@ export default function ResidentHome() {
                 </div>
               </div>
 
-              <div className="overflow-y-auto flex-1">
-                {/* Messages section */}
-                {unreadMessages > 0 && (
-                  <button
-                    onClick={() => { setPanelOpen(false); setLocation('/messages'); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 bg-primary/5 border-b border-border hover:bg-primary/10 transition-colors text-left"
-                  >
-                    <div className="h-9 w-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                      <MessageCircle size={17} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {unreadMessages} unread message{unreadMessages > 1 ? 's' : ''}
-                      </p>
-                      <p className="text-xs text-muted-foreground">From your support agent</p>
-                    </div>
-                    <ChevronRight size={15} className="text-muted-foreground shrink-0" />
-                  </button>
-                )}
-
-                {/* Admin notifications */}
-                {notifications.length === 0 && unreadMessages === 0 && (
-                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                    <Bell size={32} className="mb-2 opacity-30" />
-                    <p className="text-sm">No notifications yet</p>
-                  </div>
-                )}
-
-                {notifications.map(n => {
-                  const Icon = TYPE_ICON[n.type] ?? Info;
-                  const isUnread = !n.readAt;
-                  return (
+              {/* Detail view */}
+              {selectedNotif ? (
+                <div className="flex-1 overflow-y-auto px-5 py-5">
+                  {(() => {
+                    const Icon = TYPE_ICON[selectedNotif.type] ?? Info;
+                    return (
+                      <>
+                        <div className={cn('h-12 w-12 rounded-full flex items-center justify-center mb-4', TYPE_COLOR[selectedNotif.type] ?? 'bg-gray-100 text-gray-500')}>
+                          <Icon size={22} />
+                        </div>
+                        <h3 className="font-bold text-lg text-foreground leading-snug mb-2">{selectedNotif.title}</h3>
+                        <p className="text-xs text-muted-foreground/60 mb-4">{timeAgo(selectedNotif.createdAt)}</p>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{selectedNotif.body}</p>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="overflow-y-auto flex-1">
+                  {/* Messages section */}
+                  {unreadMessages > 0 && (
                     <button
-                      key={n.id}
-                      onClick={() => { if (isUnread) markOneRead.mutate(n.id); }}
-                      className={cn(
-                        'w-full flex items-start gap-3 px-4 py-3 border-b border-border/60 text-left hover:bg-muted/40 transition-colors',
-                        isUnread && 'bg-blue-50/60'
-                      )}
+                      onClick={() => { setPanelOpen(false); setSelectedNotif(null); setLocation('/messages'); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-primary/5 border-b border-border hover:bg-primary/10 transition-colors text-left"
                     >
-                      <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0 mt-0.5', TYPE_COLOR[n.type] ?? 'bg-gray-100 text-gray-500')}>
-                        <Icon size={16} />
+                      <div className="h-9 w-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                        <MessageCircle size={17} className="text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className={cn('text-sm leading-snug', isUnread ? 'font-bold text-foreground' : 'font-medium text-foreground/80')}>
-                            {n.title}
-                          </p>
-                          {isUnread && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-                        <p className="text-[10px] text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {unreadMessages} unread message{unreadMessages > 1 ? 's' : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground">From your support agent</p>
                       </div>
+                      <ChevronRight size={15} className="text-muted-foreground shrink-0" />
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+
+                  {/* Admin notifications */}
+                  {notifications.length === 0 && unreadMessages === 0 && (
+                    <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                      <Bell size={32} className="mb-2 opacity-30" />
+                      <p className="text-sm">No notifications yet</p>
+                    </div>
+                  )}
+
+                  {notifications.map(n => {
+                    const Icon = TYPE_ICON[n.type] ?? Info;
+                    const isUnread = !n.readAt;
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          if (isUnread) markOneRead.mutate(n.id);
+                          setSelectedNotif(n);
+                        }}
+                        className={cn(
+                          'w-full flex items-start gap-3 px-4 py-3 border-b border-border/60 text-left hover:bg-muted/40 transition-colors',
+                          isUnread && 'bg-blue-50/60'
+                        )}
+                      >
+                        <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0 mt-0.5', TYPE_COLOR[n.type] ?? 'bg-gray-100 text-gray-500')}>
+                          <Icon size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={cn('text-sm leading-snug', isUnread ? 'font-bold text-foreground' : 'font-medium text-foreground/80')}>
+                              {n.title}
+                            </p>
+                            {isUnread && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            <p className="text-[10px] text-muted-foreground/60">{timeAgo(n.createdAt)}</p>
+                            <span className="text-[10px] text-primary font-medium">Tap to read →</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

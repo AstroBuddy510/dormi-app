@@ -155,7 +155,7 @@ function AddItemDialog({
     if (!resolvedCategory) { toast({ title: 'Select or enter a category', variant: 'destructive' }); return; }
     if (imageUploading) { toast({ title: 'Image still uploading', description: 'Please wait…', variant: 'destructive' }); return; }
     setSaving(true);
-    const imageUrl = imageObjectPath ? `${BASE}/api/storage${imageObjectPath}` : undefined;
+    const imageUrl = imageObjectPath ? `/api/storage${imageObjectPath}` : undefined;
     try {
       await apiFetch('/items', {
         method: 'POST',
@@ -394,7 +394,7 @@ function EditItemDialog({
 
     let imageUrl: string | null | undefined;
     if (imageObjectPath) {
-      imageUrl = `${BASE}/api/storage${imageObjectPath}`;
+      imageUrl = `/api/storage${imageObjectPath}`;
     } else if (imageCleared) {
       imageUrl = null;
     } else {
