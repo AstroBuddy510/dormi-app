@@ -30,6 +30,7 @@ import AdminCatalogue from "@/pages/admin/Catalogue";
 import AdminReports from "@/pages/admin/Reports";
 import AdminRiderInbox from "@/pages/admin/RiderInbox";
 import AdminVendorInbox from "@/pages/admin/VendorInbox";
+import AdminNotifications from "@/pages/admin/Notifications";
 import AgentDashboard from "@/pages/agent/Dashboard";
 import AgentCreateOrder from "@/pages/agent/CreateOrder";
 import AgentComplaints from "@/pages/agent/Complaints";
@@ -108,6 +109,7 @@ function RoleBasedRouter() {
         <Route path="/reports" component={AdminReports} />
         <Route path="/rider-messages" component={AdminRiderInbox} />
         <Route path="/vendor-inbox" component={AdminVendorInbox} />
+        <Route path="/notifications" component={AdminNotifications} />
         <Route component={NotFound} />
       </Switch>
     );

@@ -4,7 +4,7 @@ import { useAuth } from '@/store';
 import {
   LayoutDashboard, PhoneCall, Truck, Users, LogOut, Settings,
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
-  Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu,
+  Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -171,6 +171,12 @@ export function AdminSidebar() {
       items: [
         { icon: TrendingUp, label: 'Finance', path: '/finance' },
         { icon: BarChart3,  label: 'Reports', path: '/reports' },
+      ],
+    },
+    {
+      heading: 'Engagement',
+      items: [
+        { icon: Bell, label: 'Notifications', path: '/notifications' },
       ],
     },
     {
