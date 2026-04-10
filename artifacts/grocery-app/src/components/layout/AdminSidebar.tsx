@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
 import {
   LayoutDashboard, PhoneCall, Truck, Users, LogOut, Settings,
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
+  ShieldAlert,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -106,12 +108,47 @@ function NavContent({ groups, location, logout }: NavContentProps) {
   );
 }
 
+const IDLE_TIMEOUT_MS  = 15 * 60 * 1000; // 15 minutes
+const IDLE_WARNING_MS  =  1 * 60 * 1000; // warn 1 minute before
+
 export function AdminSidebar() {
   const [open, setOpen] = useState(false);
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { logout } = useAuth();
+  const [idleWarning, setIdleWarning] = useState(false);
+  const [countdown, setCountdown] = useState(60);
 
   useEffect(() => { setOpen(false); }, [location]);
+
+  const handleLogout = useCallback(() => {
+    setIdleWarning(false);
+    logout();
+    setLocation('/');
+  }, [logout, setLocation]);
+
+  const { reset: resetIdle } = useIdleTimeout({
+    timeoutMs:  IDLE_TIMEOUT_MS,
+    warningMs:  IDLE_WARNING_MS,
+    onWarn:     () => { setIdleWarning(true); setCountdown(60); },
+    onTimeout:  handleLogout,
+  });
+
+  const staySignedIn = useCallback(() => {
+    setIdleWarning(false);
+    resetIdle();
+  }, [resetIdle]);
+
+  useEffect(() => {
+    if (!idleWarning) return;
+    setCountdown(60);
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [idleWarning]);
 
   const { data: requests = [] } = useQuery<any[]>({
     queryKey: ['item-requests'],
@@ -189,6 +226,40 @@ export function AdminSidebar() {
 
   return (
     <>
+      {/* ── Idle-timeout warning overlay ── */}
+      {idleWarning && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-7 flex flex-col items-center text-center gap-5">
+            <div className="h-16 w-16 rounded-full bg-amber-50 border-2 border-amber-200 flex items-center justify-center">
+              <ShieldAlert size={28} className="text-amber-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Session Timeout</h2>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                You've been idle for a while. For security, you'll be signed out automatically.
+              </p>
+            </div>
+            <div className="h-16 w-16 rounded-full border-4 border-amber-200 flex items-center justify-center bg-amber-50">
+              <span className="text-2xl font-bold text-amber-600 tabular-nums">{countdown}</span>
+            </div>
+            <div className="flex flex-col gap-2 w-full">
+              <button
+                onClick={staySignedIn}
+                className="w-full py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition-colors"
+              >
+                Stay Signed In
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-gray-50 transition-colors"
+              >
+                Sign Out Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile sticky top bar (hidden on lg+) ── */}
       <div className="sticky top-0 z-50 lg:hidden h-16 flex items-center justify-between px-4 bg-white border-b border-border shadow-sm shrink-0">
         <div className="flex items-center gap-2">
