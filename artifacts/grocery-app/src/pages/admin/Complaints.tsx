@@ -87,7 +87,7 @@ export default function AdminComplaints() {
 
   return (
     <AdminLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Complaints</h1>
           <p className="text-gray-500 mt-1">Complaints forwarded by call center agents. Review, respond, and resolve.</p>

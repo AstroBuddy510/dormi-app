@@ -97,7 +97,7 @@ export default function RiderInbox() {
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <div className="flex-1 p-4 md:p-6 lg:p-8 max-w-4xl">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="flex items-center gap-3 mb-6">
           {selectedRiderId && (
             <button

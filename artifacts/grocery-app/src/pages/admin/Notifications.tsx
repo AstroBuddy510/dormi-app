@@ -119,10 +119,10 @@ export default function AdminNotifications() {
   const residentsArr = Array.isArray(residents) ? residents : (residents as any)?.residents ?? [];
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <main className="flex-1 overflow-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+        <div className="space-y-6">
 
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -295,7 +295,7 @@ export default function AdminNotifications() {
             </CardContent>
           </Card>
         </div>
-      </main>
+      </div>
 
       <AlertDialog open={deleteId !== null} onOpenChange={open => { if (!open) setDeleteId(null); }}>
         <AlertDialogContent>

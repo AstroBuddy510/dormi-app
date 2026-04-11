@@ -920,7 +920,7 @@ export default function AdminCatalogue() {
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
       <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-        <div className="max-w-5xl mx-auto">
+        <div>
           <div className="mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
               <ShoppingBasket size={26} className="text-primary" /> Item Catalogue

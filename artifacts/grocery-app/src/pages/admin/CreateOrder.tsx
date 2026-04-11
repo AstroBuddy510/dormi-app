@@ -537,7 +537,7 @@ function ThirdPartyTab() {
 export default function CreateOrder() {
   return (
     <AdminLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Create Order</h1>
           <p className="text-gray-500 mt-1">Choose the order type that matches the customer's situation.</p>
