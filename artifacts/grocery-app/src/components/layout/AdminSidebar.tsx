@@ -229,22 +229,24 @@ function SidebarBody({
       >
         {collapsed ? (
           /* Collapsed: logo alone, perfectly centered over the icon column */
-          <img
-            src={`${BASE}/images/dormi-logo.png`}
-            alt="Dormi Logo"
-            className="w-8 h-8 rounded-lg shadow-sm"
-          />
+          <Link href="/" className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <img
+              src={`${BASE}/images/dormi-logo.png`}
+              alt="Dormi Logo"
+              className="w-8 h-8 rounded-lg shadow-sm hover:opacity-80 transition-opacity"
+            />
+          </Link>
         ) : (
           /* Expanded: logo + wordmark + collapse toggle */
           <>
-            <div className="flex items-center gap-2 text-primary min-w-0">
+            <Link href="/" className="flex items-center gap-2 text-primary min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:opacity-80 transition-opacity">
               <img
                 src={`${BASE}/images/dormi-logo.png`}
                 alt="Dormi Logo"
                 className="w-8 h-8 rounded-lg shadow-sm shrink-0"
               />
               <span className="font-display font-bold text-xl tracking-tight whitespace-nowrap">Dormi</span>
-            </div>
+            </Link>
             {showCollapseButton && (
               <button
                 onClick={onToggleCollapse}
@@ -574,14 +576,14 @@ export function AdminSidebar() {
 
       {/* ── Mobile sticky top bar ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-50 lg:hidden h-16 flex items-center justify-between px-4 bg-white border-b border-border shadow-sm shrink-0">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <img
             src={`${BASE}/images/dormi-logo.png`}
             alt="Dormi"
             className="w-7 h-7 rounded-lg shadow-sm"
           />
           <span className="font-display font-bold text-lg tracking-tight text-primary">Dormi</span>
-        </div>
+        </Link>
         <button
           onClick={() => setMobileOpen(true)}
           className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-muted-foreground"
