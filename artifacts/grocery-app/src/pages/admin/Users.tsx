@@ -562,7 +562,7 @@ function ResidentsTab() {
           /* ── List view ── */
           <div className="space-y-1.5">
             {/* Header row */}
-            <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+            <div className="hidden md:grid grid-cols-[2.5rem_8rem_11rem_6rem_5.5rem_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
               <span />
               <span>Name</span>
               <span>Contact & Address</span>
@@ -571,7 +571,7 @@ function ResidentsTab() {
               <span>Actions</span>
             </div>
             {paged.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_8rem_11rem_6rem_5.5rem_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
@@ -585,12 +585,12 @@ function ResidentsTab() {
                     <StatusPill suspended={(r as any).suspended} />
                   </div>
                 </div>
-                <div className="hidden md:block min-w-0">
+                <div className="hidden md:block min-w-0 overflow-hidden">
                   <p className="text-xs font-mono truncate">{r.phone}</p>
                   <p className="text-[11px] text-muted-foreground truncate">{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</p>
                 </div>
-                <div className="hidden md:block"><ZoneBadge zone={(r as any).zone} /></div>
-                <div className="hidden md:block"><StatusPill suspended={(r as any).suspended} /></div>
+                <div className="hidden md:block overflow-hidden"><ZoneBadge zone={(r as any).zone} /></div>
+                <div className="hidden md:block overflow-hidden"><StatusPill suspended={(r as any).suspended} /></div>
                 <div className="flex gap-1 shrink-0 md:justify-end">
                   <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" onClick={() => openEdit(r)} title="Edit">
                     <Pencil size={14} />
@@ -850,7 +850,7 @@ function VendorsTab() {
         ) : (
           /* ── List view ── */
           <div className="space-y-1.5">
-            <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+            <div className="hidden md:grid grid-cols-[2.5rem_9rem_12rem_5.5rem_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
               <span />
               <span>Name</span>
               <span>Phone & Categories</span>
@@ -858,7 +858,7 @@ function VendorsTab() {
               <span>Actions</span>
             </div>
             {paged.map((v) => (
-              <div key={v.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
+              <div key={v.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_9rem_12rem_5.5rem_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
@@ -869,7 +869,7 @@ function VendorsTab() {
                   <p className="text-[11px] text-muted-foreground truncate md:hidden">{v.phone || 'No phone'}</p>
                   <div className="md:hidden mt-0.5"><StatusPill active={v.isActive} /></div>
                 </div>
-                <div className="hidden md:block min-w-0">
+                <div className="hidden md:block min-w-0 overflow-hidden">
                   <p className="text-xs font-mono truncate">{v.phone || '—'}</p>
                   <div className="flex flex-wrap gap-0.5 mt-0.5">
                     {(v.categories || []).slice(0, 3).map(c => (
@@ -877,7 +877,7 @@ function VendorsTab() {
                     ))}
                   </div>
                 </div>
-                <div className="hidden md:block"><StatusPill active={v.isActive} /></div>
+                <div className="hidden md:block overflow-hidden"><StatusPill active={v.isActive} /></div>
                 <div className="flex gap-1 shrink-0 md:justify-end">
                   <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" onClick={() => setEditTarget({ ...v })} title="Edit"><Pencil size={14} /></button>
                   <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => setPinTarget(v)} title="Reset PIN"><ShieldCheck size={14} /></button>
@@ -1076,7 +1076,7 @@ function RidersTab() {
         ) : (
           /* ── List view ── */
           <div className="space-y-1.5">
-            <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+            <div className="hidden md:grid grid-cols-[2.5rem_8rem_10rem_7rem_5.5rem_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
               <span />
               <span>Name</span>
               <span>Phone & Availability</span>
@@ -1085,7 +1085,7 @@ function RidersTab() {
               <span>Actions</span>
             </div>
             {paged.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_8rem_10rem_7rem_5.5rem_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
@@ -1099,7 +1099,7 @@ function RidersTab() {
                     <StatusPill suspended={(r as any).suspended} />
                   </div>
                 </div>
-                <div className="hidden md:block min-w-0">
+                <div className="hidden md:block min-w-0 overflow-hidden">
                   <p className="text-xs font-mono truncate">{r.phone}</p>
                   <div className="flex items-center gap-1 mt-0.5">
                     <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
@@ -1109,7 +1109,7 @@ function RidersTab() {
                 <button onClick={() => setPinTarget(r)} className="hidden md:flex text-xs text-primary hover:underline font-medium items-center gap-1 whitespace-nowrap">
                   <ShieldCheck size={11} /> {(r as any).hasCustomPin ? 'Reset PIN' : 'Set PIN'}
                 </button>
-                <div className="hidden md:block"><StatusPill suspended={(r as any).suspended} /></div>
+                <div className="hidden md:block overflow-hidden"><StatusPill suspended={(r as any).suspended} /></div>
                 <div className="flex gap-1 shrink-0 md:justify-end">
                   <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" onClick={() => setEditTarget({ ...r })} title="Edit"><Pencil size={14} /></button>
                   <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => handleSuspend(r)} title={(r as any).suspended ? 'Reactivate' : 'Suspend'}>
@@ -1341,13 +1341,13 @@ function AgentsTab() {
       )}
       {!isLoading && filtered.length > 0 && viewMode !== 'grid' && (
         <div className="space-y-1">
-          <div className="hidden md:grid grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
+          <div className="hidden md:grid grid-cols-[2.5rem_9rem_9rem_5.5rem_5.5rem_auto] gap-4 px-3 pb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border/50">
             <span></span><span>Name</span><span>Phone</span><span>Status</span><span>Added</span><span></span>
           </div>
           {pagedAgents.map((a) => (
             <div
               key={a.id}
-              className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-start px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
+              className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_9rem_9rem_5.5rem_5.5rem_auto] md:gap-4 md:items-start px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
             >
               <div className="relative shrink-0">
                 <Avatar name={a.name} photoUrl={a.photoUrl} color="bg-indigo-100 text-indigo-700" size="sm" />
@@ -1360,7 +1360,7 @@ function AgentsTab() {
                 <div className="md:hidden mt-0.5"><StatusPill active={a.isActive} /></div>
               </div>
               <p className="hidden md:block text-xs font-mono truncate min-w-0">{a.phone}</p>
-              <div className="hidden md:block"><StatusPill active={a.isActive} /></div>
+              <div className="hidden md:block overflow-hidden"><StatusPill active={a.isActive} /></div>
               <span className="hidden md:block text-[11px] text-muted-foreground whitespace-nowrap">
                 {a.createdAt ? format(new Date(a.createdAt), 'dd MMM yy') : '—'}
               </span>
