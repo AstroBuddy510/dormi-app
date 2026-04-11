@@ -571,33 +571,27 @@ function ResidentsTab() {
               <span>Actions</span>
             </div>
             {paged.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-center px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
                 </div>
-                <div className="flex-1 min-w-0 hidden md:grid grid-cols-[1fr_1fr_auto_auto] gap-x-4 items-center">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm truncate">{r.fullName}</p>
-                    <p className="text-[11px] text-muted-foreground">ID #{r.id} · {format(new Date(r.createdAt), 'dd MMM yy')}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-mono truncate">{r.phone}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</p>
-                  </div>
-                  <ZoneBadge zone={(r as any).zone} />
-                  <StatusPill suspended={(r as any).suspended} />
-                </div>
-                {/* Mobile fallback */}
-                <div className="flex-1 min-w-0 md:hidden">
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{r.fullName}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{r.phone} · {r.estate}</p>
-                  <div className="flex gap-1.5 mt-1">
+                  <p className="text-[11px] text-muted-foreground">ID #{r.id} · {format(new Date(r.createdAt), 'dd MMM yy')}</p>
+                  <p className="text-[11px] text-muted-foreground truncate md:hidden">{r.phone} · {r.estate}</p>
+                  <div className="flex gap-1.5 mt-1 md:hidden">
                     <ZoneBadge zone={(r as any).zone} />
                     <StatusPill suspended={(r as any).suspended} />
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="hidden md:block min-w-0">
+                  <p className="text-xs font-mono truncate">{r.phone}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{r.estate}, Blk {r.blockNumber}, Hse {r.houseNumber}</p>
+                </div>
+                <div className="hidden md:block"><ZoneBadge zone={(r as any).zone} /></div>
+                <div className="hidden md:block"><StatusPill suspended={(r as any).suspended} /></div>
+                <div className="flex gap-1 shrink-0 md:justify-end">
                   <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" onClick={() => openEdit(r)} title="Edit">
                     <Pencil size={14} />
                   </button>
@@ -864,33 +858,27 @@ function VendorsTab() {
               <span>Actions</span>
             </div>
             {paged.map((v) => (
-              <div key={v.id} className={`flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
+              <div key={v.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto] md:gap-4 md:items-center px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
                 </div>
-                <div className="flex-1 min-w-0 hidden md:grid grid-cols-[1fr_1fr_auto] gap-x-4 items-center">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm truncate">{v.name}</p>
-                    <p className="text-[11px] text-muted-foreground">Vendor #{v.id}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-mono truncate">{v.phone || '—'}</p>
-                    <div className="flex flex-wrap gap-0.5 mt-0.5">
-                      {(v.categories || []).slice(0, 3).map(c => (
-                        <span key={c} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{c}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <StatusPill active={v.isActive} />
-                </div>
-                {/* Mobile fallback */}
-                <div className="flex-1 min-w-0 md:hidden">
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{v.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{v.phone || 'No phone'}</p>
-                  <StatusPill active={v.isActive} />
+                  <p className="text-[11px] text-muted-foreground">Vendor #{v.id}</p>
+                  <p className="text-[11px] text-muted-foreground truncate md:hidden">{v.phone || 'No phone'}</p>
+                  <div className="md:hidden mt-0.5"><StatusPill active={v.isActive} /></div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="hidden md:block min-w-0">
+                  <p className="text-xs font-mono truncate">{v.phone || '—'}</p>
+                  <div className="flex flex-wrap gap-0.5 mt-0.5">
+                    {(v.categories || []).slice(0, 3).map(c => (
+                      <span key={c} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{c}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="hidden md:block"><StatusPill active={v.isActive} /></div>
+                <div className="flex gap-1 shrink-0 md:justify-end">
                   <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" onClick={() => setEditTarget({ ...v })} title="Edit"><Pencil size={14} /></button>
                   <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => setPinTarget(v)} title="Reset PIN"><ShieldCheck size={14} /></button>
                   <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => handleSuspend(v)} title={v.isActive ? 'Suspend' : 'Reactivate'}>
@@ -1097,38 +1085,32 @@ function RidersTab() {
               <span>Actions</span>
             </div>
             {paged.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-center px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
                 </div>
-                <div className="flex-1 min-w-0 hidden md:grid grid-cols-[1fr_1fr_auto_auto] gap-x-4 items-center">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm truncate">{r.name}</p>
-                    <p className="text-[11px] text-muted-foreground">Rider #{r.id} · {(r as any).createdAt ? format(new Date((r as any).createdAt), 'dd MMM yy') : ''}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-mono truncate">{r.phone}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
-                      <span className="text-[11px] text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
-                    </div>
-                  </div>
-                  <button onClick={() => setPinTarget(r)} className="text-xs text-primary hover:underline font-medium flex items-center gap-1 whitespace-nowrap">
-                    <ShieldCheck size={11} /> {(r as any).hasCustomPin ? 'Reset PIN' : 'Set PIN'}
-                  </button>
-                  <StatusPill suspended={(r as any).suspended} />
-                </div>
-                {/* Mobile fallback */}
-                <div className="flex-1 min-w-0 md:hidden">
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{r.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{r.phone}</p>
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <p className="text-[11px] text-muted-foreground">Rider #{r.id} · {(r as any).createdAt ? format(new Date((r as any).createdAt), 'dd MMM yy') : ''}</p>
+                  <p className="text-[11px] text-muted-foreground truncate md:hidden">{r.phone}</p>
+                  <div className="flex items-center gap-1.5 mt-1 md:hidden">
                     <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
                     <StatusPill suspended={(r as any).suspended} />
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="hidden md:block min-w-0">
+                  <p className="text-xs font-mono truncate">{r.phone}</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className={`w-2 h-2 rounded-full ${r.isAvailable ? 'bg-green-500' : 'bg-amber-500'}`} />
+                    <span className="text-[11px] text-muted-foreground">{r.isAvailable ? 'Available' : 'On delivery'}</span>
+                  </div>
+                </div>
+                <button onClick={() => setPinTarget(r)} className="hidden md:flex text-xs text-primary hover:underline font-medium items-center gap-1 whitespace-nowrap">
+                  <ShieldCheck size={11} /> {(r as any).hasCustomPin ? 'Reset PIN' : 'Set PIN'}
+                </button>
+                <div className="hidden md:block"><StatusPill suspended={(r as any).suspended} /></div>
+                <div className="flex gap-1 shrink-0 md:justify-end">
                   <button className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" onClick={() => setEditTarget({ ...r })} title="Edit"><Pencil size={14} /></button>
                   <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" onClick={() => handleSuspend(r)} title={(r as any).suspended ? 'Reactivate' : 'Suspend'}>
                     {(r as any).suspended ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
@@ -1365,43 +1347,29 @@ function AgentsTab() {
           {pagedAgents.map((a) => (
             <div
               key={a.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
+              className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-center px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
             >
               <div className="relative shrink-0">
                 <Avatar name={a.name} photoUrl={a.photoUrl} color="bg-indigo-100 text-indigo-700" size="sm" />
                 <PhotoUploadButton onUpload={(file) => handlePhotoUpload(a, file)} />
               </div>
-              {/* Desktop grid */}
-              <div className="hidden md:grid grid-cols-[1fr_1fr_auto_auto_auto] gap-4 flex-1 items-center min-w-0">
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm truncate">{a.name}</p>
-                  <p className="text-[11px] text-muted-foreground">Agent #{a.id}</p>
-                </div>
-                <p className="text-xs font-mono truncate">{a.phone}</p>
-                <StatusPill active={a.isActive} />
-                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                  {a.createdAt ? format(new Date(a.createdAt), 'dd MMM yy') : '—'}
-                </span>
-                <div className="flex gap-1">
-                  <button className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-600 transition-colors" onClick={() => setEditTarget({ ...a })} title="Edit"><Pencil size={14} /></button>
-                  <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" onClick={() => handleToggleActive(a)} title={a.isActive ? 'Suspend' : 'Reactivate'}>
-                    {a.isActive ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
-                  </button>
-                  <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive transition-colors" onClick={() => setDeleteTarget(a)} title="Delete"><Trash2 size={14} /></button>
-                </div>
-              </div>
-              {/* Mobile fallback */}
-              <div className="flex-1 min-w-0 md:hidden">
+              <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{a.name}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{a.phone}</p>
-                <StatusPill active={a.isActive} />
+                <p className="text-[11px] text-muted-foreground">Agent #{a.id}</p>
+                <p className="text-[11px] text-muted-foreground truncate md:hidden">{a.phone}</p>
+                <div className="md:hidden mt-0.5"><StatusPill active={a.isActive} /></div>
               </div>
-              <div className="flex gap-1 shrink-0 md:hidden">
-                <button className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-600 transition-colors" onClick={() => setEditTarget({ ...a })}><Pencil size={14} /></button>
-                <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" onClick={() => handleToggleActive(a)}>
+              <p className="hidden md:block text-xs font-mono truncate min-w-0">{a.phone}</p>
+              <div className="hidden md:block"><StatusPill active={a.isActive} /></div>
+              <span className="hidden md:block text-[11px] text-muted-foreground whitespace-nowrap">
+                {a.createdAt ? format(new Date(a.createdAt), 'dd MMM yy') : '—'}
+              </span>
+              <div className="flex gap-1 shrink-0 md:justify-end">
+                <button className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-600 transition-colors" onClick={() => setEditTarget({ ...a })} title="Edit"><Pencil size={14} /></button>
+                <button className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" onClick={() => handleToggleActive(a)} title={a.isActive ? 'Suspend' : 'Reactivate'}>
                   {a.isActive ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
                 </button>
-                <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive transition-colors" onClick={() => setDeleteTarget(a)}><Trash2 size={14} /></button>
+                <button className="p-1.5 rounded-lg hover:bg-red-50 text-destructive transition-colors" onClick={() => setDeleteTarget(a)} title="Delete"><Trash2 size={14} /></button>
               </div>
             </div>
           ))}
