@@ -5,7 +5,7 @@ import {
   LayoutDashboard, PhoneCall, Truck, Users, LogOut, Settings,
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
-  ShieldAlert,
+  ShieldAlert, ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,16 @@ import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+// Static section→paths map used for auto-opening sections on navigation
+const SECTION_PATHS: Record<string, string[]> = {
+  operations:  ['/', '/create-order', '/call-log', '/riders', '/delivery-partners', '/rider-messages', '/vendor-inbox', '/complaints'],
+  catalogue:   ['/catalogue', '/pricing'],
+  people:      ['/employees', '/subscribers', '/users'],
+  finance:     ['/finance', '/reports'],
+  engagement:  ['/notifications'],
+  system:      ['/settings'],
+};
+
 type NavItem = {
   icon: React.ElementType;
   label: string;
@@ -21,104 +31,364 @@ type NavItem = {
   badge?: number;
 };
 
-type NavGroup = {
+type NavSection = {
+  id: string;
   heading: string;
   items: NavItem[];
 };
 
-interface NavContentProps {
-  groups: NavGroup[];
+// ─── Tooltip wrapper shown only in collapsed mode ───────────────────────────
+interface TooltipProps {
+  label: string;
+  badge?: number;
+  children: React.ReactNode;
+}
+
+function SidebarTooltip({ label, badge, children }: TooltipProps) {
+  return (
+    <div className="relative group/tip w-full flex justify-center">
+      {children}
+      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[300] pointer-events-none opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150">
+        <div className="relative flex items-center gap-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-xl">
+          {label}
+          {(badge ?? 0) > 0 && (
+            <span className="bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-px leading-none">
+              {badge}
+            </span>
+          )}
+          {/* Arrow */}
+          <span className="absolute top-1/2 -translate-y-1/2 right-full border-[5px] border-transparent border-r-gray-900" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Single nav link ─────────────────────────────────────────────────────────
+interface NavLinkItemProps {
+  item: NavItem;
+  isActive: boolean;
+  collapsed: boolean;
+}
+
+function NavLinkItem({ item, isActive, collapsed }: NavLinkItemProps) {
+  const Icon = item.icon;
+  const hasBadge = (item.badge ?? 0) > 0;
+
+  const link = (
+    <Link
+      href={item.path}
+      className={cn(
+        'relative flex items-center gap-3 rounded-xl transition-all duration-200 group/link text-sm',
+        collapsed
+          ? 'justify-center w-10 h-10 mx-auto p-0'
+          : 'px-3 py-2.5 w-full',
+        isActive
+          ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 font-medium'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+      )}
+    >
+      <div className="relative shrink-0">
+        <Icon
+          size={17}
+          className={cn('transition-transform duration-200', !isActive && 'group-hover/link:scale-110')}
+        />
+        {collapsed && hasBadge && (
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 border-2 border-white" />
+        )}
+      </div>
+
+      {!collapsed && (
+        <>
+          <span className="flex-1 truncate">{item.label}</span>
+          {hasBadge && (
+            <span
+              className={cn(
+                'shrink-0 text-xs font-bold rounded-full px-1.5 py-px leading-none min-w-[18px] text-center',
+                isActive ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700',
+              )}
+            >
+              {item.badge}
+            </span>
+          )}
+        </>
+      )}
+    </Link>
+  );
+
+  if (collapsed) {
+    return (
+      <SidebarTooltip label={item.label} badge={item.badge}>
+        {link}
+      </SidebarTooltip>
+    );
+  }
+
+  return link;
+}
+
+// ─── Collapsible section group ────────────────────────────────────────────────
+interface SectionGroupProps {
+  section: NavSection;
+  isOpen: boolean;
+  onToggle: () => void;
   location: string;
+  collapsed: boolean;
+}
+
+function SectionGroup({ section, isOpen, onToggle, location, collapsed }: SectionGroupProps) {
+  const hasActive = section.items.some((item) => location === item.path);
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-0.5 w-full">
+        {section.items.map((item) => (
+          <NavLinkItem
+            key={item.path}
+            item={item}
+            isActive={location === item.path}
+            collapsed
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className={cn(
+          'w-full flex items-center justify-between px-3 py-1.5 rounded-lg',
+          'transition-colors duration-150 group/heading',
+          hasActive
+            ? 'text-primary'
+            : 'text-muted-foreground/60 hover:text-muted-foreground',
+        )}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-widest select-none">
+          {section.heading}
+        </span>
+        <ChevronDown
+          size={12}
+          className={cn('opacity-60 transition-transform duration-200', isOpen && 'rotate-180')}
+        />
+      </button>
+
+      <div
+        className={cn(
+          'overflow-hidden transition-all duration-300 ease-in-out',
+          isOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0',
+        )}
+      >
+        <div className="flex flex-col gap-0.5 pt-0.5 pb-1.5 pl-1">
+          {section.items.map((item) => (
+            <NavLinkItem
+              key={item.path}
+              item={item}
+              isActive={location === item.path}
+              collapsed={false}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Full sidebar body (used for both desktop and mobile sheet) ───────────────
+interface SidebarBodyProps {
+  sections: NavSection[];
+  location: string;
+  collapsed: boolean;
+  openSections: Record<string, boolean>;
+  onToggleSection: (id: string) => void;
+  onToggleCollapse?: () => void;
+  showCollapseButton?: boolean;
   logout: () => void;
 }
 
-function NavContent({ groups, location, logout }: NavContentProps) {
+function SidebarBody({
+  sections,
+  location,
+  collapsed,
+  openSections,
+  onToggleSection,
+  onToggleCollapse,
+  showCollapseButton = false,
+  logout,
+}: SidebarBodyProps) {
   return (
     <>
-      <div className="h-16 flex items-center px-6 border-b border-border shrink-0">
-        <div className="flex items-center gap-2 text-primary">
+      {/* Header */}
+      <div
+        className={cn(
+          'h-16 flex items-center border-b border-border shrink-0 transition-all duration-300',
+          collapsed ? 'justify-center px-2 gap-0' : 'px-4 justify-between gap-2',
+        )}
+      >
+        <div className={cn('flex items-center gap-2 text-primary min-w-0 overflow-hidden', collapsed && 'w-0 opacity-0 pointer-events-none')}>
           <img
             src={`${BASE}/images/dormi-logo.png`}
             alt="Dormi Logo"
-            className="w-8 h-8 rounded-lg shadow-sm"
+            className="w-8 h-8 rounded-lg shadow-sm shrink-0"
           />
-          <span className="font-display font-bold text-xl tracking-tight">Dormi</span>
+          <span className="font-display font-bold text-xl tracking-tight whitespace-nowrap">Dormi</span>
         </div>
+
+        {collapsed && (
+          <img
+            src={`${BASE}/images/dormi-logo.png`}
+            alt="Dormi Logo"
+            className="w-8 h-8 rounded-lg shadow-sm shrink-0"
+          />
+        )}
+
+        {showCollapseButton && (
+          <button
+            onClick={onToggleCollapse}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="shrink-0 p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 py-4 px-3 flex flex-col gap-5 overflow-y-auto">
-        {groups.map((group) => (
-          <div key={group.heading}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-3 mb-1.5">
-              {group.heading}
-            </p>
-            <div className="flex flex-col gap-0.5">
-              {group.items.map((link) => {
-                const isActive = location === link.path;
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.path}
-                    href={link.path}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-sm',
-                      isActive
-                        ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 font-medium'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                    )}
-                  >
-                    <Icon
-                      size={17}
-                      className={cn(
-                        'shrink-0 transition-transform duration-200',
-                        !isActive && 'group-hover:scale-110',
-                      )}
-                    />
-                    <span className="flex-1">{link.label}</span>
-                    {(link.badge ?? 0) > 0 && (
-                      <span
-                        className={cn(
-                          'text-xs font-bold rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center',
-                          isActive
-                            ? 'bg-white/20 text-white'
-                            : 'bg-amber-100 text-amber-700',
-                        )}
-                      >
-                        {link.badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      {/* Nav body */}
+      <div
+        className={cn(
+          'flex-1 py-3 flex flex-col overflow-y-auto overflow-x-hidden',
+          collapsed ? 'px-1.5 gap-0 items-center' : 'px-3 gap-1.5',
+        )}
+      >
+        {collapsed
+          ? sections.map((section, i) => (
+              <div
+                key={section.id}
+                className={cn(
+                  'flex flex-col items-center gap-0.5 w-full py-1.5',
+                  i > 0 && 'border-t border-border/50 mt-0.5 pt-2',
+                )}
+              >
+                {section.items.map((item) => (
+                  <NavLinkItem
+                    key={item.path}
+                    item={item}
+                    isActive={location === item.path}
+                    collapsed
+                  />
+                ))}
+              </div>
+            ))
+          : sections.map((section) => (
+              <SectionGroup
+                key={section.id}
+                section={section}
+                isOpen={openSections[section.id] ?? true}
+                onToggle={() => onToggleSection(section.id)}
+                location={location}
+                collapsed={false}
+              />
+            ))}
       </div>
 
-      <div className="p-3 border-t border-border shrink-0">
-        <button
-          onClick={logout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors duration-200 font-medium"
-        >
-          <LogOut size={17} />
-          Sign Out
-        </button>
+      {/* Footer / Sign out */}
+      <div
+        className={cn(
+          'border-t border-border shrink-0',
+          collapsed ? 'flex justify-center py-3' : 'p-3',
+        )}
+      >
+        {collapsed ? (
+          <SidebarTooltip label="Sign Out">
+            <button
+              onClick={logout}
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <LogOut size={17} />
+            </button>
+          </SidebarTooltip>
+        ) : (
+          <button
+            onClick={logout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors duration-200 font-medium"
+          >
+            <LogOut size={17} />
+            Sign Out
+          </button>
+        )}
       </div>
     </>
   );
 }
 
-const IDLE_TIMEOUT_MS  = 15 * 60 * 1000; // 15 minutes
-const IDLE_WARNING_MS  =  1 * 60 * 1000; // warn 1 minute before
+// ─── Idle timeout constants ───────────────────────────────────────────────────
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const IDLE_WARNING_MS =  1 * 60 * 1000;
 
+// ─── Main export ──────────────────────────────────────────────────────────────
 export function AdminSidebar() {
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const { logout } = useAuth();
   const [idleWarning, setIdleWarning] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
-  useEffect(() => { setOpen(false); }, [location]);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('dormi-sidebar-collapsed') === 'true'; }
+    catch { return false; }
+  });
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem('dormi-sidebar-sections');
+      if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return {
+      operations: true,
+      catalogue: true,
+      people: true,
+      finance: true,
+      engagement: true,
+      system: true,
+    };
+  });
+
+  useEffect(() => { setMobileOpen(false); }, [location]);
+
+  const toggleCollapse = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('dormi-sidebar-collapsed', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const toggleSection = useCallback((id: string) => {
+    setOpenSections((prev) => {
+      const next = { ...prev, [id]: !(prev[id] ?? true) };
+      try { localStorage.setItem('dormi-sidebar-sections', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  // Auto-open the section containing the active route
+  useEffect(() => {
+    setOpenSections((prev) => {
+      const updated = { ...prev };
+      let changed = false;
+      for (const [id, paths] of Object.entries(SECTION_PATHS)) {
+        if (paths.includes(location) && !prev[id]) {
+          updated[id] = true;
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      try { localStorage.setItem('dormi-sidebar-sections', JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
+  }, [location]);
 
   const handleLogout = useCallback(() => {
     setIdleWarning(false);
@@ -127,10 +397,10 @@ export function AdminSidebar() {
   }, [logout, setLocation]);
 
   const { reset: resetIdle } = useIdleTimeout({
-    timeoutMs:  IDLE_TIMEOUT_MS,
-    warningMs:  IDLE_WARNING_MS,
-    onWarn:     () => { setIdleWarning(true); setCountdown(60); },
-    onTimeout:  handleLogout,
+    timeoutMs: IDLE_TIMEOUT_MS,
+    warningMs: IDLE_WARNING_MS,
+    onWarn: () => { setIdleWarning(true); setCountdown(60); },
+    onTimeout: handleLogout,
   });
 
   const staySignedIn = useCallback(() => {
@@ -142,7 +412,7 @@ export function AdminSidebar() {
     if (!idleWarning) return;
     setCountdown(60);
     const interval = setInterval(() => {
-      setCountdown(prev => {
+      setCountdown((prev) => {
         if (prev <= 1) { clearInterval(interval); return 0; }
         return prev - 1;
       });
@@ -150,6 +420,7 @@ export function AdminSidebar() {
     return () => clearInterval(interval);
   }, [idleWarning]);
 
+  // ── Badge queries ──────────────────────────────────────────────────────────
   const { data: requests = [] } = useQuery<any[]>({
     queryKey: ['item-requests'],
     queryFn: () => fetch(`${BASE}/api/items/requests`).then((r) => r.json()),
@@ -160,35 +431,36 @@ export function AdminSidebar() {
 
   const { data: unreadData } = useQuery<{ total: number }>({
     queryKey: ['rider-messages-unread-admin'],
-    queryFn: () =>
-      fetch(`${BASE}/api/rider-messages/unread-count?role=admin`).then((r) => r.json()),
+    queryFn: () => fetch(`${BASE}/api/rider-messages/unread-count?role=admin`).then((r) => r.json()),
     refetchInterval: 15000,
   });
   const riderMsgUnread = unreadData?.total ?? 0;
 
   const { data: vendorUnreadData } = useQuery<{ total: number }>({
     queryKey: ['vendor-messages-unread-admin'],
-    queryFn: () =>
-      fetch(`${BASE}/api/vendor-messages/unread-count`).then((r) => r.json()),
+    queryFn: () => fetch(`${BASE}/api/vendor-messages/unread-count`).then((r) => r.json()),
     refetchInterval: 15000,
   });
   const vendorMsgUnread = vendorUnreadData?.total ?? 0;
 
-  const groups: NavGroup[] = [
+  // ── Nav structure ──────────────────────────────────────────────────────────
+  const sections: NavSection[] = [
     {
+      id: 'operations',
       heading: 'Operations',
       items: [
-        { icon: LayoutDashboard, label: 'Live Orders',       path: '/' },
-        { icon: PackagePlus,     label: 'Create Order',      path: '/create-order' },
-        { icon: PhoneCall,       label: 'Call Log',          path: '/call-log' },
-        { icon: Truck,           label: 'Assign Riders',     path: '/riders' },
-        { icon: Building2,       label: 'Delivery Partners', path: '/delivery-partners' },
-        { icon: MessageCircle,   label: 'Rider Messages',    path: '/rider-messages', badge: riderMsgUnread || undefined },
-        { icon: Store,           label: 'Vendor Inbox',      path: '/vendor-inbox', badge: vendorMsgUnread || undefined },
-        { icon: MessageSquareWarning, label: 'Complaints',   path: '/complaints' },
+        { icon: LayoutDashboard,       label: 'Live Orders',       path: '/' },
+        { icon: PackagePlus,           label: 'Create Order',      path: '/create-order' },
+        { icon: PhoneCall,             label: 'Call Log',          path: '/call-log' },
+        { icon: Truck,                 label: 'Assign Riders',     path: '/riders' },
+        { icon: Building2,             label: 'Delivery Partners', path: '/delivery-partners' },
+        { icon: MessageCircle,         label: 'Rider Messages',    path: '/rider-messages', badge: riderMsgUnread || undefined },
+        { icon: Store,                 label: 'Vendor Inbox',      path: '/vendor-inbox',   badge: vendorMsgUnread || undefined },
+        { icon: MessageSquareWarning,  label: 'Complaints',        path: '/complaints' },
       ],
     },
     {
+      id: 'catalogue',
       heading: 'Catalogue & Pricing',
       items: [
         { icon: ShoppingBasket, label: 'Catalogue', path: '/catalogue', badge: pendingCount },
@@ -196,6 +468,7 @@ export function AdminSidebar() {
       ],
     },
     {
+      id: 'people',
       heading: 'People',
       items: [
         { icon: Briefcase,  label: 'Employees',   path: '/employees' },
@@ -204,6 +477,7 @@ export function AdminSidebar() {
       ],
     },
     {
+      id: 'finance',
       heading: 'Finance & Reports',
       items: [
         { icon: TrendingUp, label: 'Finance', path: '/finance' },
@@ -211,12 +485,14 @@ export function AdminSidebar() {
       ],
     },
     {
+      id: 'engagement',
       heading: 'Engagement',
       items: [
         { icon: Bell, label: 'Notifications', path: '/notifications' },
       ],
     },
     {
+      id: 'system',
       heading: 'System',
       items: [
         { icon: Settings, label: 'Settings', path: '/settings' },
@@ -224,9 +500,17 @@ export function AdminSidebar() {
     },
   ];
 
+  const sharedProps = {
+    sections,
+    location,
+    openSections,
+    onToggleSection: toggleSection,
+    logout: handleLogout,
+  };
+
   return (
     <>
-      {/* ── Idle-timeout warning overlay ── */}
+      {/* ── Idle-timeout warning overlay ──────────────────────────────────── */}
       {idleWarning && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-7 flex flex-col items-center text-center gap-5">
@@ -260,7 +544,7 @@ export function AdminSidebar() {
         </div>
       )}
 
-      {/* ── Mobile sticky top bar (hidden on lg+) ── */}
+      {/* ── Mobile sticky top bar ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-50 lg:hidden h-16 flex items-center justify-between px-4 bg-white border-b border-border shadow-sm shrink-0">
         <div className="flex items-center gap-2">
           <img
@@ -271,7 +555,7 @@ export function AdminSidebar() {
           <span className="font-display font-bold text-lg tracking-tight text-primary">Dormi</span>
         </div>
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => setMobileOpen(true)}
           className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-muted-foreground"
           aria-label="Open navigation"
         >
@@ -279,17 +563,32 @@ export function AdminSidebar() {
         </button>
       </div>
 
-      {/* ── Mobile Sheet drawer ── */}
-      <Sheet open={open} onOpenChange={setOpen}>
+      {/* ── Mobile Sheet drawer ───────────────────────────────────────────── */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="p-0 w-72 flex flex-col">
-          <NavContent groups={groups} location={location} logout={logout} />
+          <SidebarBody
+            {...sharedProps}
+            collapsed={false}
+            showCollapseButton={false}
+          />
         </SheetContent>
       </Sheet>
 
-      {/* ── Desktop sidebar (hidden below lg) ── */}
-      <div className="hidden lg:flex flex-col w-64 bg-white border-r border-border min-h-screen shrink-0">
-        <NavContent groups={groups} location={location} logout={logout} />
-      </div>
+      {/* ── Desktop sidebar ───────────────────────────────────────────────── */}
+      <aside
+        className={cn(
+          'hidden lg:flex flex-col bg-white border-r border-border min-h-screen shrink-0',
+          'transition-[width] duration-300 ease-in-out overflow-hidden',
+          collapsed ? 'w-[4.5rem]' : 'w-60',
+        )}
+      >
+        <SidebarBody
+          {...sharedProps}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapse}
+          showCollapseButton
+        />
+      </aside>
     </>
   );
 }
