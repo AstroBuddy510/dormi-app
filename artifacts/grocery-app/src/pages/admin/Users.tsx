@@ -571,7 +571,7 @@ function ResidentsTab() {
               <span>Actions</span>
             </div>
             {paged.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-center px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={r.fullName} photoUrl={(r as any).photoUrl} color="bg-primary/10 text-primary" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
@@ -858,7 +858,7 @@ function VendorsTab() {
               <span>Actions</span>
             </div>
             {paged.map((v) => (
-              <div key={v.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto] md:gap-4 md:items-center px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
+              <div key={v.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${!v.isActive ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={v.name} photoUrl={(v as any).photoUrl} color="bg-amber-100 text-amber-700" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(v, file)} />
@@ -1085,7 +1085,7 @@ function RidersTab() {
               <span>Actions</span>
             </div>
             {paged.map((r) => (
-              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-center px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
+              <div key={r.id} className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-start px-3 py-2.5 bg-white rounded-xl border border-border/50 hover:shadow-sm transition-shadow ${(r as any).suspended ? 'opacity-60' : ''}`}>
                 <div className="relative shrink-0">
                   <Avatar name={r.name} photoUrl={(r as any).photoUrl} color="bg-blue-100 text-blue-700" size="sm" />
                   <PhotoUploadButton onUpload={(file) => handlePhotoUpload(r, file)} />
@@ -1347,7 +1347,7 @@ function AgentsTab() {
           {pagedAgents.map((a) => (
             <div
               key={a.id}
-              className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-center px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
+              className={`flex items-center gap-3 md:grid md:grid-cols-[2.5rem_1fr_1fr_auto_auto_auto] md:gap-4 md:items-start px-3 py-2.5 rounded-xl border border-border/50 bg-card hover:bg-muted/40 transition-colors ${!a.isActive ? 'opacity-60' : ''}`}
             >
               <div className="relative shrink-0">
                 <Avatar name={a.name} photoUrl={a.photoUrl} color="bg-indigo-100 text-indigo-700" size="sm" />
