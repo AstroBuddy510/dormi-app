@@ -224,34 +224,37 @@ function SidebarBody({
       <div
         className={cn(
           'h-16 flex items-center border-b border-border shrink-0 transition-all duration-300',
-          collapsed ? 'justify-center px-2 gap-0' : 'px-4 justify-between gap-2',
+          collapsed ? 'justify-center px-2' : 'px-4 justify-between gap-2',
         )}
       >
-        <div className={cn('flex items-center gap-2 text-primary min-w-0 overflow-hidden', collapsed && 'w-0 opacity-0 pointer-events-none')}>
+        {collapsed ? (
+          /* Collapsed: logo alone, perfectly centered over the icon column */
           <img
             src={`${BASE}/images/dormi-logo.png`}
             alt="Dormi Logo"
-            className="w-8 h-8 rounded-lg shadow-sm shrink-0"
+            className="w-8 h-8 rounded-lg shadow-sm"
           />
-          <span className="font-display font-bold text-xl tracking-tight whitespace-nowrap">Dormi</span>
-        </div>
-
-        {collapsed && (
-          <img
-            src={`${BASE}/images/dormi-logo.png`}
-            alt="Dormi Logo"
-            className="w-8 h-8 rounded-lg shadow-sm shrink-0"
-          />
-        )}
-
-        {showCollapseButton && (
-          <button
-            onClick={onToggleCollapse}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="shrink-0 p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
-          </button>
+        ) : (
+          /* Expanded: logo + wordmark + collapse toggle */
+          <>
+            <div className="flex items-center gap-2 text-primary min-w-0">
+              <img
+                src={`${BASE}/images/dormi-logo.png`}
+                alt="Dormi Logo"
+                className="w-8 h-8 rounded-lg shadow-sm shrink-0"
+              />
+              <span className="font-display font-bold text-xl tracking-tight whitespace-nowrap">Dormi</span>
+            </div>
+            {showCollapseButton && (
+              <button
+                onClick={onToggleCollapse}
+                title="Collapse sidebar"
+                className="shrink-0 p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronLeft size={15} />
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -263,7 +266,21 @@ function SidebarBody({
         )}
       >
         {collapsed
-          ? sections.map((section, i) => (
+          ? <>
+              {/* Expand button — first icon in the collapsed column */}
+              {showCollapseButton && (
+                <div className="w-full pb-1.5 border-b border-border/50 mb-1">
+                  <SidebarTooltip label="Expand Sidebar">
+                    <button
+                      onClick={onToggleCollapse}
+                      className="w-10 h-10 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors mx-auto"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </SidebarTooltip>
+                </div>
+              )}
+              {sections.map((section, i) => (
               <div
                 key={section.id}
                 className={cn(
@@ -280,7 +297,8 @@ function SidebarBody({
                   />
                 ))}
               </div>
-            ))
+            ))}
+            </>
           : sections.map((section) => (
               <SectionGroup
                 key={section.id}
@@ -401,6 +419,10 @@ export function AdminSidebar() {
     warningMs: IDLE_WARNING_MS,
     onWarn: () => { setIdleWarning(true); setCountdown(60); },
     onTimeout: handleLogout,
+    // While the warning dialog is open, freeze the activity listeners so that
+    // the admin hovering or clicking the modal cannot silently reset the timer.
+    // Only an explicit "Stay Signed In" click calls resetIdle() directly.
+    paused: idleWarning,
   });
 
   const staySignedIn = useCallback(() => {
@@ -527,12 +549,18 @@ export function AdminSidebar() {
               <span className="text-2xl font-bold text-amber-600 tabular-nums">{countdown}</span>
             </div>
             <div className="flex flex-col gap-2 w-full">
-              <button
-                onClick={staySignedIn}
-                className="w-full py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition-colors"
-              >
-                Stay Signed In
-              </button>
+              {countdown > 0 ? (
+                <button
+                  onClick={staySignedIn}
+                  className="w-full py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  Stay Signed In
+                </button>
+              ) : (
+                <div className="w-full py-3 rounded-xl bg-gray-100 text-gray-400 text-sm font-semibold text-center select-none">
+                  Signing out…
+                </div>
+              )}
               <button
                 onClick={handleLogout}
                 className="w-full py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-gray-50 transition-colors"
