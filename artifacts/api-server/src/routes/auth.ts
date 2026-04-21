@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettingsTable, adminsTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettingsTable, adminsTable } from "../../../lib/db/src/schema/index.js";
 import { eq, count } from "drizzle-orm";
-import { LoginBody } from "@workspace/api-zod";
+import { LoginBody } from "../../../lib/api-zod/src/index.js";
 import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
 
