@@ -1,13 +1,13 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable } from "../../../lib/db/src/schema/index.js";
 import { eq, and, desc } from "drizzle-orm";
 import {
   CreateOrderBody,
   UpdateOrderStatusBody,
   AssignRiderBody,
   UploadOrderPhotoBody,
-} from "@workspace/api-zod";
+} from "../../../lib/api-zod/src/index.js";
 
 import { getGatewayKeys } from "../lib/gatewayKeys";
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { vendorsTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { vendorsTable } from "../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { createHash } from "crypto";
 

@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { residentsTable, estatesTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { residentsTable, estatesTable } from "../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
-import { ResidentSignupBody, UpdateSubscriptionBody } from "@workspace/api-zod";
+import { ResidentSignupBody, UpdateSubscriptionBody } from "../../../lib/api-zod/src/index.js";
 
 const router: IRouter = Router();
 

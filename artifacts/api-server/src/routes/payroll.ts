@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { payrollPaymentsTable, employeesTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { payrollPaymentsTable, employeesTable } from "../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
 

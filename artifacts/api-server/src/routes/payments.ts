@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { ordersTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { ordersTable } from "../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { getGatewayKeys } from "../lib/gatewayKeys";
 

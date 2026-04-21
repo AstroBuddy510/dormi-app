@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { adminsTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { adminsTable } from "../../../lib/db/src/schema/index.js";
 import { eq, count } from "drizzle-orm";
 import { createHash } from "crypto";
 import { z } from "zod/v4";

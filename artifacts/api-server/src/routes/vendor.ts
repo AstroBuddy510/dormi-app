@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { ordersTable } from "@workspace/db";
+import { db } from "../../../lib/db/src/index.js";
+import { ordersTable } from "../../../lib/db/src/index.js";
 import { eq, and, gte, sql } from "drizzle-orm";
 
 const router = Router();

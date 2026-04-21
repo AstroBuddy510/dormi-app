@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { paymentGatewayTable } from "@workspace/db/schema";
+import { db } from "../../../lib/db/src/index.js";
+import { paymentGatewayTable } from "../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();

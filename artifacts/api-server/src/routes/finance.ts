@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db } from "../../../lib/db/src/index.js";
 import {
   financeSettingsTable,
   deliveryZonesTable,
@@ -9,7 +9,7 @@ import {
   expensesTable,
   payrollPaymentsTable,
   deliveryPartnersTable,
-} from "@workspace/db/schema";
+} from "../../../lib/db/src/schema/index.js";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 
