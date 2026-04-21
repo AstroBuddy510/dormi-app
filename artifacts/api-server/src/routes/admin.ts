@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "../../../lib/db/src/index.js";
+import { db } from "../../../../lib/db/src/index.js";
 import {
   ordersTable,
   residentsTable,
@@ -10,9 +10,9 @@ import {
   deliveryPartnersTable,
   deliveryZonesTable,
   deliveryTownsTable,
-} from "../../../lib/db/src/schema/index.js";
+} from "../../../../lib/db/src/schema/index.js";
 import { eq, and, gte } from "drizzle-orm";
-import { CreateCallLogOrderBody } from "../../../lib/api-zod/src/index.js";
+import { CreateCallLogOrderBody } from "../../../../lib/api-zod/src/index.js";
 
 const router: IRouter = Router();
 

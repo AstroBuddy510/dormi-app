@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db } from "../../../lib/db/src/index.js";
-import { riderMessagesTable } from "../../../lib/db/src/index.js";
+import { db } from "../../../../lib/db/src/index.js";
+import { riderMessagesTable } from "../../../../lib/db/src/index.js";
 import { eq, desc, isNull } from "drizzle-orm";
 
 const router = Router();

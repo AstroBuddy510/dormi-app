@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "../../../lib/db/src/index.js";
-import { agentMessagesTable, residentsTable, agentsTable } from "../../../lib/db/src/schema/index.js";
+import { db } from "../../../../lib/db/src/index.js";
+import { agentMessagesTable, residentsTable, agentsTable } from "../../../../lib/db/src/schema/index.js";
 import { eq, and, desc, or, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 

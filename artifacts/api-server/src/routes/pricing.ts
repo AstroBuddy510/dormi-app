@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db } from "../../../lib/db/src/index.js";
-import { pricingTable } from "../../../lib/db/src/schema/index.js";
+import { db } from "../../../../lib/db/src/index.js";
+import { pricingTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
-import { UpdatePricingBody } from "../../../lib/api-zod/src/index.js";
+import { UpdatePricingBody } from "../../../../lib/api-zod/src/index.js";
 
 const router: IRouter = Router();
 

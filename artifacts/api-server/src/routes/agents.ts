@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "../../../lib/db/src/index.js";
-import { agentsTable, ordersTable, agentCallLogsTable, agentScheduledCallsTable, agentTempCallListTable, agentMessagesTable } from "../../../lib/db/src/schema/index.js";
+import { db } from "../../../../lib/db/src/index.js";
+import { agentsTable, ordersTable, agentCallLogsTable, agentScheduledCallsTable, agentTempCallListTable, agentMessagesTable } from "../../../../lib/db/src/schema/index.js";
 import { eq, and, desc, count } from "drizzle-orm";
 import { createHash } from "crypto";
 

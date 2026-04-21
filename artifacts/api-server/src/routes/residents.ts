@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db } from "../../../lib/db/src/index.js";
-import { residentsTable, estatesTable } from "../../../lib/db/src/schema/index.js";
+import { db } from "../../../../lib/db/src/index.js";
+import { residentsTable, estatesTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
-import { ResidentSignupBody, UpdateSubscriptionBody } from "../../../lib/api-zod/src/index.js";
+import { ResidentSignupBody, UpdateSubscriptionBody } from "../../../../lib/api-zod/src/index.js";
 
 const router: IRouter = Router();
 

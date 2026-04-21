@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db } from "../../../lib/db/src/index.js";
-import { notificationsTable } from "../../../lib/db/src/schema/index.js";
+import { db } from "../../../../lib/db/src/index.js";
+import { notificationsTable } from "../../../../lib/db/src/schema/index.js";
 import { eq, or, isNull, desc, and, isNotNull } from "drizzle-orm";
 import { z } from "zod/v4";
 
