@@ -2,7 +2,6 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
-  "type": "module",
   "scripts": {
     "dev": "pnpm -r --if-present dev",
     "build": "pnpm --filter '!@workspace/mockup-sandbox' -r --if-present run build",
