@@ -1,14 +1,17 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.ts": {
+    "api/handler.js": {
       "runtime": "vercel-node@latest",
       "memory": 1024,
       "maxDuration": 10
     }
   },
   "rewrites": [
-
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/handler.js"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/artifacts/grocery-app/dist/public/$1"
