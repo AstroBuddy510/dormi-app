@@ -1,9 +1,9 @@
-import app from "../artifacts/api-server/dist/index.cjs";
+const app = require("./bundle.cjs");
 
-export default async function handler(req, res) {
+module.exports = (req, res) => {
   try {
-    const handlerFunc = app.default || app;
-    return handlerFunc(req, res);
+    const handler = app.default || app;
+    return handler(req, res);
   } catch (error) {
     console.error("API Crash:", error);
     res.status(500).json({
@@ -11,4 +11,4 @@ export default async function handler(req, res) {
       message: error.message
     });
   }
-}
+};
