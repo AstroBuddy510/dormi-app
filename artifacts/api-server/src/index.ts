@@ -3,19 +3,7 @@ import { seedDefaultAdmin } from "./routes/auth.js";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
-const rawPort = process.env["PORT"];
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
 
 async function ensureTables() {
   await db.execute(sql`
@@ -33,6 +21,17 @@ async function ensureTables() {
 }
 
 if (typeof require !== "undefined" && require.main === module) {
+  const rawPort = process.env["PORT"];
+  if (!rawPort) {
+    throw new Error(
+      "PORT environment variable is required but was not provided.",
+    );
+  }
+  const port = Number(rawPort);
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
+
   app.listen(port, async () => {
     console.log(`Server listening on port ${port}`);
     await ensureTables();
