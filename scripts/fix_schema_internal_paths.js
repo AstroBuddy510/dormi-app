@@ -10,13 +10,20 @@ files.forEach(file => {
     let content = fs.readFileSync(filePath, 'utf8');
     
     // Replace internal relative imports with .js extensions
-    // Look for: from "./filename" or from "../filename"
-    // But exclude packages (which don't start with .)
+    // Handles both single and double quotes
     
     const lines = content.split('\n');
     const updatedLines = lines.map(line => {
+        // Regex to match: from './path' or from "./path"
+        // and ensure it doesn't already have .js
+        if (line.includes('from \'./') && !line.includes('.js\'')) {
+            return line.replace(/from '(\.\/[^']+)'/g, "from '$1.js'");
+        }
         if (line.includes('from "./') && !line.includes('.js"')) {
             return line.replace(/from "(\.\/[^"]+)"/g, 'from "$1.js"');
+        }
+        if (line.includes('from \'../') && !line.includes('.js\'')) {
+            return line.replace(/from '(\.\.\/[^']+)'/g, "from '$1.js'");
         }
         if (line.includes('from "../') && !line.includes('.js"')) {
             return line.replace(/from "(\.\.\/[^"]+)"/g, 'from "$1.js"');
