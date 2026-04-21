@@ -103,8 +103,8 @@ async function seed() {
 
     // 4. Residents (Demo)
     await db.insert(residentsTable).values([
-      { fullName: "Kwesi Boateng", phone: "0244567890", estate: "Airport Hills", blockNumber: "A", houseNumber: "12", isSubscriptionActive: true },
-      { fullName: "Abena Owusu", phone: "0244567891", estate: "East Legon Hills", blockNumber: "B", houseNumber: "45", isSubscriptionActive: false },
+      { fullName: "Kwesi Boateng", phone: "0244567890", estate: "Airport Hills", blockNumber: "A", houseNumber: "12", subscribeWeekly: true },
+      { fullName: "Abena Owusu", phone: "0244567891", estate: "East Legon Hills", blockNumber: "B", houseNumber: "45", subscribeWeekly: false },
     ]).onConflictDoNothing();
 
     console.log("Seeding completed successfully.");
