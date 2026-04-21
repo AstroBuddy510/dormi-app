@@ -51,6 +51,7 @@ async function buildAll() {
   const externals = allDeps.filter(
     (dep) =>
       !allowlist.includes(dep) &&
+      !dep.startsWith("@workspace/") &&
       !(pkg.dependencies?.[dep]?.startsWith("workspace:")),
   );
 

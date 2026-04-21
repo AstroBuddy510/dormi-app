@@ -32,8 +32,12 @@ async function ensureTables() {
   console.log("Tables verified.");
 }
 
-app.listen(port, async () => {
-  console.log(`Server listening on port ${port}`);
-  await ensureTables();
-  await seedDefaultAdmin();
-});
+if (typeof require !== "undefined" && require.main === module) {
+  app.listen(port, async () => {
+    console.log(`Server listening on port ${port}`);
+    await ensureTables();
+    await seedDefaultAdmin();
+  });
+}
+
+export default app;
