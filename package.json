@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "pnpm -r --if-present dev",
-    "build": "pnpm --filter '!@workspace/mockup-sandbox' -r --if-present run build && cp artifacts/api-server/dist/index.cjs api/bundle.cjs",
+    "build": "pnpm --filter '!@workspace/mockup-sandbox' -r --if-present run build && cp artifacts/api-server/dist/index.cjs server-functions/bundle.cjs",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
