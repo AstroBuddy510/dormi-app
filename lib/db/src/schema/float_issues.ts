@@ -1,7 +1,7 @@
 import { pgTable, serial, integer, numeric, date, boolean, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { ridersTable } from "./riders";
+import { ridersTable } from "./riders.js";
 
 export const floatIssuesTable = pgTable("float_issues", {
   id: serial("id").primaryKey(),

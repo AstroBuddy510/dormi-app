@@ -1,7 +1,7 @@
 import { pgTable, serial, integer, numeric, text, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { employeesTable } from "./employees";
+import { employeesTable } from "./employees.js";
 
 export const payrollPaymentsTable = pgTable("payroll_payments", {
   id: serial("id").primaryKey(),

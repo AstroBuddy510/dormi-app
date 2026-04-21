@@ -1,5 +1,5 @@
 import { pgTable, text, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
-import { ridersTable } from "./riders";
+import { ridersTable } from "./riders.js";
 
 export const blockOrderGroupsTable = pgTable("block_order_groups", {
   id: serial("id").primaryKey(),

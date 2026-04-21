@@ -1,12 +1,12 @@
 import { pgTable, text, serial, integer, numeric, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { residentsTable } from "./residents";
-import { vendorsTable } from "./vendors";
-import { ridersTable } from "./riders";
-import { blockOrderGroupsTable } from "./blockOrderGroups";
-import { deliveryPartnersTable } from "./deliveryPartners";
-import { agentsTable } from "./agents";
+import { residentsTable } from "./residents.js";
+import { vendorsTable } from "./vendors.js";
+import { ridersTable } from "./riders.js";
+import { blockOrderGroupsTable } from "./blockOrderGroups.js";
+import { deliveryPartnersTable } from "./deliveryPartners.js";
+import { agentsTable } from "./agents.js";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
