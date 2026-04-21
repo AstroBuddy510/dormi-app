@@ -1,7 +1,7 @@
 {
   "version": 2,
   "functions": {
-    "api/handler.js": {
+    "api/handler.mjs": {
       "runtime": "nodejs22.x",
       "memory": 1024,
       "maxDuration": 10
@@ -10,7 +10,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/handler.js"
+      "destination": "/api/handler.mjs"
     },
     {
       "source": "/((?!api/).*)",
