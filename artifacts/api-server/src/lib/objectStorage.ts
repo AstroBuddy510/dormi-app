@@ -64,7 +64,7 @@ export class ObjectStorageService {
   /**
    * Directly upload from server.
    */
-  async upload(path: string, stream: ReadableStream | Buffer | string): Promise<string> {
+  async upload(path: string, stream: any): Promise<string> {
     const { url } = await put(path, stream, { access: 'public' });
     return url;
   }
