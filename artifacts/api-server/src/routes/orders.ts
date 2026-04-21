@@ -9,7 +9,7 @@ import {
   UploadOrderPhotoBody,
 } from "../../../../lib/api-zod/src/index.js";
 
-import { getGatewayKeys } from "../lib/gatewayKeys";
+import { getGatewayKeys } from "../lib/gatewayKeys.js";
 
 const router: IRouter = Router();
 

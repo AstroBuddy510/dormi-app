@@ -5,7 +5,7 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { UploadPhotoRequestPhotoType } from "./uploadPhotoRequestPhotoType";
+import type { UploadPhotoRequestPhotoType } from "./uploadPhotoRequestPhotoType.js";
 
 export interface UploadPhotoRequest {
   photoUrl: string;

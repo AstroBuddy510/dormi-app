@@ -5,7 +5,7 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { LoginRequestRole } from "./loginRequestRole";
+import type { LoginRequestRole } from "./loginRequestRole.js";
 
 export interface LoginRequest {
   phone: string;

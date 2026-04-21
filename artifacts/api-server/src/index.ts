@@ -1,5 +1,5 @@
-import app from "./app";
-import { seedDefaultAdmin } from "./routes/auth";
+import app from "./app.js";
+import { seedDefaultAdmin } from "./routes/auth.js";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 

@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
 import { ordersTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
-import { getGatewayKeys } from "../lib/gatewayKeys";
+import { getGatewayKeys } from "../lib/gatewayKeys.js";
 
 const router: IRouter = Router();
 

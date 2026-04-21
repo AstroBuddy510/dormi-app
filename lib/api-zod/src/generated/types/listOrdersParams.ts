@@ -5,7 +5,7 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { ListOrdersStatus } from "./listOrdersStatus";
+import type { ListOrdersStatus } from "./listOrdersStatus.js";
 
 export type ListOrdersParams = {
   status?: ListOrdersStatus;

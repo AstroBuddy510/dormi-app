@@ -5,7 +5,7 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { GroceryItemCategory } from "./groceryItemCategory";
+import type { GroceryItemCategory } from "./groceryItemCategory.js";
 
 export interface GroceryItem {
   id: number;

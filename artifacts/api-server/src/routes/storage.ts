@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage.js";
+import { ObjectPermission } from "../lib/objectAcl.js";
 
 interface UploadUrlBody { name: string; size: number; contentType: string; }
 

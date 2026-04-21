@@ -5,8 +5,8 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateOrderRequestPaymentMethod } from "./createOrderRequestPaymentMethod";
-import type { OrderItemInput } from "./orderItemInput";
+import type { CreateOrderRequestPaymentMethod } from "./createOrderRequestPaymentMethod.js";
+import type { OrderItemInput } from "./orderItemInput.js";
 
 export interface CreateOrderRequest {
   residentId: number;

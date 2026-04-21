@@ -5,7 +5,7 @@
  * GrocerEase Accra - Grocery Delivery API
  * OpenAPI spec version: 0.1.0
  */
-import type { UpdateOrderStatusRequestStatus } from "./updateOrderStatusRequestStatus";
+import type { UpdateOrderStatusRequestStatus } from "./updateOrderStatusRequestStatus.js";
 
 export interface UpdateOrderStatusRequest {
   status: UpdateOrderStatusRequestStatus;
