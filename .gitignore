@@ -4,6 +4,7 @@ node_modules
 .replitignore
 replit.md
 dist
+!artifacts/api-server/dist/index.cjs
 build
 .cache
 *.log
