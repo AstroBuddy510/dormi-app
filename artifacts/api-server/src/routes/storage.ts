@@ -30,14 +30,39 @@ router.post("/uploads/request-url", async (req: Request, res: Response) => {
   }
 
   try {
-    const { name, size, contentType } = parsed.data;
-
     const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+    // We need to return an absolute URL for the frontend if it's on a different port/host
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['host'];
+    const absoluteUploadURL = `${protocol}://${host}${uploadURL}`;
 
-    res.json({ uploadURL, objectPath, metadata: { name, size, contentType } });
+    res.json({ uploadURL: absoluteUploadURL, objectPath, metadata: parsed.data });
   } catch (error) {
     console.error("Error generating upload URL:", error);
     res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});
+
+/**
+ * PUT /storage/proxy-upload
+ *
+ * Receives the file stream from the frontend and pipes it to Vercel Blob.
+ */
+router.put("/proxy-upload", async (req: Request, res: Response) => {
+  const path = req.query.path as string;
+  if (!path) {
+    res.status(400).json({ error: "Missing path parameter" });
+    return;
+  }
+
+  try {
+    // Vercel Blob's put expects a stream, buffer, or string.
+    // Express req is a Readable stream.
+    const url = await objectStorageService.upload(path, req);
+    res.json({ url });
+  } catch (error) {
+    console.error("Proxy upload failed:", error);
+    res.status(500).json({ error: "Failed to upload to blob storage" });
   }
 });
 

@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import { authenticate } from "../middlewares/auth";
 import authRouter from "./auth";
 import residentsRouter from "./residents";
 import itemsRouter from "./items";
@@ -32,10 +33,10 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
-router.use("/residents", residentsRouter);
+router.use("/residents", authenticate, residentsRouter);
 router.use("/items", itemsRouter);
 router.use("/pricing", pricingRouter);
-router.use("/orders", ordersRouter);
+router.use("/orders", authenticate, ordersRouter);
 router.use("/vendors", vendorsRouter);
 router.use("/riders", ridersRouter);
 router.use("/admin", adminRouter);

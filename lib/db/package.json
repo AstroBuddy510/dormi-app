@@ -9,7 +9,10 @@
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "generate": "drizzle-kit generate --config ./drizzle.config.ts",
+    "migrate": "npx tsx src/migrate.ts",
+    "seed": "npx tsx src/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

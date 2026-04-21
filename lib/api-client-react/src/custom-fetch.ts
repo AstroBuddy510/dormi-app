@@ -285,6 +285,22 @@ export async function customFetch<T = unknown>(
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
+  // Automatically add JWT token if available in localStorage
+  if (typeof window !== "undefined") {
+    const authStore = window.localStorage.getItem("grocerease-auth");
+    if (authStore) {
+      try {
+        const parsed = JSON.parse(authStore);
+        const token = parsed.state?.token;
+        if (token && !headers.has("authorization")) {
+          headers.set("authorization", `Bearer ${token}`);
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+  }
+
   if (
     typeof init.body === "string" &&
     !headers.has("content-type") &&

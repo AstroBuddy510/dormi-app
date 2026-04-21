@@ -4,6 +4,9 @@ import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettings
 import { eq, count } from "drizzle-orm";
 import { LoginBody } from "@workspace/api-zod";
 import { createHash } from "crypto";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "dormi-secret-key-2026-change-me";
 
 const router: IRouter = Router();
 
@@ -60,7 +63,12 @@ router.post("/login", async (req, res) => {
           res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
           return;
         }
-        res.json({ user: { id: 0, name: "Admin", phone, role: "admin" }, role: "admin", token: "admin-token" });
+        const token = jwt.sign(
+          { id: 0, name: "Admin", phone, role: "admin" },
+          JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+        res.json({ user: { id: 0, name: "Admin", phone, role: "admin" }, role: "admin", token });
         return;
       }
 
@@ -78,10 +86,15 @@ router.post("/login", async (req, res) => {
         res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
         return;
       }
+      const token = jwt.sign(
+        { id: admin.id, name: admin.name, phone: admin.phone, role: "admin" },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+      );
       res.json({
         user: { id: admin.id, name: admin.name, phone: admin.phone, role: "admin" },
         role: "admin",
-        token: `admin-${admin.id}`,
+        token,
       });
       return;
     }
@@ -92,10 +105,15 @@ router.post("/login", async (req, res) => {
         res.status(401).json({ error: "unauthorized", message: "Phone not registered. Please sign up first." });
         return;
       }
+      const token = jwt.sign(
+        { id: resident.id, name: resident.fullName, phone: resident.phone, role: "resident" },
+        JWT_SECRET,
+        { expiresIn: "30d" }
+      );
       res.json({
         user: { id: resident.id, name: resident.fullName, phone: resident.phone, role: "resident", photoUrl: resident.photoUrl },
         role: "resident",
-        token: `resident-${resident.id}`,
+        token,
       });
       return;
     }
@@ -110,10 +128,15 @@ router.post("/login", async (req, res) => {
         res.status(401).json({ error: "unauthorized", message: "Invalid vendor PIN" });
         return;
       }
+      const token = jwt.sign(
+        { id: vendor.id, name: vendor.name, phone: vendor.phone, role: "vendor" },
+        JWT_SECRET,
+        { expiresIn: "14d" }
+      );
       res.json({
         user: { id: vendor.id, name: vendor.name, phone: vendor.phone, role: "vendor", photoUrl: vendor.photoUrl },
         role: "vendor",
-        token: `vendor-${vendor.id}`,
+        token,
       });
       return;
     }
@@ -128,10 +151,15 @@ router.post("/login", async (req, res) => {
         res.status(401).json({ error: "unauthorized", message: "Invalid rider PIN" });
         return;
       }
+      const token = jwt.sign(
+        { id: rider.id, name: rider.name, phone: rider.phone, role: "rider" },
+        JWT_SECRET,
+        { expiresIn: "14d" }
+      );
       res.json({
         user: { id: rider.id, name: rider.name, phone: rider.phone, role: "rider", photoUrl: rider.photoUrl },
         role: "rider",
-        token: `rider-${rider.id}`,
+        token,
       });
       return;
     }
@@ -150,10 +178,15 @@ router.post("/login", async (req, res) => {
         res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
         return;
       }
+      const token = jwt.sign(
+        { id: agent.id, name: agent.name, phone: agent.phone, role: "agent" },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+      );
       res.json({
         user: { id: agent.id, name: agent.name, phone: agent.phone, role: "agent", photoUrl: agent.photoUrl },
         role: "agent",
-        token: `agent-${agent.id}`,
+        token,
       });
       return;
     }
@@ -164,10 +197,15 @@ router.post("/login", async (req, res) => {
         res.status(401).json({ error: "unauthorized", message: "Invalid PIN" });
         return;
       }
+      const token = jwt.sign(
+        { id: 0, name: "Accountant", phone, role: "accountant" },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+      );
       res.json({
         user: { id: 0, name: "Accountant", phone, role: "accountant" },
         role: "accountant",
-        token: "accountant-token",
+        token,
       });
       return;
     }
