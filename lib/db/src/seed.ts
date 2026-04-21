@@ -1,5 +1,5 @@
-import { db, pool } from "./index.js";
-import { itemsTable, vendorsTable, residentsTable, pricingTable } from "./schema.js";
+import { db, pool } from "./index";
+import { itemsTable, vendorsTable, residentsTable, pricingTable } from "./schema";
 import { createHash } from "crypto";
 
 function hashPin(pin: string): string {
