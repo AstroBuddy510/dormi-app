@@ -15,25 +15,44 @@ import { ItemsBuilder } from "@/components/ItemsBuilder";
 
 const BASE = "";
 
+function authHeaders(): Record<string, string> {
+  try {
+    if (typeof window === "undefined") return {};
+    const authStore = window.localStorage.getItem("grocerease-auth");
+    if (!authStore) return {};
+    const parsed = JSON.parse(authStore);
+    const token = parsed?.state?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function safeFetchArray<T = any>(url: string): Promise<T[]> {
+  try {
+    const r = await fetch(url, { headers: authHeaders() });
+    if (!r.ok) return [];
+    const data = await r.json();
+    return Array.isArray(data) ? (data as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function fetchResidents() {
-  const r = await fetch(`${BASE}/api/residents`);
-  return r.json();
+  return safeFetchArray(`${BASE}/api/residents`);
 }
 async function fetchEstates() {
-  const r = await fetch(`${BASE}/api/residents/estates`);
-  return r.json() as Promise<string[]>;
+  return safeFetchArray<string>(`${BASE}/api/residents/estates`);
 }
 async function fetchDeliveryPartners() {
-  const r = await fetch(`${BASE}/api/delivery-partners`);
-  return r.json();
+  return safeFetchArray(`${BASE}/api/delivery-partners`);
 }
 async function fetchVendors() {
-  const r = await fetch(`${BASE}/api/vendors`);
-  return r.json();
+  return safeFetchArray(`${BASE}/api/vendors`);
 }
 async function fetchTowns() {
-  const r = await fetch(`${BASE}/api/finance/towns`);
-  return r.json() as Promise<{ id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null }[]>;
+  return safeFetchArray<{ id: number; name: string; zoneId: number | null; zoneName: string | null; feeCedis: number | null }>(`${BASE}/api/finance/towns`);
 }
 
 function OrderSummaryBox({ rawItems, deliveryFee = 30, markupPct = 18 }: { rawItems: string; deliveryFee?: number; markupPct?: number }) {

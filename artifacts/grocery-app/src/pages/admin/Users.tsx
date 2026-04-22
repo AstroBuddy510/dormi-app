@@ -68,9 +68,33 @@ import { format } from 'date-fns';
 
 const API_BASE = '/api';
 
+function authHeaders(): Record<string, string> {
+  try {
+    if (typeof window === 'undefined') return {};
+    const authStore = window.localStorage.getItem('grocerease-auth');
+    if (!authStore) return {};
+    const parsed = JSON.parse(authStore);
+    const token = parsed?.state?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function safeFetchArray<T = any>(url: string): Promise<T[]> {
+  try {
+    const r = await fetch(url, { headers: authHeaders() });
+    if (!r.ok) return [];
+    const data = await r.json();
+    return Array.isArray(data) ? (data as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     ...options,
   });
   if (!res.ok) {
@@ -342,7 +366,7 @@ function ResidentsTab() {
   const { data: residents = [], isLoading } = useListResidents();
   const { data: estateList = [] } = useQuery<string[]>({
     queryKey: ['estates'],
-    queryFn: () => fetch('/api/residents/estates').then(r => r.json()),
+    queryFn: () => safeFetchArray<string>('/api/residents/estates'),
   });
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<any>(null);
@@ -1168,7 +1192,7 @@ function AgentsTab() {
   const queryClient = useQueryClient();
   const { data: agents = [], isLoading } = useQuery<any[]>({
     queryKey: ['agents'],
-    queryFn: () => fetch('/api/agents').then((r) => r.json()),
+    queryFn: () => safeFetchArray('/api/agents'),
   });
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<any>(null);
@@ -1517,7 +1541,7 @@ export default function AdminUsers() {
   const { data: residents = [] } = useListResidents();
   const { data: vendors = [] } = useListVendors();
   const { data: riders = [] } = useListRiders();
-  const { data: agents = [] } = useQuery<any[]>({ queryKey: ['agents'], queryFn: () => fetch('/api/agents').then((r) => r.json()) });
+  const { data: agents = [] } = useQuery<any[]>({ queryKey: ['agents'], queryFn: () => safeFetchArray('/api/agents') });
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
