@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "server-functions/index.js": {
-      "runtime": "nodejs20.x",
+      "runtime": "@vercel/node@5.0.0",
       "memory": 1024,
       "maxDuration": 10
     }
@@ -13,7 +13,7 @@
       "destination": "/server-functions/index.js"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/).*\\.[^/]+)$",
       "destination": "/artifacts/grocery-app/dist/public/$1"
     },
     {
