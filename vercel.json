@@ -13,11 +13,11 @@
     },
     {
       "source": "/((?!api/).*\\.[^/]+)$",
-      "destination": "/artifacts/grocery-app/dist/public/$1"
+      "destination": "/$1"
     },
     {
       "source": "/((?!api/).*)",
-      "destination": "/artifacts/grocery-app/dist/public/index.html"
+      "destination": "/index.html"
     }
   ],
   "headers": [
