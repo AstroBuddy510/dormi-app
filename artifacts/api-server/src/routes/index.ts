@@ -34,7 +34,9 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
-router.use("/residents", authenticate, residentsRouter);
+// Note: /residents has both public (signup, estates list) and protected routes.
+// Auth is applied per-route inside residents.ts — do NOT gate the whole subtree here.
+router.use("/residents", residentsRouter);
 router.use("/items", itemsRouter);
 router.use("/pricing", pricingRouter);
 router.use("/orders", authenticate, ordersRouter);

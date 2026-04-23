@@ -3,6 +3,7 @@ import { db } from "../../../../lib/db/src/index.js";
 import { residentsTable, estatesTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { ResidentSignupBody, UpdateSubscriptionBody } from "../../../../lib/api-zod/src/index.js";
+import { authenticate } from "../middlewares/auth.js";
 
 const router: IRouter = Router();
 
@@ -81,12 +82,12 @@ router.get("/estates", async (_req, res) => {
   res.json([...names].sort());
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", authenticate, async (_req, res) => {
   const residents = await db.select().from(residentsTable).orderBy(residentsTable.createdAt);
   res.json(residents.map(mapResident));
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const id = parseInt(req.params.id);
   const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, id)).limit(1);
   if (!resident) {
@@ -96,7 +97,7 @@ router.get("/:id", async (req, res) => {
   res.json(mapResident(resident));
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { fullName, phone, estate, blockNumber, houseNumber, ghanaGpsAddress } = req.body;
@@ -127,7 +128,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // Auto-detect zone from stored Ghana GPS address
-router.post("/:id/detect-zone", async (req, res) => {
+router.post("/:id/detect-zone", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, id)).limit(1);
@@ -148,7 +149,7 @@ router.post("/:id/detect-zone", async (req, res) => {
 });
 
 // Manually assign zone
-router.patch("/:id/zone", async (req, res) => {
+router.patch("/:id/zone", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { zone } = req.body;
@@ -164,7 +165,7 @@ router.patch("/:id/zone", async (req, res) => {
 });
 
 // Bulk auto-tag all residents that have GPS but no zone
-router.post("/bulk-detect-zones", async (_req, res) => {
+router.post("/bulk-detect-zones", authenticate, async (_req, res) => {
   try {
     const all = await db.select().from(residentsTable);
     let updated = 0;
@@ -183,7 +184,7 @@ router.post("/bulk-detect-zones", async (_req, res) => {
   }
 });
 
-router.put("/:id/subscription", async (req, res) => {
+router.put("/:id/subscription", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const body = UpdateSubscriptionBody.parse(req.body);
@@ -201,7 +202,7 @@ router.put("/:id/subscription", async (req, res) => {
   }
 });
 
-router.put("/:id/suspend", async (req, res) => {
+router.put("/:id/suspend", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { suspended } = req.body;
@@ -219,7 +220,7 @@ router.put("/:id/suspend", async (req, res) => {
   }
 });
 
-router.put("/:id/photo", async (req, res) => {
+router.put("/:id/photo", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { photoUrl } = req.body;
@@ -237,7 +238,7 @@ router.put("/:id/photo", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await db.delete(residentsTable).where(eq(residentsTable.id, id));
