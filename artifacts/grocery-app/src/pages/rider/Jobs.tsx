@@ -14,6 +14,19 @@ import { useToast } from '@/hooks/use-toast';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+function authHeaders(): Record<string, string> {
+  try {
+    if (typeof window === 'undefined') return {};
+    const raw = window.localStorage.getItem('grocerease-auth');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    const token = parsed?.state?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 const GHANA_POST_RE = /\b([A-Z]{2,3}-\d{3,4}-\d{3,4})\b/i;
 
 function extractGhanaPostCode(address: string): string | null {
@@ -55,7 +68,7 @@ function playAlertTone() {
 async function uploadFileToStorage(file: File): Promise<string> {
   const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
   });
   if (!urlRes.ok) throw new Error('Failed to get upload URL');
@@ -68,7 +81,7 @@ async function uploadFileToStorage(file: File): Promise<string> {
 async function respondToJob(orderId: number, accepted: boolean) {
   const res = await fetch(`${BASE}/api/orders/${orderId}/rider-response`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ accepted }),
   });
   if (!res.ok) throw new Error((await res.json()).message ?? 'Request failed');
@@ -78,7 +91,7 @@ async function respondToJob(orderId: number, accepted: boolean) {
 async function respondToBulkGroup(groupId: number, accepted: boolean) {
   const res = await fetch(`${BASE}/api/block-groups/${groupId}/rider-response`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ accepted }),
   });
   if (!res.ok) throw new Error((await res.json()).message ?? 'Request failed');
@@ -88,7 +101,7 @@ async function respondToBulkGroup(groupId: number, accepted: boolean) {
 async function updateBulkGroupStatus(groupId: number, status: string) {
   const res = await fetch(`${BASE}/api/block-groups/${groupId}/status`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ status }),
   });
   if (!res.ok) throw new Error((await res.json()).message ?? 'Request failed');
@@ -111,7 +124,7 @@ export default function RiderJobs() {
   /* Fetch block groups assigned to this rider */
   const { data: bulkGroups = [] } = useQuery<any[]>({
     queryKey: ['block-groups-rider', user?.id],
-    queryFn: () => fetch(`${BASE}/api/block-groups?riderId=${user?.id}`).then(r => r.json()),
+    queryFn: () => fetch(`${BASE}/api/block-groups?riderId=${user?.id}`, { headers: authHeaders() }).then(r => r.json()),
     enabled: !!user?.id,
     refetchInterval: 5000,
   });
@@ -255,7 +268,7 @@ export default function RiderJobs() {
 
   const { data: unreadData } = useQuery<{ total: number }>({
     queryKey: ['rider-messages-unread', user?.id],
-    queryFn: () => fetch(`${BASE}/api/rider-messages/unread-count`).then(r => r.json()),
+    queryFn: () => fetch(`${BASE}/api/rider-messages/unread-count`, { headers: authHeaders() }).then(r => r.json()),
     refetchInterval: 10_000,
     enabled: !!user?.id,
   });

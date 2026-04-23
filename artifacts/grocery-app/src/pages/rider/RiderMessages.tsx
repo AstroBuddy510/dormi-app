@@ -7,6 +7,19 @@ import { useToast } from '@/hooks/use-toast';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+function authHeaders(): Record<string, string> {
+  try {
+    if (typeof window === 'undefined') return {};
+    const raw = window.localStorage.getItem('grocerease-auth');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    const token = parsed?.state?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 interface Message {
   id: number;
   riderId: number;
@@ -30,7 +43,7 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ['rider-messages', riderId],
-    queryFn: () => fetch(`${BASE}/api/rider-messages?riderId=${riderId}`).then(r => r.json()),
+    queryFn: () => fetch(`${BASE}/api/rider-messages?riderId=${riderId}`, { headers: authHeaders() }).then(r => r.json()),
     refetchInterval: 8000,
   });
 
@@ -38,7 +51,7 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
     mutationFn: (content: string) =>
       fetch(`${BASE}/api/rider-messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ riderId, senderRole: 'rider', senderName: riderName, content }),
       }).then(r => r.json()),
     onSuccess: () => {
@@ -52,7 +65,7 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
 
   const markReadMutation = useMutation({
     mutationFn: (id: number) =>
-      fetch(`${BASE}/api/rider-messages/${id}/read`, { method: 'PUT' }).then(r => r.json()),
+      fetch(`${BASE}/api/rider-messages/${id}/read`, { method: 'PUT', headers: authHeaders() }).then(r => r.json()),
   });
 
   useEffect(() => {
