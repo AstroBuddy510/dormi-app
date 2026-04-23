@@ -14,6 +14,16 @@ router.post("/verify", async (req, res) => {
       return res.status(400).json({ error: "missing_reference", message: "Payment reference is required." });
     }
 
+    // If an orderId is provided, load the order so we can amount-check the charge.
+    let expectedPesewas: number | undefined;
+    if (orderId) {
+      const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+      if (!order) {
+        return res.status(404).json({ error: "order_not_found", message: "Order not found." });
+      }
+      expectedPesewas = Math.round(parseFloat(order.total) * 100);
+    }
+
     const { secretKey } = await getGatewayKeys();
     if (!secretKey) {
       return res.status(500).json({ error: "misconfigured", message: "Payment gateway not configured." });
@@ -29,13 +39,22 @@ router.post("/verify", async (req, res) => {
 
     const psData = (await psRes.json()) as any;
 
-    if (!psData.status || psData.data?.status !== "success") {
+    const amountOk =
+      expectedPesewas === undefined ||
+      (typeof psData.data?.amount === "number" && psData.data.amount === expectedPesewas);
+    const currencyOk = psData.data?.currency === "GHS";
+    const chargeOk = psData.status && psData.data?.status === "success";
+
+    if (!chargeOk || !amountOk || !currencyOk) {
       if (orderId) {
         await db.update(ordersTable)
           .set({ paymentStatus: "failed" })
           .where(eq(ordersTable.id, orderId));
       }
-      return res.status(402).json({ error: "payment_not_successful", message: "Payment was not completed successfully." });
+      return res.status(402).json({
+        error: "payment_not_successful",
+        message: "Payment was not completed successfully, or amount/currency did not match.",
+      });
     }
 
     if (orderId) {

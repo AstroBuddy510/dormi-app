@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
 import { paymentGatewayTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
+import { authenticate } from "../middlewares/auth.js";
 
 const router: IRouter = Router();
 
@@ -35,7 +36,7 @@ router.get("/", async (_req, res) => {
   });
 });
 
-router.put("/", async (req, res) => {
+router.put("/", authenticate, async (req, res) => {
   const { publicKey, secretKey, mode, isActive } = req.body as {
     publicKey?: string;
     secretKey?: string;

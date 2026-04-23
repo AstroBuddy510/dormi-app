@@ -13,7 +13,7 @@ import { getGatewayKeys } from "../lib/gatewayKeys.js";
 
 const router: IRouter = Router();
 
-async function verifyPaystackRef(reference: string): Promise<boolean> {
+async function verifyPaystackRef(reference: string, expectedPesewas: number): Promise<boolean> {
   const { secretKey } = await getGatewayKeys();
   if (!secretKey) return false;
   try {
@@ -22,7 +22,13 @@ async function verifyPaystackRef(reference: string): Promise<boolean> {
     });
     if (!res.ok) return false;
     const data = (await res.json()) as any;
-    return data.status === true && data.data?.status === "success";
+    return (
+      data.status === true &&
+      data.data?.status === "success" &&
+      data.data?.currency === "GHS" &&
+      typeof data.data?.amount === "number" &&
+      data.data.amount === expectedPesewas
+    );
   } catch {
     return false;
   }
@@ -172,9 +178,17 @@ router.post("/", async (req, res) => {
       if (!paystackReference) {
         return res.status(400).json({ error: "missing_payment_reference", message: "A Paystack payment reference is required for online payment." });
       }
-      const verified = await verifyPaystackRef(paystackReference);
+      // Idempotency: block re-using a reference that's already tied to an order.
+      const [existing] = await db.select().from(ordersTable)
+        .where(eq(ordersTable.paystackReference, paystackReference))
+        .limit(1);
+      if (existing) {
+        return res.status(409).json({ error: "duplicate_reference", message: "An order already exists for this payment reference." });
+      }
+      const expectedPesewas = Math.round(total * 100);
+      const verified = await verifyPaystackRef(paystackReference, expectedPesewas);
       if (!verified) {
-        return res.status(402).json({ error: "payment_not_verified", message: "Payment could not be verified. Please try again." });
+        return res.status(402).json({ error: "payment_not_verified", message: "Payment could not be verified (status, amount, or currency mismatch). Please try again." });
       }
       paymentStatus = "paid";
     }

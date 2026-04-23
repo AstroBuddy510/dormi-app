@@ -20,9 +20,22 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 
 type Tab = 'rider' | 'residence' | 'vendor' | 'agent' | 'delivery-partner' | 'payment-gateway' | 'admin-accounts' | 'estates';
 
+function authHeaders(): Record<string, string> {
+  try {
+    if (typeof window === 'undefined') return {};
+    const raw = window.localStorage.getItem('grocerease-auth');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    const token = parsed?.state?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     ...options,
   });
   if (!res.ok) {
