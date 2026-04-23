@@ -12,6 +12,7 @@ import {
   ChevronRight, Inbox, LogOut,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import EmojiPickerButton from '@/components/EmojiPickerButton';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -124,6 +125,24 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
   const { toast } = useToast();
   const [message, setMessage] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleEmojiSelect = (emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setMessage(prev => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? message.length;
+    const end = el.selectionEnd ?? message.length;
+    const newMessage = message.slice(0, start) + emoji + message.slice(end);
+    setMessage(newMessage);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const { data: messages = [], isLoading } = useQuery<VendorMessage[]>({
     queryKey: ['vendor-messages', vendorId],
@@ -219,8 +238,9 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
         </div>
 
         <div className="px-4 pb-4 pt-2 border-t border-border">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-end">
             <textarea
+              ref={textareaRef}
               value={message}
               onChange={e => setMessage(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
@@ -228,10 +248,14 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
               rows={2}
               className="flex-1 resize-none rounded-xl border border-border bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
             />
+            <EmojiPickerButton
+              onEmojiSelect={handleEmojiSelect}
+              className="h-11 w-11 rounded-xl"
+            />
             <Button
               onClick={handleSend}
               disabled={!message.trim() || sendMutation.isPending}
-              className="self-end h-11 w-11 p-0 rounded-xl bg-primary hover:bg-primary/90"
+              className="h-11 w-11 p-0 rounded-xl bg-primary hover:bg-primary/90"
             >
               <Send size={15} />
             </Button>

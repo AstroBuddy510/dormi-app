@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Store, Send, ChevronLeft, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import EmojiPickerButton from '@/components/EmojiPickerButton';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -31,6 +32,24 @@ export default function VendorInbox() {
   const { toast } = useToast();
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
   const [reply, setReply] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleEmojiSelect = (emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setReply(prev => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? reply.length;
+    const end = el.selectionEnd ?? reply.length;
+    const newReply = reply.slice(0, start) + emoji + reply.slice(end);
+    setReply(newReply);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const { data: allMessages = [] } = useQuery<VendorMessage[]>({
     queryKey: ['vendor-messages-all'],
@@ -206,8 +225,9 @@ export default function VendorInbox() {
                 })}
               </div>
 
-              <div className="flex gap-2 border-t border-border px-5 py-4">
+              <div className="flex gap-2 border-t border-border px-5 py-4 items-end">
                 <textarea
+                  ref={textareaRef}
                   value={reply}
                   onChange={e => setReply(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
@@ -215,10 +235,14 @@ export default function VendorInbox() {
                   rows={2}
                   className="flex-1 resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
+                <EmojiPickerButton
+                  onEmojiSelect={handleEmojiSelect}
+                  className="h-10 w-10 rounded-xl"
+                />
                 <Button
                   onClick={handleReply}
                   disabled={!reply.trim() || replyMutation.isPending}
-                  className="self-end h-10 w-10 p-0 rounded-xl"
+                  className="h-10 w-10 p-0 rounded-xl"
                 >
                   <Send size={15} />
                 </Button>

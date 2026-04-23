@@ -76,6 +76,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "emoji-picker-react": "^4.18.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "zustand": "^5.0.11"

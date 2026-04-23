@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Send, MessageCircle, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import EmojiPickerButton from '@/components/EmojiPickerButton';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -38,8 +39,26 @@ interface RiderMessagesProps {
 export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleEmojiSelect = (emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setText(prev => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const newText = text.slice(0, start) + emoji + text.slice(end);
+    setText(newText);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ['rider-messages', riderId],
@@ -144,8 +163,9 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
       </div>
 
       {/* Input */}
-      <div className="flex gap-2 pt-3 border-t border-border mt-auto">
+      <div className="flex gap-2 pt-3 border-t border-border mt-auto items-end">
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -153,10 +173,14 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
           rows={2}
           className="flex-1 resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
         />
+        <EmojiPickerButton
+          onEmojiSelect={handleEmojiSelect}
+          className="h-10 w-10 rounded-xl"
+        />
         <Button
           onClick={handleSend}
           disabled={!text.trim() || sendMutation.isPending}
-          className="self-end h-10 w-10 p-0 rounded-xl bg-primary hover:bg-primary/90"
+          className="h-10 w-10 p-0 rounded-xl bg-primary hover:bg-primary/90"
         >
           <Send size={16} />
         </Button>

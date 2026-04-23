@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/store';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageCircle, ChevronLeft, Headphones, Smile } from 'lucide-react';
+import { Send, MessageCircle, ChevronLeft, Headphones } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import EmojiPickerButton from '@/components/EmojiPickerButton';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -22,119 +23,11 @@ function formatTime(dateStr: string) {
   return format(d, 'MMM d');
 }
 
-// ─── Emoji Picker ─────────────────────────────────────────────────────────────
-const EMOJI_GROUPS = [
-  {
-    label: 'Faces', icon: '😊',
-    emojis: [
-      '😊','😂','😅','😍','🥰','😮','😢','😡','🤔','😬',
-      '😎','🥳','😴','🤩','😤','🥺','😁','😜','🤭','😇',
-      '🙃','😑','🤗','😏','🫠',
-    ],
-  },
-  {
-    label: 'Hands', icon: '👍',
-    emojis: [
-      '👍','👎','👋','🙏','💪','✌️','👏','🤝','☝️','🤞',
-      '🫡','❤️','🫶','🤙','👌','✋','💯','🙌','🤜','🤛',
-      '🫸','🫷','🖐️','✍️','🤌',
-    ],
-  },
-  {
-    label: 'Produce', icon: '🍎',
-    emojis: [
-      '🍎','🥦','🥕','🧅','🥬','🍋','🍅','🧄','🥒','🌽',
-      '🥑','🫑','🍇','🍓','🫐','🥝','🍊','🥭','🥥','🍒',
-      '🍑','🥜','🌰','🫛','🫚','🍈','🥦','🌿','🪴','🌱',
-    ],
-  },
-  {
-    label: 'Grocery', icon: '🛒',
-    emojis: [
-      '🛒','🥫','🧴','🧃','🥚','🧀','🧈','🥩','🍗','🥐',
-      '🍞','🫙','🥓','🍖','🐟','🦐','🥗','🍳','🧆','🫕',
-      '🧂','🍯','🫖','☕','🥞','🧇','🍫','🍬','🧁','🥤',
-    ],
-  },
-  {
-    label: 'Delivery', icon: '🚚',
-    emojis: [
-      '📦','🚚','🏠','📍','⏰','💰','💳','🛍️','🏪','🧺',
-      '🔔','📞','💬','✅','❌','⚠️','🎉','⭐','🔥','📝',
-      '🗓️','📋','🔑','🚦','🛵',
-    ],
-  },
-];
-
-function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
-  const [activeGroup, setActiveGroup] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [onClose]);
-
-  const group = EMOJI_GROUPS[activeGroup];
-
-  return (
-    <div
-      ref={ref}
-      className="absolute bottom-full mb-2 right-0 bg-white rounded-2xl shadow-xl border border-border z-50 w-72 overflow-hidden"
-    >
-      {/* Category tabs */}
-      <div className="flex border-b border-border bg-gray-50/80">
-        {EMOJI_GROUPS.map((g, i) => (
-          <button
-            key={g.label}
-            onClick={() => setActiveGroup(i)}
-            title={g.label}
-            className={cn(
-              'flex-1 py-2 text-lg transition-colors hover:bg-gray-100',
-              i === activeGroup
-                ? 'bg-white border-b-2 border-primary'
-                : 'text-gray-400',
-            )}
-          >
-            {g.icon}
-          </button>
-        ))}
-      </div>
-
-      {/* Category label */}
-      <div className="px-3 pt-2 pb-1">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          {group.label}
-        </p>
-      </div>
-
-      {/* Scrollable emoji grid */}
-      <div className="px-2 pb-2 max-h-44 overflow-y-auto">
-        <div className="grid grid-cols-7 gap-0.5">
-          {group.emojis.map(em => (
-            <button
-              key={em}
-              onClick={() => onSelect(em)}
-              className="w-9 h-9 text-xl hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors"
-            >
-              {em}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Chat Thread ──────────────────────────────────────────────────────────────
 function ChatThread({ conv, residentId, residentName, onBack }: {
   conv: any; residentId: number; residentName: string; onBack: () => void;
 }) {
   const [text, setText] = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -156,7 +49,6 @@ function ChatThread({ conv, residentId, residentName, onBack }: {
       qc.invalidateQueries({ queryKey: ['res-agent-messages', conv.residentId, conv.agentId] });
       qc.invalidateQueries({ queryKey: ['res-conversations', residentId] });
       setText('');
-      setShowEmoji(false);
     },
     onError: () => toast({ title: 'Failed to send', variant: 'destructive' }),
   });
@@ -192,11 +84,14 @@ function ChatThread({ conv, residentId, residentName, onBack }: {
       const end = el.selectionEnd;
       const newText = text.slice(0, start) + emoji + text.slice(end);
       setText(newText);
-      setTimeout(() => { el.selectionStart = el.selectionEnd = start + emoji.length; el.focus(); }, 0);
+      requestAnimationFrame(() => {
+        el.focus();
+        const pos = start + emoji.length;
+        el.setSelectionRange(pos, pos);
+      });
     } else {
       setText(prev => prev + emoji);
     }
-    setShowEmoji(false);
   };
 
   return (
@@ -254,33 +149,21 @@ function ChatThread({ conv, residentId, residentName, onBack }: {
       {/* Input bar */}
       <div className="px-4 py-3 border-t border-border bg-white shrink-0">
         <div className="flex gap-2 items-end">
-          <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message…"
-              rows={1}
-              disabled={sendMutation.isPending}
-              className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2.5 pr-9 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
-              style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '100px' }}
-            />
-            <div className="absolute right-2 bottom-2">
-              <div className="relative">
-                <button
-                  onClick={() => setShowEmoji(v => !v)}
-                  type="button"
-                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-100 transition-colors"
-                >
-                  <Smile size={15} />
-                </button>
-                {showEmoji && (
-                  <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />
-                )}
-              </div>
-            </div>
-          </div>
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message…"
+            rows={1}
+            disabled={sendMutation.isPending}
+            className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
+            style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '100px' }}
+          />
+          <EmojiPickerButton
+            onEmojiSelect={insertEmoji}
+            className="h-10 w-10 rounded-xl shrink-0"
+          />
           <Button
             onClick={handleSend}
             disabled={!text.trim() || sendMutation.isPending}
