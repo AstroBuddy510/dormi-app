@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff, BarChart3, MessageCircle, Boxes, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { compressImage, formatBytes } from '@/lib/imageCompression';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -65,16 +66,44 @@ function playAlertTone() {
   }
 }
 
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const body = await res.json();
+      return body?.message || body?.error || fallback;
+    }
+    const text = await res.text();
+    return text?.slice(0, 200) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function uploadFileToStorage(file: File): Promise<string> {
   const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
   });
-  if (!urlRes.ok) throw new Error('Failed to get upload URL');
+  if (!urlRes.ok) {
+    const msg = await readErrorMessage(urlRes, 'Failed to get upload URL');
+    throw new Error(`(${urlRes.status}) ${msg}`);
+  }
   const { uploadURL, objectPath } = await urlRes.json();
-  const uploadRes = await fetch(uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-  if (!uploadRes.ok) throw new Error('Failed to upload photo');
+  const uploadRes = await fetch(uploadURL, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  if (!uploadRes.ok) {
+    const msg = await readErrorMessage(uploadRes, 'Failed to upload photo');
+    // 413 is the tell-tale "payload too large" — surface that clearly.
+    if (uploadRes.status === 413) {
+      throw new Error(`Photo too large (${formatBytes(file.size)}). Please retake at lower resolution.`);
+    }
+    throw new Error(`(${uploadRes.status}) ${msg}`);
+  }
   return objectPath as string;
 }
 
@@ -252,11 +281,25 @@ export default function RiderJobs() {
 
   const handleFileSelected = useCallback(async (jobId: number, file: File) => {
     if (!file) return;
-    const localPreview = URL.createObjectURL(file);
-    setPreviews(prev => ({ ...prev, [jobId]: localPreview }));
     setUploading(prev => ({ ...prev, [jobId]: true }));
     try {
-      const objectPath = await uploadFileToStorage(file);
+      // Compress first so phone-camera JPEGs (often 4–10 MB) fit under
+      // Vercel's ~4.5 MB serverless body limit.
+      const { file: toUpload, compressed, originalSize, finalSize } =
+        await compressImage(file, { targetBytes: 3 * 1024 * 1024, maxBytes: 5 * 1024 * 1024 });
+
+      // Preview the (possibly compressed) image we're actually sending.
+      const localPreview = URL.createObjectURL(toUpload);
+      setPreviews(prev => ({ ...prev, [jobId]: localPreview }));
+
+      if (compressed) {
+        toast({
+          title: 'Photo optimised',
+          description: `Shrunk ${formatBytes(originalSize)} → ${formatBytes(finalSize)} before upload.`,
+        });
+      }
+
+      const objectPath = await uploadFileToStorage(toUpload);
       uploadPhoto.mutate({ id: jobId, data: { photoType: UploadPhotoRequestPhotoType.delivery, photoUrl: objectPath } });
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message ?? 'Could not upload photo.', variant: 'destructive' });
