@@ -71,7 +71,10 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('application/json')) {
       const body = await res.json();
-      return body?.message || body?.error || fallback;
+      // Prefer message, fall back to error. Append hint when the server gave one.
+      const primary = body?.message || body?.error || fallback;
+      const hint = typeof body?.hint === 'string' ? ` — ${body.hint}` : '';
+      return `${primary}${hint}`;
     }
     const text = await res.text();
     return text?.slice(0, 200) || fallback;

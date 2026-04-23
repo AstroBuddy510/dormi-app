@@ -63,9 +63,22 @@ export class ObjectStorageService {
 
   /**
    * Directly upload from server.
+   *
+   * `body` accepts anything Vercel Blob's `put()` supports
+   * (Buffer, string, Blob, ReadableStream, etc.). For serverless environments,
+   * prefer Buffer so the SDK knows the exact content length.
    */
-  async upload(path: string, stream: any): Promise<string> {
-    const { url } = await put(path, stream, { access: 'public' });
+  async upload(
+    path: string,
+    body: Buffer | Uint8Array | Blob | ArrayBuffer | string,
+    contentType?: string,
+  ): Promise<string> {
+    const { url } = await put(path, body as any, {
+      access: "public",
+      contentType,
+      // addRandomSuffix defaults to true in v2 — keep our exact objectPath.
+      addRandomSuffix: false,
+    });
     return url;
   }
 }

@@ -56,13 +56,37 @@ router.put("/proxy-upload", async (req: Request, res: Response) => {
   }
 
   try {
-    // Vercel Blob's put expects a stream, buffer, or string.
-    // Express req is a Readable stream.
-    const url = await objectStorageService.upload(path, req);
+    // Buffer the body up-front. The Vercel Blob SDK wants a known-length
+    // payload; Express's raw `req` stream can make `put()` hang or throw
+    // when Content-Length isn't honoured. Bodies are already ≤5 MB after
+    // client-side compression, so buffering is safe.
+    const contentType = req.headers["content-type"] || "application/octet-stream";
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const body = Buffer.concat(chunks);
+
+    if (body.length === 0) {
+      res.status(400).json({ error: "Empty request body" });
+      return;
+    }
+
+    const url = await objectStorageService.upload(path, body, contentType);
     res.json({ url });
   } catch (error) {
+    // Log full detail for server-side diagnosis…
     console.error("Proxy upload failed:", error);
-    res.status(500).json({ error: "Failed to upload to blob storage" });
+    // …and surface the real message to the client so we stop debugging blind.
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({
+      error: "Failed to upload to blob storage",
+      message,
+      hint:
+        message.toLowerCase().includes("token") || message.toLowerCase().includes("auth")
+          ? "Likely BLOB_READ_WRITE_TOKEN is missing in Vercel env vars, or no Blob store is linked to this project."
+          : undefined,
+    });
   }
 });
 
