@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -39,6 +40,7 @@ import {
 } from 'lucide-react';
 
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const ADMIN_PAGE_SIZE = 20;
 
@@ -83,7 +85,7 @@ function AddItemDialog({
   const [brands, setBrands] = useState<string[]>([]);
   const [brandInput, setBrandInput] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageObjectPath, setImageObjectPath] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
 
   const isCustomCategory = categorySelect === NEW_CATEGORY_VALUE;
@@ -98,7 +100,7 @@ function AddItemDialog({
     setBrands([]);
     setBrandInput('');
     setImagePreview(null);
-    setImageObjectPath(null);
+    setUploadedImageUrl(null);
     setImageUploading(false);
   };
 
@@ -118,11 +120,22 @@ function AddItemDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
-      await fetch(res.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      setImageObjectPath(res.objectPath);
+      const uploadResp = await fetch(res.uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!uploadResp.ok) throw new Error('Upload failed');
+      // Proxy-upload returns { url } — the direct Vercel Blob CDN URL.
+      // Save that so <img src> hits the CDN directly instead of going through
+      // the server proxy (which was unreliable due to pathname prefix matching).
+      const { url } = await uploadResp.json();
+      if (!url) throw new Error('Upload did not return a URL');
+      setUploadedImageUrl(url);
     } catch {
       toast({ title: 'Upload failed', description: 'Could not upload image. Try again.', variant: 'destructive' });
       setImagePreview(null);
+      setUploadedImageUrl(null);
     } finally {
       setImageUploading(false);
     }
@@ -155,7 +168,7 @@ function AddItemDialog({
     if (!resolvedCategory) { toast({ title: 'Select or enter a category', variant: 'destructive' }); return; }
     if (imageUploading) { toast({ title: 'Image still uploading', description: 'Please wait…', variant: 'destructive' }); return; }
     setSaving(true);
-    const imageUrl = imageObjectPath ? `/api/storage${imageObjectPath}` : undefined;
+    const imageUrl = uploadedImageUrl ?? undefined;
     try {
       await apiFetch('/items', {
         method: 'POST',
@@ -270,7 +283,7 @@ function AddItemDialog({
                   )}
                   <button
                     type="button"
-                    onClick={() => { setImagePreview(null); setImageObjectPath(null); }}
+                    onClick={() => { setImagePreview(null); setUploadedImageUrl(null); }}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center"
                   >
                     <X size={10} />
@@ -282,7 +295,7 @@ function AddItemDialog({
                   <input type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp" className="hidden" onChange={handleImagePick} />
                 </label>
               )}
-              {imageObjectPath && !imageUploading && (
+              {uploadedImageUrl && !imageUploading && (
                 <p className="text-xs text-green-600 font-medium mt-1">✓ Image uploaded</p>
               )}
             </div>
@@ -314,7 +327,7 @@ function EditItemDialog({
   const [brands, setBrands] = useState<string[]>([]);
   const [brandInput, setBrandInput] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageObjectPath, setImageObjectPath] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [imageCleared, setImageCleared] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
 
@@ -333,7 +346,7 @@ function EditItemDialog({
       setBrands(item.brands ?? []);
       setBrandInput('');
       setImagePreview(item.imageUrl ?? null);
-      setImageObjectPath(null);
+      setUploadedImageUrl(null);
       setImageCleared(false);
       setImageUploading(false);
     }
@@ -355,12 +368,20 @@ function EditItemDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
-      await fetch(res.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      setImageObjectPath(res.objectPath);
+      const uploadResp = await fetch(res.uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!uploadResp.ok) throw new Error('Upload failed');
+      const { url } = await uploadResp.json();
+      if (!url) throw new Error('Upload did not return a URL');
+      setUploadedImageUrl(url);
       setImageCleared(false);
     } catch {
       toast({ title: 'Upload failed', description: 'Could not upload image. Try again.', variant: 'destructive' });
       setImagePreview(null);
+      setUploadedImageUrl(null);
     } finally {
       setImageUploading(false);
     }
@@ -369,7 +390,7 @@ function EditItemDialog({
 
   const handleClearImage = () => {
     setImagePreview(null);
-    setImageObjectPath(null);
+    setUploadedImageUrl(null);
     setImageCleared(true);
   };
 
@@ -393,8 +414,8 @@ function EditItemDialog({
     setSaving(true);
 
     let imageUrl: string | null | undefined;
-    if (imageObjectPath) {
-      imageUrl = `/api/storage${imageObjectPath}`;
+    if (uploadedImageUrl) {
+      imageUrl = uploadedImageUrl;
     } else if (imageCleared) {
       imageUrl = null;
     } else {
@@ -533,7 +554,7 @@ function EditItemDialog({
                   <input type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp" className="hidden" onChange={handleImagePick} />
                 </label>
               )}
-              {imageObjectPath && !imageUploading && (
+              {uploadedImageUrl && !imageUploading && (
                 <p className="text-xs text-green-600 font-medium mt-1">✓ New image uploaded</p>
               )}
             </div>
@@ -569,6 +590,9 @@ function CatalogueTab() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const filtered = useMemo(() => items.filter(i => {
     const matchCat = filterCat === 'All' || i.category === filterCat;
@@ -579,9 +603,37 @@ function CatalogueTab() {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [search, filterCat]);
 
+  // Clear selection when filters/search change — selected items may no longer be visible
+  useEffect(() => { setSelectedIds(new Set()); }, [search, filterCat]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pagedItems = filtered.slice((safePage - 1) * ADMIN_PAGE_SIZE, safePage * ADMIN_PAGE_SIZE);
+
+  // Select-all state for the filtered (across-page) list. Lets the user hit
+  // one toggle to grab every matching row, not just what's on the current page.
+  const allFilteredSelected = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id));
+  const someFilteredSelected = filtered.some(i => selectedIds.has(i.id));
+  const selectAllState: boolean | 'indeterminate' =
+    allFilteredSelected ? true : (someFilteredSelected ? 'indeterminate' : false);
+
+  const toggleOne = (id: number, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(filtered.map(i => i.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -595,6 +647,30 @@ function CatalogueTab() {
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const result = await apiFetch('/items/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      toast({
+        title: `${result.deletedCount ?? ids.length} item${(result.deletedCount ?? ids.length) !== 1 ? 's' : ''} removed`,
+        description: 'Catalogue updated.',
+      });
+      qc.invalidateQueries({ queryKey: ['items'] });
+      clearSelection();
+    } catch (e: any) {
+      toast({ title: 'Bulk delete failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsBulkDeleting(false);
+      setBulkDeleteOpen(false);
     }
   };
 
@@ -635,6 +711,32 @@ function CatalogueTab() {
         )}
       </div>
 
+      {/* Bulk actions bar — shows when one or more rows are selected */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5">
+          <p className="text-sm font-medium text-foreground">
+            <strong>{selectedIds.size}</strong> item{selectedIds.size !== 1 ? 's' : ''} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="rounded-lg h-8 text-xs"
+              onClick={clearSelection}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-lg h-8 gap-1.5 bg-destructive hover:bg-destructive/90 text-white"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 size={13} /> Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Items table */}
       {isLoading ? (
         <div className="text-center py-16 text-muted-foreground">Loading catalogue…</div>
@@ -648,6 +750,14 @@ function CatalogueTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-secondary/50 text-left">
+                <th className="px-4 py-3 w-10">
+                  <Checkbox
+                    checked={selectAllState}
+                    onCheckedChange={(v) => toggleSelectAll(v === true)}
+                    aria-label="Select all items"
+                    title={allFilteredSelected ? 'Clear selection' : `Select all ${filtered.length} filtered items`}
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Item</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Category</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">Brands</th>
@@ -657,8 +767,23 @@ function CatalogueTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {pagedItems.map((item: any) => (
-                <tr key={item.id} className="bg-white hover:bg-secondary/30 transition-colors">
+              {pagedItems.map((item: any) => {
+                const isSelected = selectedIds.has(item.id);
+                return (
+                <tr
+                  key={item.id}
+                  className={cn(
+                    'transition-colors',
+                    isSelected ? 'bg-primary/5 hover:bg-primary/10' : 'bg-white hover:bg-secondary/30',
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(v) => toggleOne(item.id, v === true)}
+                      aria-label={`Select ${item.name}`}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium">
                     <div className="flex items-center gap-2.5">
                       {item.imageUrl ? (
@@ -707,7 +832,8 @@ function CatalogueTab() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -759,6 +885,28 @@ function CatalogueTab() {
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction className="rounded-xl bg-destructive hover:bg-destructive/90" onClick={handleDelete} disabled={isDeleting}>
               {isDeleting ? 'Removing…' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={o => { if (!o && !isBulkDeleting) setBulkDeleteOpen(false); }}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{selectedIds.size}</strong> selected item
+              {selectedIds.size !== 1 ? 's' : ''} from the catalogue. Existing orders won't be affected, but this cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl" disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-destructive hover:bg-destructive/90"
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+            >
+              {isBulkDeleting ? 'Removing…' : `Remove ${selectedIds.size}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

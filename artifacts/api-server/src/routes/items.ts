@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
 import { itemsTable, itemRequestsTable } from "../../../../lib/db/src/schema/index.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { UpdateItemPriceBody } from "../../../../lib/api-zod/src/index.js";
 import { z } from "zod/v4";
 
@@ -103,6 +103,21 @@ router.delete("/:id", async (req, res) => {
       return;
     }
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+// Bulk delete — accepts { ids: number[] } and removes them in one query.
+// Using POST instead of DELETE because DELETE requests with bodies are
+// inconsistently supported across proxies / the fetch spec.
+const BulkDeleteBody = z.object({ ids: z.array(z.number().int()).min(1).max(500) });
+
+router.post("/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = BulkDeleteBody.parse(req.body);
+    const deleted = await db.delete(itemsTable).where(inArray(itemsTable.id, ids)).returning();
+    res.json({ success: true, deletedCount: deleted.length, deletedIds: deleted.map(d => d.id) });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }
