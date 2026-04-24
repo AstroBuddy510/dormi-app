@@ -9,6 +9,7 @@ import {
   expensesTable,
   payrollPaymentsTable,
   deliveryPartnersTable,
+  payoutsTable,
 } from "../../../../lib/db/src/schema/index.js";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -243,8 +244,12 @@ router.get("/stats", async (req, res) => {
         vendorCommissionRevenue += (subtotal * commPct) / 100;
       }
 
-      if (order.paymentMethod === "cash") cashRevenue += total;
-      else paystackRevenue += total;
+      // Payment method is stored as either "paystack" or "cash_on_delivery".
+      // "cash" is a legacy value some old test data might still have — treat
+      // anything that isn't "paystack" as cash so nothing silently rolls into
+      // the wrong bucket.
+      if (order.paymentMethod === "paystack") paystackRevenue += total;
+      else cashRevenue += total;
     }
 
     const expenses = expenseConditions.length
@@ -266,6 +271,27 @@ router.get("/stats", async (req, res) => {
     let totalPayroll = 0;
     for (const p of payrollPayments) totalPayroll += parseFloat(p.amount);
 
+    // ── Paid vendor payouts for the same period ──────────────────────────────
+    // Payouts show here once admin has marked them paid. We want a separate
+    // Paystack/Cash breakdown because admin moves money differently for each.
+    const payoutConditions: any[] = [eq(payoutsTable.status, "paid")];
+    if (from) payoutConditions.push(gte(payoutsTable.paidAt, new Date(from)));
+    if (to) payoutConditions.push(lte(payoutsTable.paidAt, new Date(to)));
+    const paidPayoutRows = await db.select({
+      totalAmount: payoutsTable.totalAmount,
+      paystackPortion: payoutsTable.paystackPortion,
+      cashPortion: payoutsTable.cashPortion,
+    }).from(payoutsTable).where(and(...payoutConditions));
+
+    let vendorPayoutsPaid = 0;
+    let vendorPayoutsPaystack = 0;
+    let vendorPayoutsCash = 0;
+    for (const p of paidPayoutRows) {
+      vendorPayoutsPaid += parseFloat(p.totalAmount ?? "0");
+      vendorPayoutsPaystack += parseFloat(p.paystackPortion ?? "0");
+      vendorPayoutsCash += parseFloat(p.cashPortion ?? "0");
+    }
+
     const totalRevenue = serviceChargeRevenue + inHouseDeliveryRevenue + thirdPartyCommissionRevenue + vendorCommissionRevenue;
     const netProfit = totalRevenue - totalExpenses - totalPayroll;
     const utilitiesFlag = totalRevenue > 0 && utilitiesExpenses / totalRevenue > 0.2;
@@ -285,6 +311,10 @@ router.get("/stats", async (req, res) => {
       netProfit: round2(netProfit),
       ordersCount: deliveredOrders.length,
       expenseByType,
+      vendorPayoutsPaid: round2(vendorPayoutsPaid),
+      vendorPayoutsPaystack: round2(vendorPayoutsPaystack),
+      vendorPayoutsCash: round2(vendorPayoutsCash),
+      vendorPayoutsCount: paidPayoutRows.length,
     });
   } catch (err: any) {
     res.status(500).json({ error: "server_error", message: err.message });

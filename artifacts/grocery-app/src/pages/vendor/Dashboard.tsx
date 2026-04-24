@@ -11,10 +11,12 @@ import {
   Store, CheckCircle, PackageCheck, BarChart3, MessageCircle,
   ShoppingBag, TrendingUp, Clock, Send, Star, Package,
   ChevronRight, Inbox, LogOut, Wallet, Calendar, Percent,
+  Banknote, CreditCard, HandCoins, Hourglass,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import EmojiPickerButton from '@/components/EmojiPickerButton';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -500,6 +502,210 @@ function SalesOverview({ vendorId }: { vendorId: number }) {
   );
 }
 
+interface PayoutBreakdownData {
+  vendorId: number;
+  commissionPercent: number;
+  totalEarnings: number;
+  paystackPortion: number;
+  cashPortion: number;
+  unpaid: { total: number; paystack: number; cash: number; orderCount: number };
+  inFlight: { total: number; paystack: number; cash: number; requestCount: number };
+}
+
+function PayoutBreakdown({ vendorId }: { vendorId: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const { data, isLoading, isError } = useQuery<PayoutBreakdownData>({
+    queryKey: ['vendor-payout-breakdown', vendorId],
+    queryFn: () =>
+      fetch(`${BASE}/api/payouts/breakdown?vendorId=${vendorId}`).then(r => {
+        if (!r.ok) throw new Error('Failed to load payout breakdown');
+        return r.json();
+      }),
+    enabled: !!vendorId,
+    refetchInterval: 30000,
+  });
+
+  const requestPayout = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}/api/payouts/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? 'Failed to request payout');
+      return body;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-payout-breakdown', vendorId] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-payout-history', vendorId] });
+      toast({
+        title: 'Payout Requested',
+        description: 'Your request has been sent to admin for processing.',
+      });
+      setConfirmOpen(false);
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Could Not Request Payout',
+        description: err.message ?? 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const unpaidTotal = data?.unpaid.total ?? 0;
+  const canRequest = unpaidTotal > 0 && !requestPayout.isPending;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Payout Breakdown</p>
+        {(data?.inFlight.requestCount ?? 0) > 0 && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+            <Hourglass className="h-3 w-3" /> {data!.inFlight.requestCount} pending
+          </span>
+        )}
+      </div>
+
+      {isError ? (
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+          Couldn't load payout breakdown. Pull down to retry.
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3">
+            {/* Total Earnings */}
+            <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+              <div className="flex items-start justify-between">
+                <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                  <Banknote className="h-5 w-5 text-green-600" />
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-green-700 bg-white/60 px-2 py-0.5 rounded-full">
+                  Net · after {data?.commissionPercent ?? 0}% commission
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-green-700 leading-tight mt-3">
+                {isLoading ? '…' : CEDI(data?.totalEarnings ?? 0)}
+              </p>
+              <p className="text-xs font-medium text-gray-500 mt-0.5">Total Earnings</p>
+              <p className="text-[11px] text-gray-400 mt-1">lifetime from delivered orders</p>
+            </div>
+
+            {/* Paystack + Cash — two columns */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center mb-3">
+                  <CreditCard className="h-5 w-5 text-blue-600" />
+                </div>
+                <p className="text-xl font-bold text-blue-700 leading-tight">
+                  {isLoading ? '…' : CEDI(data?.paystackPortion ?? 0)}
+                </p>
+                <p className="text-xs font-medium text-gray-500 mt-0.5">Paid via Paystack</p>
+                <p className="text-[11px] text-gray-400 mt-1">cleared online</p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center mb-3">
+                  <HandCoins className="h-5 w-5 text-amber-600" />
+                </div>
+                <p className="text-xl font-bold text-amber-700 leading-tight">
+                  {isLoading ? '…' : CEDI(data?.cashPortion ?? 0)}
+                </p>
+                <p className="text-xs font-medium text-gray-500 mt-0.5">Cash on Delivery</p>
+                <p className="text-[11px] text-gray-400 mt-1">collected at doorstep</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Unpaid + Request Button */}
+          <div className="rounded-2xl border border-border bg-white p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Unpaid Balance</p>
+                <p className="text-xl font-bold text-gray-900 mt-0.5">
+                  {isLoading ? '…' : CEDI(unpaidTotal)}
+                </p>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  {data?.unpaid.orderCount ?? 0} delivered order{(data?.unpaid.orderCount ?? 0) === 1 ? '' : 's'} · waiting to be requested
+                </p>
+              </div>
+              <Wallet className="h-8 w-8 text-gray-300" />
+            </div>
+            <Button
+              onClick={() => setConfirmOpen(true)}
+              disabled={!canRequest}
+              className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Request Payout
+            </Button>
+            {unpaidTotal === 0 && !isLoading && (
+              <p className="text-[11px] text-center text-muted-foreground mt-2">
+                No unpaid earnings yet. New delivered orders will show here.
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Confirmation modal */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-green-600" />
+              Confirm Payout Request
+            </DialogTitle>
+            <DialogDescription>
+              Admin will review and transfer your earnings. This snapshots your current unpaid balance.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 bg-gray-50 rounded-xl p-4 border border-border">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Paystack portion</span>
+              <span className="font-semibold text-blue-700">{CEDI(data?.unpaid.paystack ?? 0)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Cash portion</span>
+              <span className="font-semibold text-amber-700">{CEDI(data?.unpaid.cash ?? 0)}</span>
+            </div>
+            <div className="border-t border-border pt-2 flex justify-between">
+              <span className="font-semibold text-gray-800">Total</span>
+              <span className="font-bold text-green-700 text-lg">{CEDI(unpaidTotal)}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground pt-1">
+              Across {data?.unpaid.orderCount ?? 0} delivered order{(data?.unpaid.orderCount ?? 0) === 1 ? '' : 's'}.
+            </p>
+          </div>
+
+          <DialogFooter className="flex-row gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => setConfirmOpen(false)}
+              disabled={requestPayout.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => requestPayout.mutate()}
+              disabled={requestPayout.isPending || unpaidTotal === 0}
+            >
+              {requestPayout.isPending ? 'Requesting…' : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 type Tab = 'overview' | 'orders' | 'chat';
 
 export default function VendorDashboard() {
@@ -604,6 +810,8 @@ export default function VendorDashboard() {
         {activeTab === 'overview' && (
           <div className="space-y-5">
             {user?.id && <SalesOverview vendorId={user.id} />}
+
+            {user?.id && <PayoutBreakdown vendorId={user.id} />}
 
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Today's Activity</p>

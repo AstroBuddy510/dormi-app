@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, DollarSign, ShoppingBag, Truck, Users, AlertTriangle, Download, RefreshCcw, FileText } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingBag, Truck, Users, AlertTriangle, Download, RefreshCcw, FileText, Banknote, CreditCard, HandCoins } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -333,6 +333,7 @@ export default function AdminFinance() {
                       { label: 'Total Expenses', value: stats.totalExpenses, icon: '🧾' },
                       { label: 'Utilities', value: stats.utilitiesExpenses, icon: '💡', flag: stats.utilitiesFlag },
                       { label: 'Total Payroll', value: stats.totalPayroll, icon: '👷' },
+                      { label: 'Vendor Payouts Paid', value: stats.vendorPayoutsPaid ?? 0, icon: '🏪' },
                     ].map(({ label, value, icon, flag }) => (
                       <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                         <span className="text-sm flex items-center gap-1.5">
@@ -349,6 +350,46 @@ export default function AdminFinance() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Vendor Payouts Paid breakdown */}
+              {(stats.vendorPayoutsCount ?? 0) > 0 && (
+                <Card className="rounded-2xl border-0 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Banknote size={18} className="text-green-600" />
+                      Vendor Payouts Paid
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="rounded-xl border border-green-100 bg-green-50 p-4">
+                        <div className="flex items-center gap-2 text-green-700">
+                          <Banknote size={16} />
+                          <span className="text-xs font-semibold uppercase tracking-wide">Total Paid</span>
+                        </div>
+                        <p className="text-2xl font-bold text-green-700 mt-2">{fmt(stats.vendorPayoutsPaid)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{stats.vendorPayoutsCount} payout{stats.vendorPayoutsCount === 1 ? '' : 's'} this period</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                        <div className="flex items-center gap-2 text-blue-700">
+                          <CreditCard size={16} />
+                          <span className="text-xs font-semibold uppercase tracking-wide">Paystack Portion</span>
+                        </div>
+                        <p className="text-2xl font-bold text-blue-700 mt-2">{fmt(stats.vendorPayoutsPaystack)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">transferred online</p>
+                      </div>
+                      <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+                        <div className="flex items-center gap-2 text-amber-700">
+                          <HandCoins size={16} />
+                          <span className="text-xs font-semibold uppercase tracking-wide">Cash Portion</span>
+                        </div>
+                        <p className="text-2xl font-bold text-amber-700 mt-2">{fmt(stats.vendorPayoutsCash)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">settled in cash</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {stats.expenseByType && Object.keys(stats.expenseByType).length > 0 && (
                 <Card className="rounded-2xl border-0 shadow-sm">

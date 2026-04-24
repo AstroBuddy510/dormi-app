@@ -7,6 +7,7 @@ import { ridersTable } from "./riders.js";
 import { blockOrderGroupsTable } from "./blockOrderGroups.js";
 import { deliveryPartnersTable } from "./deliveryPartners.js";
 import { agentsTable } from "./agents.js";
+import { payoutsTable } from "./payouts.js";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -39,6 +40,9 @@ export const ordersTable = pgTable("orders", {
   notes: text("notes"),
   paystackReference: text("paystack_reference"),
   paymentStatus: text("payment_status").notNull().default("pending"),
+  // Set when a vendor-payout is requested for this order. Prevents double-
+  // inclusion of the same delivered order in multiple payout requests.
+  vendorPayoutId: integer("vendor_payout_id").references(() => payoutsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

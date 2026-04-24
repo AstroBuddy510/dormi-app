@@ -28,6 +28,7 @@ import AdminFinance from "@/pages/admin/Finance";
 import AdminEmployees from "@/pages/admin/Employees";
 import AdminCatalogue from "@/pages/admin/Catalogue";
 import AdminReports from "@/pages/admin/Reports";
+import AdminPayouts from "@/pages/admin/Payouts";
 import AdminRiderInbox from "@/pages/admin/RiderInbox";
 import AdminVendorInbox from "@/pages/admin/VendorInbox";
 import AdminNotifications from "@/pages/admin/Notifications";
@@ -107,6 +108,7 @@ function RoleBasedRouter() {
         <Route path="/employees" component={AdminEmployees} />
         <Route path="/catalogue" component={AdminCatalogue} />
         <Route path="/reports" component={AdminReports} />
+        <Route path="/payouts" component={AdminPayouts} />
         <Route path="/rider-messages" component={AdminRiderInbox} />
         <Route path="/vendor-inbox" component={AdminVendorInbox} />
         <Route path="/notifications" component={AdminNotifications} />

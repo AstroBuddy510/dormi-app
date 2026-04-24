@@ -29,6 +29,7 @@ import adminAccountsRouter from "./adminAccounts.js";
 import estatesRouter from "./estates.js";
 import agentMessagesRouter from "./agentMessages.js";
 import notificationsRouter from "./notifications.js";
+import payoutsRouter from "./payouts.js";
 
 const router: IRouter = Router();
 
@@ -63,5 +64,6 @@ router.use("/admin-accounts", adminAccountsRouter);
 router.use("/estates", estatesRouter);
 router.use("/agent-messages", agentMessagesRouter);
 router.use("/notifications", notificationsRouter);
+router.use("/payouts", payoutsRouter);
 
 export default router;

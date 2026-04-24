@@ -8,6 +8,13 @@
       "when": 1776737939373,
       "tag": "0000_perfect_violations",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777161600000,
+      "tag": "0001_add_payouts",
+      "breakpoints": true
     }
   ]
 }
