@@ -1,18 +1,20 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useAuth } from '@/store';
 import { useListOrders, useUpdateOrderStatus, OrderStatus } from '@workspace/api-client-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   Store, CheckCircle, PackageCheck, BarChart3, MessageCircle,
   ShoppingBag, TrendingUp, Clock, Send, Star, Package,
-  ChevronRight, Inbox, LogOut,
+  ChevronRight, Inbox, LogOut, Wallet, Calendar, Percent,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import EmojiPickerButton from '@/components/EmojiPickerButton';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -268,6 +270,236 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
   );
 }
 
+// ─── Sales Overview ───────────────────────────────────────────────────────────
+
+type RangePreset = 'today' | 'week' | 'month' | 'custom';
+
+interface VendorOverview {
+  vendorId: number;
+  commissionPercent: number;
+  from: string;
+  to: string;
+  orderCount: number;
+  totalSales: number;
+  totalCommission: number;
+  daily: { date: string; sales: number; commission: number; orders: number }[];
+}
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function resolveRange(preset: RangePreset, custom: { from: string; to: string }): { from: string; to: string } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (preset === 'today') {
+    return { from: ymd(today), to: ymd(today) };
+  }
+  if (preset === 'week') {
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay()); // Sunday
+    return { from: ymd(start), to: ymd(today) };
+  }
+  if (preset === 'month') {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: ymd(start), to: ymd(today) };
+  }
+  return { from: custom.from || ymd(today), to: custom.to || ymd(today) };
+}
+
+const CEDI = (n: number) => `GH₵${n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function SalesOverview({ vendorId }: { vendorId: number }) {
+  const [preset, setPreset] = useState<RangePreset>('month');
+  const todayKey = ymd(new Date());
+  const [customFrom, setCustomFrom] = useState<string>(todayKey);
+  const [customTo, setCustomTo] = useState<string>(todayKey);
+
+  const range = useMemo(
+    () => resolveRange(preset, { from: customFrom, to: customTo }),
+    [preset, customFrom, customTo],
+  );
+
+  const { data, isLoading, isError } = useQuery<VendorOverview>({
+    queryKey: ['vendor-overview', vendorId, range.from, range.to],
+    queryFn: () =>
+      fetch(`${BASE}/api/vendor/overview?vendorId=${vendorId}&from=${range.from}&to=${range.to}`)
+        .then(r => {
+          if (!r.ok) throw new Error('Failed to load overview');
+          return r.json();
+        }),
+    enabled: !!vendorId && !!range.from && !!range.to,
+    refetchInterval: 60000,
+  });
+
+  const chartData = useMemo(
+    () =>
+      (data?.daily ?? []).map(d => ({
+        ...d,
+        // Short x-axis label: "15 Apr"
+        label: format(new Date(`${d.date}T00:00:00`), 'dd MMM'),
+      })),
+    [data?.daily],
+  );
+
+  const presets: { id: RangePreset; label: string }[] = [
+    { id: 'today', label: 'Today' },
+    { id: 'week',  label: 'This Week' },
+    { id: 'month', label: 'This Month' },
+    { id: 'custom', label: 'Custom' },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Sales Overview</p>
+        {data?.commissionPercent !== undefined && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full">
+            <Percent className="h-3 w-3" /> {data.commissionPercent}% commission rate
+          </span>
+        )}
+      </div>
+
+      {/* Period toggle */}
+      <div className="grid grid-cols-4 gap-1 p-1 bg-gray-100 rounded-xl">
+        {presets.map(p => (
+          <button
+            key={p.id}
+            onClick={() => setPreset(p.id)}
+            className={`py-2 rounded-lg text-xs font-bold transition-all ${
+              preset === p.id
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'text-muted-foreground hover:text-gray-700'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {preset === 'custom' && (
+        <div className="grid grid-cols-2 gap-3 bg-white border border-border rounded-xl p-3">
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> From
+            </label>
+            <Input
+              type="date"
+              value={customFrom}
+              max={customTo || todayKey}
+              onChange={e => setCustomFrom(e.target.value)}
+              className="h-10 rounded-lg text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> To
+            </label>
+            <Input
+              type="date"
+              value={customTo}
+              min={customFrom}
+              max={todayKey}
+              onChange={e => setCustomTo(e.target.value)}
+              className="h-10 rounded-lg text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+          <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center mb-3">
+            <ShoppingBag className="h-5 w-5 text-green-600" />
+          </div>
+          <p className="text-2xl font-bold text-green-700 leading-tight">
+            {isLoading ? '…' : CEDI(data?.totalSales ?? 0)}
+          </p>
+          <p className="text-xs font-medium text-gray-500 mt-0.5">Total Sales</p>
+          <p className="text-[11px] text-gray-400 mt-1">{data?.orderCount ?? 0} orders</p>
+        </div>
+
+        <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
+          <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center mb-3">
+            <Wallet className="h-5 w-5 text-purple-600" />
+          </div>
+          <p className="text-2xl font-bold text-purple-700 leading-tight">
+            {isLoading ? '…' : CEDI(data?.totalCommission ?? 0)}
+          </p>
+          <p className="text-xs font-medium text-gray-500 mt-0.5">Commission Paid</p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            to platform · {data?.commissionPercent ?? 0}% of sales
+          </p>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="rounded-2xl border border-border bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-gray-800">Daily Sales</p>
+          <p className="text-[11px] text-muted-foreground">
+            {range.from === range.to
+              ? format(new Date(`${range.from}T00:00:00`), 'dd MMM yyyy')
+              : `${format(new Date(`${range.from}T00:00:00`), 'dd MMM')} – ${format(new Date(`${range.to}T00:00:00`), 'dd MMM yyyy')}`}
+          </p>
+        </div>
+        {isError ? (
+          <p className="text-sm text-red-600 py-6 text-center">Couldn't load overview. Try again.</p>
+        ) : isLoading ? (
+          <div className="h-48 flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          </div>
+        ) : chartData.length === 0 || (data?.orderCount ?? 0) === 0 ? (
+          <div className="h-48 flex flex-col items-center justify-center text-center gap-2">
+            <Inbox className="h-7 w-7 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No sales in this range</p>
+          </div>
+        ) : (
+          <div className="h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: '#6b7280' }}
+                  interval="preserveStartEnd"
+                  tickLine={false}
+                  axisLine={{ stroke: '#e5e7eb' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: '#6b7280' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={v => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`)}
+                  width={38}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(16, 185, 129, 0.06)' }}
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: '1px solid #e5e7eb',
+                    fontSize: 12,
+                    padding: '8px 12px',
+                  }}
+                  formatter={(value: number, name: string) =>
+                    [CEDI(value), name === 'sales' ? 'Sales' : 'Commission']
+                  }
+                  labelFormatter={label => `${label}`}
+                />
+                <Bar dataKey="sales" fill="#10b981" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type Tab = 'overview' | 'orders' | 'chat';
 
 export default function VendorDashboard() {
@@ -371,6 +603,8 @@ export default function VendorDashboard() {
       <div className="px-4 py-5 max-w-lg mx-auto">
         {activeTab === 'overview' && (
           <div className="space-y-5">
+            {user?.id && <SalesOverview vendorId={user.id} />}
+
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Today's Activity</p>
               <div className="grid grid-cols-2 gap-3">
