@@ -214,21 +214,23 @@ function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: 
       {/* Input bar */}
       <div className="px-4 md:px-5 py-3 border-t border-border bg-white shrink-0">
         <div className="flex gap-2 items-end">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message… (Shift+Enter for new line)"
-            rows={1}
-            disabled={sendMutation.isPending}
-            className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
-            style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '120px' }}
-          />
-          <EmojiPickerButton
-            onEmojiSelect={insertEmoji}
-            className="h-10 w-10 rounded-xl shrink-0"
-          />
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message… (Shift+Enter for new line)"
+              rows={1}
+              disabled={sendMutation.isPending}
+              className="w-full resize-none rounded-xl border border-input bg-background pl-3 pr-10 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
+              style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '120px' }}
+            />
+            <EmojiPickerButton
+              onEmojiSelect={insertEmoji}
+              className="absolute right-2 bottom-2"
+            />
+          </div>
           <Button
             onClick={handleSend}
             disabled={!text.trim() || sendMutation.isPending}

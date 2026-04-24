@@ -1,73 +1,99 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { Smile } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface EmojiPickerButtonProps {
   onEmojiSelect: (emoji: string) => void;
   disabled?: boolean;
+  /** Extra classes for the trigger button. */
   className?: string;
-  side?: "top" | "right" | "bottom" | "left";
-  align?: "start" | "center" | "end";
+  /** Icon size in px. */
+  iconSize?: number;
 }
 
 /**
- * Reusable emoji picker button used across all chat surfaces
- * (rider, vendor, agent, admin, resident).
+ * Shared emoji picker used across every chat surface.
  *
- * Opens a full unicode emoji picker in a popover when clicked,
- * and calls `onEmojiSelect(emoji)` whenever the user picks one.
+ * Design:
+ * - The trigger is a small ghost-style icon button meant to live INSIDE the
+ *   message input (absolute-positioned by the caller), so the textarea spans
+ *   the full width of the message bar.
+ * - When opened, the emoji panel is rendered in a fixed, centered overlay on
+ *   screen with a very light translucent backdrop so the chat underneath
+ *   stays visible.
+ * - Clicking outside the panel, or pressing Escape, closes it.
+ * - Picking an emoji keeps the panel open so the user can add several in a row.
  */
 export default function EmojiPickerButton({
   onEmojiSelect,
   disabled,
   className,
-  side = "top",
-  align = "end",
+  iconSize = 18,
 }: EmojiPickerButtonProps) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          aria-label="Insert emoji"
-          className={className}
-        >
-          <Smile className="h-5 w-5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        side={side}
-        align={align}
-        sideOffset={8}
-        className="p-0 w-auto border-none shadow-lg"
-        // Keep focus in the textarea so users can keep typing after picking
-        onOpenAutoFocus={(e) => e.preventDefault()}
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-label="Insert emoji"
+        className={cn(
+          "p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-100 transition-colors disabled:opacity-50",
+          className,
+        )}
       >
-        <EmojiPicker
-          onEmojiClick={(emojiData) => {
-            onEmojiSelect(emojiData.emoji);
+        <Smile size={iconSize} />
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          onMouseDown={(e) => {
+            if (
+              panelRef.current &&
+              !panelRef.current.contains(e.target as Node)
+            ) {
+              setOpen(false);
+            }
           }}
-          emojiStyle={EmojiStyle.NATIVE}
-          theme={Theme.AUTO}
-          width={320}
-          height={400}
-          searchPlaceholder="Search emoji..."
-          lazyLoadEmojis
-          previewConfig={{ showPreview: false }}
-          skinTonesDisabled={false}
-        />
-      </PopoverContent>
-    </Popover>
+        >
+          {/* Very light backdrop — chat stays clearly visible behind it */}
+          <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px]" />
+          <div
+            ref={panelRef}
+            className="relative z-10 rounded-2xl overflow-hidden shadow-2xl"
+          >
+            <EmojiPicker
+              onEmojiClick={(data) => onEmojiSelect(data.emoji)}
+              emojiStyle={EmojiStyle.NATIVE}
+              theme={Theme.AUTO}
+              width={340}
+              height={440}
+              searchPlaceholder="Search emoji..."
+              lazyLoadEmojis
+              previewConfig={{ showPreview: false }}
+              skinTonesDisabled={false}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

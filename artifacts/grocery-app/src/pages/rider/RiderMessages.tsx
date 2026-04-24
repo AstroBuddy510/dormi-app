@@ -164,19 +164,21 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
 
       {/* Input */}
       <div className="flex gap-2 pt-3 border-t border-border mt-auto items-end">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message to admin…"
-          rows={2}
-          className="flex-1 resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
-        />
-        <EmojiPickerButton
-          onEmojiSelect={handleEmojiSelect}
-          className="h-10 w-10 rounded-xl"
-        />
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message to admin…"
+            rows={2}
+            className="w-full resize-none rounded-xl border border-border bg-white pl-3 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
+          />
+          <EmojiPickerButton
+            onEmojiSelect={handleEmojiSelect}
+            className="absolute right-2 bottom-2"
+          />
+        </div>
         <Button
           onClick={handleSend}
           disabled={!text.trim() || sendMutation.isPending}

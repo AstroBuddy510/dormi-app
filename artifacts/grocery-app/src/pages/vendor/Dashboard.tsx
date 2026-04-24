@@ -239,19 +239,21 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
 
         <div className="px-4 pb-4 pt-2 border-t border-border">
           <div className="flex gap-2 items-end">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="Type your message…"
-              rows={2}
-              className="flex-1 resize-none rounded-xl border border-border bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
-            />
-            <EmojiPickerButton
-              onEmojiSelect={handleEmojiSelect}
-              className="h-11 w-11 rounded-xl"
-            />
+            <div className="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Type your message…"
+                rows={2}
+                className="w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
+              />
+              <EmojiPickerButton
+                onEmojiSelect={handleEmojiSelect}
+                className="absolute right-2 bottom-2"
+              />
+            </div>
             <Button
               onClick={handleSend}
               disabled={!message.trim() || sendMutation.isPending}

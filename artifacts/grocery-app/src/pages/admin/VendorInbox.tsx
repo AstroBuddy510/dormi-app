@@ -226,19 +226,21 @@ export default function VendorInbox() {
               </div>
 
               <div className="flex gap-2 border-t border-border px-5 py-4 items-end">
-                <textarea
-                  ref={textareaRef}
-                  value={reply}
-                  onChange={e => setReply(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
-                  placeholder="Type a reply to the vendor…"
-                  rows={2}
-                  className="flex-1 resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <EmojiPickerButton
-                  onEmojiSelect={handleEmojiSelect}
-                  className="h-10 w-10 rounded-xl"
-                />
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={reply}
+                    onChange={e => setReply(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
+                    placeholder="Type a reply to the vendor…"
+                    rows={2}
+                    className="w-full resize-none rounded-xl border border-border bg-white pl-3 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <EmojiPickerButton
+                    onEmojiSelect={handleEmojiSelect}
+                    className="absolute right-2 bottom-2"
+                  />
+                </div>
                 <Button
                   onClick={handleReply}
                   disabled={!reply.trim() || replyMutation.isPending}
