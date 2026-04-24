@@ -112,15 +112,19 @@ async function uploadPhoto(file: File): Promise<string> {
     body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
   });
   if (!metaRes.ok) throw new Error('Failed to get upload URL');
-  const { uploadURL, objectPath } = await metaRes.json();
+  const { uploadURL } = await metaRes.json();
   const putRes = await fetch(uploadURL, {
     method: 'PUT',
     body: file,
     headers: { 'Content-Type': file.type },
   });
   if (!putRes.ok) throw new Error('Failed to upload photo');
-  // Return full serving URL so it can be stored and used directly as img src
-  return `/api/storage${objectPath}` as string;
+  // The proxy-upload endpoint returns the direct Vercel Blob CDN URL.
+  // Use it as-is — DO NOT reconstruct a server-proxy path, that path
+  // does not resolve and the image shows as broken.
+  const { url } = await putRes.json();
+  if (!url) throw new Error('Upload did not return a URL');
+  return url as string;
 }
 
 // ─── Shared UI pieces ─────────────────────────────────────────────────────────

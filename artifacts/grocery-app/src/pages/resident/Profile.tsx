@@ -97,18 +97,19 @@ export default function ResidentProfile() {
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
       if (!urlRes.ok) throw new Error('Failed to get upload URL');
-      const { uploadURL, objectPath } = await urlRes.json();
+      const { uploadURL } = await urlRes.json();
 
-      // Step 2: upload file directly to GCS
+      // Step 2: upload file — proxy-upload returns the direct Vercel Blob
+      // CDN URL. Use that directly; do NOT reconstruct a /api/storage/...
+      // path (that path does not resolve and the image shows as broken).
       const putRes = await fetch(uploadURL, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       });
       if (!putRes.ok) throw new Error('Upload to storage failed');
-
-      // Build the full serving URL and store it directly
-      const servingUrl = `${BASE}/api/storage${objectPath}`;
+      const { url: servingUrl } = await putRes.json();
+      if (!servingUrl) throw new Error('Upload did not return a URL');
 
       // Step 3: save the full serving URL as the resident's photoUrl
       const saveRes = await fetch(`${BASE}/api/residents/${user.id}/photo`, {
