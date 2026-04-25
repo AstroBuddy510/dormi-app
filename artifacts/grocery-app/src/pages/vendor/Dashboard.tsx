@@ -260,8 +260,8 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="Type your message…"
                 rows={1}
-                className="w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
-                style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '100px' }}
+                className="w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2.5 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
+                style={{ overflow: 'hidden', minHeight: '44px', maxHeight: '100px' }}
               />
               <EmojiPickerButton
                 onEmojiSelect={handleEmojiSelect}
