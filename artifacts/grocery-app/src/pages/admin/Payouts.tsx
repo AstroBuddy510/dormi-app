@@ -162,7 +162,7 @@ export default function AdminPayouts() {
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
       <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-        <div className="space-y-6 max-w-7xl">
+        <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
