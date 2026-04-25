@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useLocation } from 'wouter';
 import { useAuth } from '@/store';
 import { useListOrders, useUpdateOrderStatus, OrderStatus } from '@workspace/api-client-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -725,8 +726,40 @@ export default function VendorDashboard() {
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [orderType, setOrderType] = useState<'app' | 'call'>('app');
+  const [location, setLocation] = useLocation();
+
+  // Initial state derived from URL so deep links work on first paint.
+  const initialTab: Tab =
+    location === '/app-orders' || location === '/call-orders' ? 'orders' : 'overview';
+  const initialOrderType: 'app' | 'call' = location === '/call-orders' ? 'call' : 'app';
+
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [orderType, setOrderType] = useState<'app' | 'call'>(initialOrderType);
+
+  // Keep state in sync when the URL changes (e.g. BottomNav taps from any screen).
+  useEffect(() => {
+    if (location === '/app-orders') {
+      setActiveTab('orders');
+      setOrderType('app');
+    } else if (location === '/call-orders') {
+      setActiveTab('orders');
+      setOrderType('call');
+    }
+  }, [location]);
+
+  const handleTabClick = (tab: Tab) => {
+    setActiveTab(tab);
+    if (tab === 'orders') {
+      setLocation(orderType === 'call' ? '/call-orders' : '/app-orders');
+    } else if (location !== '/') {
+      setLocation('/');
+    }
+  };
+
+  const handleOrderTypeChange = (type: 'app' | 'call') => {
+    setOrderType(type);
+    setLocation(type === 'call' ? '/call-orders' : '/app-orders');
+  };
 
   const { data: appOrders = [], isLoading: isLoadingApp } = useListOrders({ vendorId: user?.id, callOnly: false });
   const { data: callOrders = [], isLoading: isLoadingCall } = useListOrders({ vendorId: user?.id, callOnly: true });
@@ -800,7 +833,7 @@ export default function VendorDashboard() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabClick(tab.id)}
               className={`relative flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold transition-colors ${
                 activeTab === tab.id
                   ? 'text-primary border-b-2 border-primary'
@@ -864,7 +897,7 @@ export default function VendorDashboard() {
                 <Button
                   variant="outline"
                   className="mt-4 rounded-xl"
-                  onClick={() => setActiveTab('orders')}
+                  onClick={() => handleTabClick('orders')}
                 >
                   View Orders <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
@@ -879,7 +912,7 @@ export default function VendorDashboard() {
               {(['app', 'call'] as const).map(type => (
                 <button
                   key={type}
-                  onClick={() => setOrderType(type)}
+                  onClick={() => handleOrderTypeChange(type)}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
                     orderType === type ? 'bg-white shadow-sm text-gray-900' : 'text-muted-foreground'
                   }`}

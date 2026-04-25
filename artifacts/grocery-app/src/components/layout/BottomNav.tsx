@@ -49,7 +49,7 @@ export function BottomNav() {
   ];
 
   const vendorNav = [
-    { icon: ListOrdered, label: 'App Orders',  path: '/' },
+    { icon: ListOrdered, label: 'App Orders',  path: '/app-orders' },
     { icon: PhoneCall,   label: 'Call Orders', path: '/call-orders' },
   ];
 

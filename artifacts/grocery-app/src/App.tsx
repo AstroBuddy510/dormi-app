@@ -85,6 +85,7 @@ function RoleBasedRouter() {
     return (
       <Switch>
         <Route path="/" component={VendorDashboard} />
+        <Route path="/app-orders" component={VendorDashboard} />
         <Route path="/call-orders" component={VendorDashboard} />
         <Route component={NotFound} />
       </Switch>
