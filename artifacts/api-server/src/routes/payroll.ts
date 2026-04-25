@@ -3,8 +3,21 @@ import { db } from "../../../../lib/db/src/index.js";
 import { payrollPaymentsTable, employeesTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
+import { postPayrollAccrual, postPayrollDisbursement } from "../lib/ledger.js";
 
 const router: IRouter = Router();
+
+// Map free-text payment_method strings on payroll_payments to the receiving
+// account in the ledger. Anything unrecognised → bank, since that's how most
+// formal salary disbursements actually move.
+function ledgerPaidFromFor(method: string): "cash" | "momo-mtn" | "momo-telecel" | "momo-at" | "bank" {
+  const m = method.toLowerCase();
+  if (m.includes("cash")) return "cash";
+  if (m.includes("mtn")) return "momo-mtn";
+  if (m.includes("telecel") || m.includes("vodafone")) return "momo-telecel";
+  if (m.includes("airtel") || m.includes("tigo") || m === "at") return "momo-at";
+  return "bank";
+}
 
 const PayrollBody = z.object({
   employeeId: z.number().int(),
@@ -53,6 +66,30 @@ router.post("/", async (req, res) => {
       periodEnd: body.periodEnd,
       notes: body.notes,
     }).returning();
+
+    // For now we treat each payroll payment as a single-step accrual+
+    // disbursement on the same day: DR Salaries (expense), CR cash/bank/momo
+    // directly. When we add a payroll_run aggregate we can split into proper
+    // accrual + disbursement halves.
+    try {
+      await postPayrollDisbursement({
+        payrollPaymentId: payment.id,
+        amount: parseFloat(payment.amount),
+        paidFrom: ledgerPaidFromFor(payment.paymentMethod),
+        postedAt: payment.paidAt,
+      });
+      // Tracking the matching accrual (DR salaries / CR salaries payable)
+      // immediately before disbursement keeps the salary expense visible
+      // even before we model payroll runs separately.
+      await postPayrollAccrual({
+        payrollId: payment.id,
+        amount: parseFloat(payment.amount),
+        postedAt: payment.paidAt,
+      });
+    } catch (e) {
+      console.error("[ledger] failed posting payroll", payment.id, e);
+    }
+
     res.status(201).json({ id: payment.id, amount: parseFloat(payment.amount) });
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });

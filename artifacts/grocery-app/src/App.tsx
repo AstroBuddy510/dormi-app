@@ -30,6 +30,7 @@ import AdminCatalogue from "@/pages/admin/Catalogue";
 import AdminReports from "@/pages/admin/Reports";
 import AdminPayouts from "@/pages/admin/Payouts";
 import AdminTaxSettings from "@/pages/admin/TaxSettings";
+import AdminLedger from "@/pages/admin/Ledger";
 import AdminRiderInbox from "@/pages/admin/RiderInbox";
 import AdminVendorInbox from "@/pages/admin/VendorInbox";
 import AdminNotifications from "@/pages/admin/Notifications";
@@ -112,6 +113,7 @@ function RoleBasedRouter() {
         <Route path="/reports" component={AdminReports} />
         <Route path="/payouts" component={AdminPayouts} />
         <Route path="/tax-settings" component={AdminTaxSettings} />
+        <Route path="/ledger" component={AdminLedger} />
         <Route path="/rider-messages" component={AdminRiderInbox} />
         <Route path="/vendor-inbox" component={AdminVendorInbox} />
         <Route path="/notifications" component={AdminNotifications} />

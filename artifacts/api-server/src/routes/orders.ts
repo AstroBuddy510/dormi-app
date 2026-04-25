@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
 import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable } from "../../../../lib/db/src/schema/index.js";
 import { computeOrderTaxes } from "../lib/taxes.js";
+import { postOrderPayment, postRiderEarning } from "../lib/ledger.js";
 import { eq, and, desc } from "drizzle-orm";
 import {
   CreateOrderBody,
@@ -227,6 +228,27 @@ router.post("/", async (req, res) => {
       notes: body.notes ?? null,
     }).returning();
 
+    // Post the order_payment journal as soon as the customer's money has
+    // actually moved (paystack-paid at this stage, or verified upfront).
+    // Cash orders get their journal posted later — when the rider collects
+    // cash at delivery (see PUT /:id/status below).
+    if (paymentStatus === "paid") {
+      try {
+        await postOrderPayment({
+          orderId: order.id,
+          subtotal,
+          serviceFee,
+          deliveryFee,
+          vatAmount: tax.vatAmount,
+          nhilAmount: tax.nhilAmount,
+          getfundAmount: tax.getfundAmount,
+          receivedInto: "paystack",
+        });
+      } catch (e) {
+        console.error("[ledger] failed to post order_payment for order", order.id, e);
+      }
+    }
+
     res.status(201).json(await enrichOrder(order));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
@@ -249,13 +271,53 @@ router.put("/:id/status", async (req, res) => {
     const body = UpdateOrderStatusBody.parse(req.body);
     const updateData: any = { status: body.status, updatedAt: new Date() };
     if (body.status === 'in_transit') updateData.pickedUpAt = new Date();
-    if (body.status === 'delivered') updateData.deliveredAt = new Date();
+    if (body.status === 'delivered') {
+      updateData.deliveredAt = new Date();
+      // Cash orders are paid in cash AT delivery — flip paymentStatus now so
+      // the order_payment journal can post downstream.
+      const [pre] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+      if (pre && pre.paymentMethod !== 'paystack' && pre.paymentStatus !== 'paid') {
+        updateData.paymentStatus = 'paid';
+      }
+    }
     if (body.callAccepted !== undefined) updateData.callAccepted = body.callAccepted;
     const [order] = await db.update(ordersTable).set(updateData).where(eq(ordersTable.id, id)).returning();
     if (!order) {
       res.status(404).json({ error: "not_found", message: "Order not found" });
       return;
     }
+
+    // Side-effects: ledger postings on delivery completion.
+    if (body.status === 'delivered') {
+      try {
+        // 1. Cash payment recognition (paystack orders already posted at create).
+        if (order.paymentMethod !== 'paystack' && order.paymentStatus === 'paid') {
+          await postOrderPayment({
+            orderId: order.id,
+            subtotal: parseFloat(order.subtotal),
+            serviceFee: parseFloat(order.serviceFee),
+            deliveryFee: parseFloat(order.deliveryFee),
+            vatAmount: parseFloat(order.vatAmount),
+            nhilAmount: parseFloat(order.nhilAmount),
+            getfundAmount: parseFloat(order.getfundAmount),
+            receivedInto: "cash",
+            postedAt: order.deliveredAt ?? new Date(),
+          });
+        }
+        // 2. Rider earning recognition (full delivery fee passes through).
+        if (order.riderId) {
+          await postRiderEarning({
+            orderId: order.id,
+            riderId: order.riderId,
+            amount: parseFloat(order.deliveryFee),
+            postedAt: order.deliveredAt ?? new Date(),
+          });
+        }
+      } catch (e) {
+        console.error("[ledger] failed posting on delivery for order", order.id, e);
+      }
+    }
+
     res.json(await enrichOrder(order));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });

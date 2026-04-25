@@ -7,6 +7,7 @@ import {
 } from "../../../../lib/db/src/schema/index.js";
 import { eq, and, isNull, desc, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod/v4";
+import { postVendorPayout } from "../lib/ledger.js";
 
 const router: IRouter = Router();
 
@@ -314,6 +315,20 @@ router.patch("/admin/:id/pay", async (req, res) => {
       .set({ status: "paid", paidAt: new Date() })
       .where(eq(payoutsTable.id, id))
       .returning();
+
+    // Post vendor_payout journal: DR Vendor payable / CR Bank.
+    try {
+      await postVendorPayout({
+        payoutId: row.id,
+        vendorId: row.vendorId,
+        amount: parseFloat(row.totalAmount ?? "0"),
+        paidFrom: "bank",
+        postedAt: row.paidAt ?? new Date(),
+      });
+    } catch (e) {
+      console.error("[ledger] failed posting vendor_payout for payout", row.id, e);
+    }
+
     res.json(mapPayout(row));
   } catch (err: any) {
     res.status(500).json({ error: "server_error", message: err.message });

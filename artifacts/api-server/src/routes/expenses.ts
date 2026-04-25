@@ -3,8 +3,23 @@ import { db } from "../../../../lib/db/src/index.js";
 import { expensesTable } from "../../../../lib/db/src/schema/index.js";
 import { eq, gte, lte, and } from "drizzle-orm";
 import { z } from "zod/v4";
+import { postExpense } from "../lib/ledger.js";
 
 const router: IRouter = Router();
+
+// Map expense category → chart-of-accounts code. Anything that doesn't
+// match falls into "Other operating expense".
+function expenseAccountFor(category: string, type?: string): string {
+  const c = category.toLowerCase();
+  const t = (type ?? "").toLowerCase();
+  if (c.includes("rent") || t.includes("rent")) return "5400-RENT";
+  if (c.includes("util") || t.includes("util") || t.includes("power") || t.includes("water") || t.includes("internet")) return "5410-UTILITIES";
+  if (c.includes("market") || t.includes("market") || t.includes("ad") || t.includes("promo")) return "5420-MARKETING";
+  if (c.includes("software") || c.includes("saas") || t.includes("subscription") || t.includes("hosting")) return "5430-SOFTWARE";
+  if (c.includes("office") || c.includes("supply") || c.includes("supplies")) return "5440-OFFICE";
+  if (c.includes("payroll") || c.includes("salar") || t.includes("salar")) return "5300-SALARIES";
+  return "5900-OTHER-OPEX";
+}
 
 const ExpenseBody = z.object({
   type: z.string().min(1),
@@ -39,6 +54,23 @@ router.post("/", async (req, res) => {
       photoUrl: body.photoUrl,
       createdByRole: body.createdByRole,
     }).returning();
+
+    // Post expense journal: DR <expense account> / CR Bank (default).
+    // Defaulting to bank because most operating expenses are bank-paid;
+    // admin can adjust via a manual journal entry if it was actually cash.
+    try {
+      await postExpense({
+        expenseId: expense.id,
+        expenseAccountCode: expenseAccountFor(expense.category, expense.type),
+        amount: parseFloat(expense.amount),
+        paidFrom: "bank",
+        postedAt: new Date(expense.expenseDate),
+        description: `${expense.type}${expense.notes ? ` — ${expense.notes}` : ""}`,
+      });
+    } catch (e) {
+      console.error("[ledger] failed posting expense", expense.id, e);
+    }
+
     res.status(201).json(mapExpense(expense));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });

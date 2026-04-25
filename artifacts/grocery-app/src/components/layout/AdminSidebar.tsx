@@ -5,7 +5,7 @@ import {
   LayoutDashboard, PhoneCall, Truck, LogOut, Settings,
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
-  ShieldAlert, ChevronDown, ChevronLeft, ChevronRight, Banknote, BadgeCheck, Receipt,
+  ShieldAlert, ChevronDown, ChevronLeft, ChevronRight, Banknote, BadgeCheck, Receipt, BookOpen,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -19,7 +19,7 @@ const SECTION_PATHS: Record<string, string[]> = {
   operations:  ['/', '/create-order', '/call-log', '/riders', '/delivery-partners', '/rider-messages', '/vendor-inbox', '/complaints'],
   catalogue:   ['/catalogue', '/pricing'],
   people:      ['/employees', '/subscribers', '/users'],
-  finance:     ['/finance', '/payouts', '/reports', '/tax-settings'],
+  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger'],
   engagement:  ['/notifications'],
   system:      ['/settings'],
 };
@@ -505,6 +505,7 @@ export function AdminSidebar() {
       heading: 'Finance & Reports',
       items: [
         { icon: TrendingUp, label: 'Finance',       path: '/finance' },
+        { icon: BookOpen,   label: 'Ledger',        path: '/ledger' },
         { icon: Banknote,   label: 'Payouts',       path: '/payouts' },
         { icon: Receipt,    label: 'Tax & Levies',  path: '/tax-settings' },
         { icon: BarChart3,  label: 'Reports',       path: '/reports' },

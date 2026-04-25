@@ -3,6 +3,7 @@ import { db } from "../../../../lib/db/src/index.js";
 import { ordersTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { getGatewayKeys } from "../lib/gatewayKeys.js";
+import { postOrderPayment } from "../lib/ledger.js";
 
 const router: IRouter = Router();
 
@@ -61,6 +62,24 @@ router.post("/verify", async (req, res) => {
       await db.update(ordersTable)
         .set({ paymentStatus: "paid", paystackReference: reference })
         .where(eq(ordersTable.id, orderId));
+      // Post order_payment journal — idempotent, safe if already posted.
+      const [paid] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
+      if (paid) {
+        try {
+          await postOrderPayment({
+            orderId: paid.id,
+            subtotal: parseFloat(paid.subtotal),
+            serviceFee: parseFloat(paid.serviceFee),
+            deliveryFee: parseFloat(paid.deliveryFee),
+            vatAmount: parseFloat(paid.vatAmount),
+            nhilAmount: parseFloat(paid.nhilAmount),
+            getfundAmount: parseFloat(paid.getfundAmount),
+            receivedInto: "paystack",
+          });
+        } catch (e) {
+          console.error("[payments/verify] ledger post failed for order", orderId, e);
+        }
+      }
     }
 
     return res.json({

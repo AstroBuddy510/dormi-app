@@ -4,6 +4,7 @@ import { db } from "../../../../lib/db/src/index.js";
 import { ordersTable } from "../../../../lib/db/src/schema/index.js";
 import { eq } from "drizzle-orm";
 import { getGatewayKeys } from "../lib/gatewayKeys.js";
+import { postOrderPayment } from "../lib/ledger.js";
 
 const router: IRouter = Router();
 
@@ -65,6 +66,21 @@ router.post("/", async (req: any, res) => {
               .update(ordersTable)
               .set({ paymentStatus: "paid" })
               .where(eq(ordersTable.id, order.id));
+            // Post order_payment journal — idempotent, safe if already posted.
+            try {
+              await postOrderPayment({
+                orderId: order.id,
+                subtotal: parseFloat(order.subtotal),
+                serviceFee: parseFloat(order.serviceFee),
+                deliveryFee: parseFloat(order.deliveryFee),
+                vatAmount: parseFloat(order.vatAmount),
+                nhilAmount: parseFloat(order.nhilAmount),
+                getfundAmount: parseFloat(order.getfundAmount),
+                receivedInto: "paystack",
+              });
+            } catch (e) {
+              console.error("[paystack-webhook] ledger post failed for order", order.id, e);
+            }
           } else {
             console.warn(
               `[paystack-webhook] amount mismatch for ${reference}: paid ${amount}, expected ${expectedPesewas}`,
