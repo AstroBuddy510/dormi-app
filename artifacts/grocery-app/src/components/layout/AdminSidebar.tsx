@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/store';
 import {
-  LayoutDashboard, PhoneCall, Truck, Users, LogOut, Settings,
+  LayoutDashboard, PhoneCall, Truck, LogOut, Settings,
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
-  ShieldAlert, ChevronDown, ChevronLeft, ChevronRight, Banknote,
+  ShieldAlert, ChevronDown, ChevronLeft, ChevronRight, Banknote, BadgeCheck,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -496,7 +496,7 @@ export function AdminSidebar() {
       heading: 'People',
       items: [
         { icon: Briefcase,  label: 'Employees',   path: '/employees' },
-        { icon: Users,      label: 'Subscribers', path: '/subscribers' },
+        { icon: BadgeCheck, label: 'Subscribers', path: '/subscribers' },
         { icon: UsersRound, label: 'Users',        path: '/users' },
       ],
     },
