@@ -167,11 +167,10 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
       );
   }, [messages]);
 
-  // Auto-grow textarea so the placeholder + emoji icon stay vertically centered
-  // on a single row by default and only expand when the user types multiline.
-  // Clamp to 44px (Send button h-11) so an empty textarea matches the button
-  // exactly — without the clamp, scrollHeight reports ~38px and the inline
-  // `style.height` overrides the CSS minHeight, leaving the textarea shorter.
+  // Auto-grow textarea. Clamp to 44px floor so an empty textarea matches the
+  // Send button (h-11 = 44px) exactly. Pair with `leading-5 py-2.5` on the
+  // textarea so 20px line + 20px padding + 2px border = 42px required height,
+  // letting the 44px floor cleanly determine the outer box.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -264,8 +263,8 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="Type your message…"
                 rows={1}
-                className="w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2.5 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
-                style={{ overflow: 'hidden', minHeight: '44px', maxHeight: '100px' }}
+                className="block w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2.5 text-sm leading-5 align-middle focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
+                style={{ overflow: 'hidden', height: '44px', minHeight: '44px', maxHeight: '100px' }}
               />
               <EmojiPickerButton
                 onEmojiSelect={handleEmojiSelect}
