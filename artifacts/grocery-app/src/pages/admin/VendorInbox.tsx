@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,6 +50,14 @@ export default function VendorInbox() {
       el.setSelectionRange(pos, pos);
     });
   };
+
+  // Auto-grow textarea — clamp to 40px floor so it matches Send button (h-10).
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(40, Math.min(el.scrollHeight, 100)) + 'px';
+  }, [reply]);
 
   const { data: allMessages = [] } = useQuery<VendorMessage[]>({
     queryKey: ['vendor-messages-all'],
@@ -233,8 +241,9 @@ export default function VendorInbox() {
                     onChange={e => setReply(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
                     placeholder="Type a reply to the vendor…"
-                    rows={2}
-                    className="w-full resize-none rounded-xl border border-border bg-white pl-3 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    rows={1}
+                    className="block w-full resize-none rounded-xl border border-border bg-white pl-3 pr-10 py-2 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    style={{ overflow: 'hidden', height: '40px', minHeight: '40px', maxHeight: '100px' }}
                   />
                   <EmojiPickerButton
                     onEmojiSelect={handleEmojiSelect}

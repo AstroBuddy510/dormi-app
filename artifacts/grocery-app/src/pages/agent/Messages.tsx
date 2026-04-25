@@ -121,12 +121,12 @@ function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: 
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Auto-grow textarea
+  // Auto-grow textarea — clamp to 40px floor so it matches Send button (h-10).
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    el.style.height = Math.max(40, Math.min(el.scrollHeight, 120)) + 'px';
   }, [text]);
 
   const handleSend = () => {
@@ -223,8 +223,8 @@ function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: 
               placeholder="Type a message… (Shift+Enter for new line)"
               rows={1}
               disabled={sendMutation.isPending}
-              className="w-full resize-none rounded-xl border border-input bg-background pl-3 pr-10 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
-              style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '120px' }}
+              className="block w-full resize-none rounded-xl border border-input bg-background pl-3 pr-10 py-2 text-sm leading-5 ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+              style={{ overflow: 'hidden', height: '40px', minHeight: '40px', maxHeight: '120px' }}
             />
             <EmojiPickerButton
               onEmojiSelect={insertEmoji}

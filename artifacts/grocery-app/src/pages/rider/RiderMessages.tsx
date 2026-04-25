@@ -94,6 +94,14 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
       .forEach(m => markReadMutation.mutate(m.id));
   }, [messages]);
 
+  // Auto-grow textarea — clamp to 40px floor so it matches Send button (h-10).
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(40, Math.min(el.scrollHeight, 100)) + 'px';
+  }, [text]);
+
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -171,8 +179,9 @@ export function RiderMessages({ riderId, riderName }: RiderMessagesProps) {
             onChange={e => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message to admin…"
-            rows={2}
-            className="w-full resize-none rounded-xl border border-border bg-white pl-3 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
+            rows={1}
+            className="block w-full resize-none rounded-xl border border-border bg-white pl-3 pr-10 py-2 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
+            style={{ overflow: 'hidden', height: '40px', minHeight: '40px', maxHeight: '100px' }}
           />
           <EmojiPickerButton
             onEmojiSelect={handleEmojiSelect}

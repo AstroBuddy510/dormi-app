@@ -65,7 +65,7 @@ function ChatThread({ conv, residentId, residentName, onBack }: {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    el.style.height = Math.max(40, Math.min(el.scrollHeight, 100)) + 'px';
   }, [text]);
 
   const handleSend = () => {
@@ -158,8 +158,8 @@ function ChatThread({ conv, residentId, residentName, onBack }: {
               placeholder="Type a message…"
               rows={1}
               disabled={sendMutation.isPending}
-              className="w-full resize-none rounded-xl border border-input bg-background pl-3 pr-10 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 leading-relaxed"
-              style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '100px' }}
+              className="block w-full resize-none rounded-xl border border-input bg-background pl-3 pr-10 py-2 text-sm leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+              style={{ overflow: 'hidden', height: '40px', minHeight: '40px', maxHeight: '100px' }}
             />
             <EmojiPickerButton
               onEmojiSelect={insertEmoji}
