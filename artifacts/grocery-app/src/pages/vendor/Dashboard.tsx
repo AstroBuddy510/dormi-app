@@ -166,6 +166,15 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
       );
   }, [messages]);
 
+  // Auto-grow textarea so the placeholder + emoji icon stay vertically centered
+  // on a single row by default and only expand when the user types multiline.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }, [message]);
+
   const sendMutation = useMutation({
     mutationFn: (content: string) =>
       fetch(`${BASE}/api/vendor-messages`, {
@@ -250,8 +259,9 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
                 onChange={e => setMessage(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="Type your message…"
-                rows={2}
-                className="w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
+                rows={1}
+                className="w-full resize-none rounded-xl border border-border bg-gray-50 pl-3 pr-10 py-2 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition-colors"
+                style={{ overflow: 'hidden', minHeight: '40px', maxHeight: '100px' }}
               />
               <EmojiPickerButton
                 onEmojiSelect={handleEmojiSelect}
@@ -761,7 +771,7 @@ export default function VendorDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50/60">
+    <div className="min-h-screen bg-gray-50/60 pb-24">
       <div className="bg-primary px-5 pt-12 pb-5 text-white">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
