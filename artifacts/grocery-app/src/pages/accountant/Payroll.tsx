@@ -171,8 +171,8 @@ export default function AccountantPayroll() {
   return (
     <div className="flex min-h-screen bg-background">
       <AccountantSidebar />
-      <div className="flex-1 p-6 md:p-8 overflow-auto">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+        <div className="space-y-6">
           <div>
             <h1 className="text-2xl font-bold font-display">Payroll</h1>
             <p className="text-muted-foreground text-sm mt-0.5">Pay staff and log payment records</p>

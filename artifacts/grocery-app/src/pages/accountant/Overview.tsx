@@ -327,8 +327,8 @@ export default function AccountantOverview() {
   return (
     <div className="flex min-h-screen bg-background">
       <AccountantSidebar />
-      <div className="flex-1 p-6 md:p-8 overflow-auto">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+        <div className="space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between flex-wrap gap-3">
