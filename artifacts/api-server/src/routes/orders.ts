@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
 import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable } from "../../../../lib/db/src/schema/index.js";
+import { computeOrderTaxes } from "../lib/taxes.js";
 import { eq, and, desc } from "drizzle-orm";
 import {
   CreateOrderBody,
@@ -39,6 +40,7 @@ function addHours(h: number) {
   d.setHours(d.getHours() + h);
   return d;
 }
+
 
 async function enrichOrder(order: typeof ordersTable.$inferSelect) {
   const [resident] = await db.select().from(residentsTable).where(eq(residentsTable.id, order.residentId)).limit(1);
@@ -81,6 +83,10 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     subtotal: parseFloat(order.subtotal),
     serviceFee: parseFloat(order.serviceFee),
     deliveryFee: parseFloat(order.deliveryFee),
+    taxBase: parseFloat(order.taxBase),
+    vatAmount: parseFloat(order.vatAmount),
+    nhilAmount: parseFloat(order.nhilAmount),
+    getfundAmount: parseFloat(order.getfundAmount),
     total: parseFloat(order.total),
     status: order.status,
     paymentMethod: order.paymentMethod,
@@ -140,7 +146,11 @@ router.post("/", async (req, res) => {
 
     const subtotal = body.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
-    const total = subtotal + serviceFee + deliveryFee;
+    // Apply admin-controlled taxes (VAT / NHIL / GETFund) to platform revenue
+    // base only (serviceFee + deliveryFee). Goods (subtotal) are NOT taxed by
+    // the platform — the vendor handles their own goods tax position.
+    const tax = await computeOrderTaxes(serviceFee, deliveryFee);
+    const total = Math.round((subtotal + serviceFee + deliveryFee + tax.taxTotal) * 100) / 100;
 
     const orderItems = await Promise.all(body.items.map(async (item) => {
       const [dbItem] = await db.select().from(itemsTable).where(eq(itemsTable.id, item.itemId)).limit(1);
@@ -200,6 +210,10 @@ router.post("/", async (req, res) => {
       subtotal: subtotal.toString(),
       serviceFee: serviceFee.toString(),
       deliveryFee: deliveryFee.toString(),
+      taxBase: tax.base.toString(),
+      vatAmount: tax.vatAmount.toString(),
+      nhilAmount: tax.nhilAmount.toString(),
+      getfundAmount: tax.getfundAmount.toString(),
       total: total.toString(),
       status: "pending",
       paymentMethod: body.paymentMethod,

@@ -13,6 +13,7 @@ import {
 } from "../../../../lib/db/src/schema/index.js";
 import { eq, and, gte } from "drizzle-orm";
 import { CreateCallLogOrderBody } from "../../../../lib/api-zod/src/index.js";
+import { computeOrderTaxes } from "../lib/taxes.js";
 
 const router: IRouter = Router();
 
@@ -63,6 +64,10 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     subtotal: parseFloat(order.subtotal),
     serviceFee: parseFloat(order.serviceFee),
     deliveryFee: parseFloat(order.deliveryFee),
+    taxBase: parseFloat(order.taxBase),
+    vatAmount: parseFloat(order.vatAmount),
+    nhilAmount: parseFloat(order.nhilAmount),
+    getfundAmount: parseFloat(order.getfundAmount),
     total: parseFloat(order.total),
     status: order.status,
     paymentMethod: order.paymentMethod,
@@ -104,7 +109,8 @@ router.post("/call-log", async (req, res) => {
 
     const subtotal = orderItems.reduce((s, i) => s + i.totalPrice, 0);
     const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
-    const total = subtotal + serviceFee + deliveryFee;
+    const tax = await computeOrderTaxes(serviceFee, deliveryFee);
+    const total = Math.round((subtotal + serviceFee + deliveryFee + tax.taxTotal) * 100) / 100;
 
     const vendors = await db.select().from(vendorsTable);
     const vendorId = vendors.length > 0 ? vendors[0].id : null;
@@ -116,6 +122,10 @@ router.post("/call-log", async (req, res) => {
       subtotal: subtotal.toString(),
       serviceFee: serviceFee.toString(),
       deliveryFee: deliveryFee.toString(),
+      taxBase: tax.base.toString(),
+      vatAmount: tax.vatAmount.toString(),
+      nhilAmount: tax.nhilAmount.toString(),
+      getfundAmount: tax.getfundAmount.toString(),
       total: total.toString(),
       status: "pending",
       paymentMethod: "cash_on_delivery",
@@ -179,7 +189,8 @@ router.post("/orders/single", async (req, res) => {
 
     const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
     const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
-    const total = subtotal + serviceFee + deliveryFee;
+    const tax = await computeOrderTaxes(serviceFee, deliveryFee);
+    const total = Math.round((subtotal + serviceFee + deliveryFee + tax.taxTotal) * 100) / 100;
     const vendorId = explicitVendorId ? parseInt(explicitVendorId) : await resolveVendor(orderItems);
 
     const [order] = await db.insert(ordersTable).values({
@@ -189,6 +200,10 @@ router.post("/orders/single", async (req, res) => {
       subtotal: subtotal.toString(),
       serviceFee: serviceFee.toString(),
       deliveryFee: deliveryFee.toString(),
+      taxBase: tax.base.toString(),
+      vatAmount: tax.vatAmount.toString(),
+      nhilAmount: tax.nhilAmount.toString(),
+      getfundAmount: tax.getfundAmount.toString(),
       total: total.toString(),
       status: "pending",
       paymentMethod: paymentMethod ?? "cash_on_delivery",
@@ -253,7 +268,8 @@ router.post("/orders/block", async (req, res) => {
 
       const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
       const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
-      const total = subtotal + serviceFee + deliveryFee;
+      const tax = await computeOrderTaxes(serviceFee, deliveryFee);
+      const total = Math.round((subtotal + serviceFee + deliveryFee + tax.taxTotal) * 100) / 100;
       const vendorId = bulkVendorId ? parseInt(bulkVendorId) : await resolveVendor(orderItems);
       groupTotal += total;
 
@@ -264,6 +280,10 @@ router.post("/orders/block", async (req, res) => {
         subtotal: subtotal.toString(),
         serviceFee: serviceFee.toString(),
         deliveryFee: deliveryFee.toString(),
+        taxBase: tax.base.toString(),
+        vatAmount: tax.vatAmount.toString(),
+        nhilAmount: tax.nhilAmount.toString(),
+        getfundAmount: tax.getfundAmount.toString(),
         total: total.toString(),
         status: "pending",
         paymentMethod: o.paymentMethod ?? "cash_on_delivery",
@@ -323,7 +343,8 @@ router.post("/orders/third-party", async (req, res) => {
 
     const subtotal = orderItems.reduce((s: number, i: any) => s + i.totalPrice, 0);
     const serviceFee = Math.round((subtotal * markupPercent / 100) * 100) / 100;
-    const total = subtotal + serviceFee + deliveryFee;
+    const tax = await computeOrderTaxes(serviceFee, deliveryFee);
+    const total = Math.round((subtotal + serviceFee + deliveryFee + tax.taxTotal) * 100) / 100;
     const vendorId = await resolveVendor(orderItems);
 
     const [order] = await db.insert(ordersTable).values({
@@ -333,6 +354,10 @@ router.post("/orders/third-party", async (req, res) => {
       subtotal: subtotal.toString(),
       serviceFee: serviceFee.toString(),
       deliveryFee: deliveryFee.toString(),
+      taxBase: tax.base.toString(),
+      vatAmount: tax.vatAmount.toString(),
+      nhilAmount: tax.nhilAmount.toString(),
+      getfundAmount: tax.getfundAmount.toString(),
       total: total.toString(),
       status: "pending",
       paymentMethod: paymentMethod ?? "cash_on_delivery",

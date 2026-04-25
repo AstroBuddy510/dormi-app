@@ -30,6 +30,7 @@ import estatesRouter from "./estates.js";
 import agentMessagesRouter from "./agentMessages.js";
 import notificationsRouter from "./notifications.js";
 import payoutsRouter from "./payouts.js";
+import taxSettingsRouter from "./taxSettings.js";
 
 const router: IRouter = Router();
 
@@ -65,5 +66,6 @@ router.use("/estates", estatesRouter);
 router.use("/agent-messages", agentMessagesRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/payouts", payoutsRouter);
+router.use("/tax-settings", taxSettingsRouter);
 
 export default router;

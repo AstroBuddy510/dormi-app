@@ -23,6 +23,13 @@ export const ordersTable = pgTable("orders", {
   subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull(),
   serviceFee: numeric("service_fee", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: numeric("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  // Tax breakdown — applied on (serviceFee + deliveryFee) when each tax is
+  // enabled in tax_settings at order-creation time. Stored per-order so the
+  // historical tax position is preserved even if rates/toggles change later.
+  taxBase: numeric("tax_base", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  vatAmount: numeric("vat_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  nhilAmount: numeric("nhil_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  getfundAmount: numeric("getfund_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
   total: numeric("total", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"),
   paymentMethod: text("payment_method").notNull(),
