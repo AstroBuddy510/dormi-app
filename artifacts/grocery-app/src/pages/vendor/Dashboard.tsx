@@ -168,11 +168,14 @@ function ChatView({ vendorId, vendorName }: { vendorId: number; vendorName: stri
 
   // Auto-grow textarea so the placeholder + emoji icon stay vertically centered
   // on a single row by default and only expand when the user types multiline.
+  // Clamp to 44px (Send button h-11) so an empty textarea matches the button
+  // exactly — without the clamp, scrollHeight reports ~38px and the inline
+  // `style.height` overrides the CSS minHeight, leaving the textarea shorter.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    el.style.height = Math.max(44, Math.min(el.scrollHeight, 100)) + 'px';
   }, [message]);
 
   const sendMutation = useMutation({
