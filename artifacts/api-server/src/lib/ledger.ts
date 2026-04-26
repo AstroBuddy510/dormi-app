@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../../../lib/db/src/index.js";
 import { ledgerEntriesTable, type LedgerSourceType } from "../../../../lib/db/src/schema/index.js";
+import { writeAudit } from "./audit.js";
+import { findActiveLockForDate } from "./periodLocks.js";
 
 /**
  * Double-entry posting helpers.
@@ -84,6 +86,17 @@ export async function postTransaction(input: PostTransactionInput): Promise<Post
   const transactionId = randomUUID();
   const when = postedAt ?? new Date();
 
+  // App-level period-lock check first: gives the API a friendly error before
+  // hitting the DB trigger fallback in 0004_add_audit_and_locks.sql.
+  const lock = await findActiveLockForDate(when);
+  if (lock) {
+    throw new Error(
+      `Period locked: cannot post journal dated ${when.toISOString().slice(0,10)} — ` +
+      `lock #${lock.id} covers ${lock.periodStart} to ${lock.periodEnd} ` +
+      `(by ${lock.lockedByName}${lock.lockReason ? `: ${lock.lockReason}` : ""}).`
+    );
+  }
+
   await db.insert(ledgerEntriesTable).values(
     lines.map(l => ({
       transactionId,
@@ -99,6 +112,28 @@ export async function postTransaction(input: PostTransactionInput): Promise<Post
       createdBy: createdBy ?? "system",
     })),
   );
+
+  // Audit the posting itself. Source-table changes are caught by DB triggers
+  // — this captures the journal-level event with full line context.
+  void writeAudit({
+    userName: createdBy ?? "system",
+    action: "ledger_post",
+    entityType: "ledger_journal",
+    entityId: transactionId,
+    after: {
+      sourceType,
+      sourceId: sourceId ?? null,
+      postedAt: when.toISOString(),
+      description: description ?? null,
+      lines: lines.map(l => ({
+        accountCode: l.accountCode,
+        debit: round2(l.debit ?? 0),
+        credit: round2(l.credit ?? 0),
+      })),
+      total: round2(totalDr),
+    },
+    metadata: meta ?? {},
+  });
 
   return { transactionId, alreadyPosted: false };
 }

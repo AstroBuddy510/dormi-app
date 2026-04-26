@@ -1,12 +1,34 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { db } from "../../../../lib/db/src/index.js";
 import { residentsTable, vendorsTable, ridersTable, agentsTable, financeSettingsTable, adminsTable } from "../../../../lib/db/src/schema/index.js";
 import { eq, count } from "drizzle-orm";
 import { LoginBody } from "../../../../lib/api-zod/src/index.js";
 import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
+import { writeAudit } from "../lib/audit.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dormi-secret-key-2026-change-me";
+
+/** Best-effort audit of a login event. Swallows errors so login is never blocked by audit failures. */
+function auditLogin(
+  req: Request,
+  user: { id: number; name: string; phone: string | null; role: string },
+  outcome: "success" | "failure" = "success",
+  reason?: string,
+) {
+  void writeAudit({
+    userId: user.id,
+    userRole: user.role,
+    userName: user.name,
+    userPhone: user.phone ?? null,
+    action: outcome === "success" ? "login" : "login_failure",
+    entityType: "user",
+    entityId: `${user.role}:${user.id}`,
+    metadata: { phone: user.phone, ...(reason ? { reason } : {}) },
+    ipAddress: (req.ip ?? (req.headers["x-forwarded-for"] as string | undefined) ?? null),
+    userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
+  });
+}
 
 const router: IRouter = Router();
 
@@ -68,6 +90,7 @@ router.post("/login", async (req, res) => {
           JWT_SECRET,
           { expiresIn: "7d" }
         );
+        auditLogin(req, { id: 0, name: "Admin", phone, role: "admin" });
         res.json({ user: { id: 0, name: "Admin", phone, role: "admin" }, role: "admin", token });
         return;
       }
@@ -91,6 +114,7 @@ router.post("/login", async (req, res) => {
         JWT_SECRET,
         { expiresIn: "7d" }
       );
+      auditLogin(req, { id: admin.id, name: admin.name, phone: admin.phone, role: "admin" });
       res.json({
         user: { id: admin.id, name: admin.name, phone: admin.phone, role: "admin" },
         role: "admin",
@@ -110,6 +134,7 @@ router.post("/login", async (req, res) => {
         JWT_SECRET,
         { expiresIn: "30d" }
       );
+      auditLogin(req, { id: resident.id, name: resident.fullName, phone: resident.phone, role: "resident" });
       res.json({
         user: { id: resident.id, name: resident.fullName, phone: resident.phone, role: "resident", photoUrl: resident.photoUrl },
         role: "resident",
@@ -133,6 +158,7 @@ router.post("/login", async (req, res) => {
         JWT_SECRET,
         { expiresIn: "14d" }
       );
+      auditLogin(req, { id: vendor.id, name: vendor.name, phone: vendor.phone, role: "vendor" });
       res.json({
         user: { id: vendor.id, name: vendor.name, phone: vendor.phone, role: "vendor", photoUrl: vendor.photoUrl },
         role: "vendor",
@@ -156,6 +182,7 @@ router.post("/login", async (req, res) => {
         JWT_SECRET,
         { expiresIn: "14d" }
       );
+      auditLogin(req, { id: rider.id, name: rider.name, phone: rider.phone, role: "rider" });
       res.json({
         user: { id: rider.id, name: rider.name, phone: rider.phone, role: "rider", photoUrl: rider.photoUrl },
         role: "rider",
@@ -183,6 +210,7 @@ router.post("/login", async (req, res) => {
         JWT_SECRET,
         { expiresIn: "7d" }
       );
+      auditLogin(req, { id: agent.id, name: agent.name, phone: agent.phone, role: "agent" });
       res.json({
         user: { id: agent.id, name: agent.name, phone: agent.phone, role: "agent", photoUrl: agent.photoUrl },
         role: "agent",
@@ -202,6 +230,7 @@ router.post("/login", async (req, res) => {
         JWT_SECRET,
         { expiresIn: "7d" }
       );
+      auditLogin(req, { id: 0, name: "Accountant", phone, role: "accountant" });
       res.json({
         user: { id: 0, name: "Accountant", phone, role: "accountant" },
         role: "accountant",

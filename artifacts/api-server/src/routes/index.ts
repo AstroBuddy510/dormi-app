@@ -32,6 +32,8 @@ import notificationsRouter from "./notifications.js";
 import payoutsRouter from "./payouts.js";
 import taxSettingsRouter from "./taxSettings.js";
 import ledgerRouter from "./ledger.js";
+import auditRouter from "./audit.js";
+import periodLocksRouter from "./periodLocks.js";
 
 const router: IRouter = Router();
 
@@ -69,5 +71,7 @@ router.use("/notifications", notificationsRouter);
 router.use("/payouts", payoutsRouter);
 router.use("/tax-settings", taxSettingsRouter);
 router.use("/ledger", ledgerRouter);
+router.use("/audit", auditRouter);
+router.use("/period-locks", periodLocksRouter);
 
 export default router;

@@ -7,9 +7,25 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Filter, ChevronLeft, ChevronRight, CircleDollarSign, X } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { BookOpen, Filter, ChevronLeft, ChevronRight, CircleDollarSign, X, History, ShieldCheck, User as UserIcon } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+function authHeaders(): Record<string, string> {
+  try {
+    if (typeof window === 'undefined') return {};
+    const authStore = window.localStorage.getItem('grocerease-auth');
+    if (!authStore) return {};
+    const parsed = JSON.parse(authStore);
+    const token = parsed?.state?.token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
 
 interface Account {
   code: string;
@@ -52,10 +68,22 @@ interface Balance {
 }
 
 function apiFetch<T = any>(path: string): Promise<T> {
-  return fetch(`${BASE}/api${path}`).then(async r => {
-    if (!r.ok) throw new Error((await r.json()).message ?? 'Request failed');
+  return fetch(`${BASE}/api${path}`, { headers: authHeaders() }).then(async r => {
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message ?? 'Request failed');
     return r.json();
   });
+}
+
+interface AuditTrailEntry {
+  id: number;
+  userId: number | null;
+  userRole: string | null;
+  userName: string | null;
+  action: string;
+  beforeState: Record<string, unknown> | null;
+  afterState: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
+  occurredAt: string;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -89,12 +117,17 @@ function dateLabel(iso: string) {
     ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
+function actionLabel(a: string) {
+  return a.replace(/_/g, ' ');
+}
+
 export default function AdminLedger() {
   const [accountFilter, setAccountFilter] = useState<string>('');
   const [sourceFilter, setSourceFilter] = useState<string>('');
   const [from, setFrom] = useState<string>('');
   const [to, setTo] = useState<string>('');
   const [page, setPage] = useState(0);
+  const [historyTx, setHistoryTx] = useState<string | null>(null);
   const PAGE_SIZE = 100;
 
   const { data: accounts = [] } = useQuery<Account[]>({
@@ -127,6 +160,17 @@ export default function AdminLedger() {
   const { data: entriesPage, isLoading } = useQuery<EntriesPage>({
     queryKey: ['ledger-entries', queryString],
     queryFn: () => apiFetch<EntriesPage>(`/ledger/entries?${queryString}`),
+  });
+
+  const { data: historyData, isLoading: historyLoading } = useQuery<{
+    transactionId: string;
+    entries: AuditTrailEntry[];
+  }>({
+    queryKey: ['journal-history', historyTx],
+    queryFn: () => apiFetch<{ transactionId: string; entries: AuditTrailEntry[] }>(
+      `/audit/journal/${encodeURIComponent(historyTx!)}`
+    ),
+    enabled: !!historyTx,
   });
 
   const accountByCode = useMemo(() => {
@@ -293,6 +337,7 @@ export default function AdminLedger() {
                         <th className="text-right py-2.5 px-4 font-semibold">Debit</th>
                         <th className="text-right py-2.5 px-4 font-semibold">Credit</th>
                         <th className="text-left py-2.5 px-4 font-semibold">Description</th>
+                        <th className="text-right py-2.5 px-4 font-semibold">Trail</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -326,6 +371,17 @@ export default function AdminLedger() {
                             </td>
                             <td className="py-2.5 px-4 text-xs text-muted-foreground max-w-md truncate">
                               {e.description ?? ''}
+                            </td>
+                            <td className="py-2.5 px-4 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 rounded-lg gap-1 text-xs"
+                                onClick={() => setHistoryTx(e.transactionId)}
+                                title="View this journal's audit trail"
+                              >
+                                <History size={12} />
+                              </Button>
                             </td>
                           </tr>
                         );
@@ -375,6 +431,70 @@ export default function AdminLedger() {
           </Card>
         </div>
       </div>
+
+      {/* Journal audit trail dialog */}
+      <Dialog open={!!historyTx} onOpenChange={o => !o && setHistoryTx(null)}>
+        <DialogContent className="rounded-2xl max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck size={18} className="text-primary" /> Journal audit trail
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs">
+              {historyTx}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[70vh] overflow-y-auto space-y-3">
+            {historyLoading ? (
+              <div className="text-sm text-muted-foreground py-6 text-center">Loading…</div>
+            ) : (historyData?.entries.length ?? 0) === 0 ? (
+              <div className="text-sm text-muted-foreground py-6 text-center">
+                No audit entries recorded for this journal. (Likely a backfilled or pre-Phase-3 transaction.)
+              </div>
+            ) : (
+              historyData!.entries.map(entry => (
+                <div key={entry.id} className="border border-border/60 rounded-xl p-3 bg-muted/20">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <UserIcon size={12} className="text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold">{entry.userName ?? 'system'}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {entry.userRole ?? '—'}{entry.userId !== null ? ` · #${entry.userId}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-emerald-100 text-emerald-800">
+                        {actionLabel(entry.action)}
+                      </span>
+                      <div className="text-[10px] text-muted-foreground mt-1">{dateLabel(entry.occurredAt)}</div>
+                    </div>
+                  </div>
+
+                  {entry.afterState && Object.keys(entry.afterState).length > 0 && (
+                    <pre className="text-[10px] bg-emerald-50 border border-emerald-100 rounded-lg p-2 mt-2 overflow-x-auto">
+                      {JSON.stringify(entry.afterState, null, 2)}
+                    </pre>
+                  )}
+                  {entry.beforeState && Object.keys(entry.beforeState).length > 0 && (
+                    <pre className="text-[10px] bg-rose-50 border border-rose-100 rounded-lg p-2 mt-2 overflow-x-auto">
+                      {JSON.stringify(entry.beforeState, null, 2)}
+                    </pre>
+                  )}
+                  {entry.metadata && Object.keys(entry.metadata).length > 0 && (
+                    <pre className="text-[10px] bg-slate-50 border border-slate-100 rounded-lg p-2 mt-2 overflow-x-auto">
+                      {JSON.stringify(entry.metadata, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

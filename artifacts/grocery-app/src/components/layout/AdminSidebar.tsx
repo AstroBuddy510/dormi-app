@@ -6,6 +6,7 @@ import {
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
   ShieldAlert, ChevronDown, ChevronLeft, ChevronRight, Banknote, BadgeCheck, Receipt, BookOpen,
+  ShieldCheck, Lock,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -19,8 +20,9 @@ const SECTION_PATHS: Record<string, string[]> = {
   operations:  ['/', '/create-order', '/call-log', '/riders', '/delivery-partners', '/rider-messages', '/vendor-inbox', '/complaints'],
   catalogue:   ['/catalogue', '/pricing'],
   people:      ['/employees', '/subscribers', '/users'],
-  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger'],
+  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger', '/period-locks'],
   engagement:  ['/notifications'],
+  governance:  ['/audit-log'],
   system:      ['/settings'],
 };
 
@@ -509,6 +511,7 @@ export function AdminSidebar() {
         { icon: Banknote,   label: 'Payouts',       path: '/payouts' },
         { icon: Receipt,    label: 'Tax & Levies',  path: '/tax-settings' },
         { icon: BarChart3,  label: 'Reports',       path: '/reports' },
+        { icon: Lock,       label: 'Period Locks',  path: '/period-locks' },
       ],
     },
     {
@@ -516,6 +519,13 @@ export function AdminSidebar() {
       heading: 'Engagement',
       items: [
         { icon: Bell, label: 'Notifications', path: '/notifications' },
+      ],
+    },
+    {
+      id: 'governance',
+      heading: 'Governance',
+      items: [
+        { icon: ShieldCheck, label: 'Audit Log', path: '/audit-log' },
       ],
     },
     {
