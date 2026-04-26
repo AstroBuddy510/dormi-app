@@ -38,6 +38,7 @@ import bankAccountsRouter from "./bankAccounts.js";
 import statementsRouter from "./statements.js";
 import reconcileRouter from "./reconcile.js";
 import cashFloatsRouter from "./cashFloats.js";
+import financialReportsRouter from "./financialReports.js";
 
 const router: IRouter = Router();
 
@@ -81,5 +82,6 @@ router.use("/bank-accounts", bankAccountsRouter);
 router.use("/statements", statementsRouter);
 router.use("/reconcile", reconcileRouter);
 router.use("/cash-floats", cashFloatsRouter);
+router.use("/financial-reports", financialReportsRouter);
 
 export default router;
