@@ -34,6 +34,10 @@ import taxSettingsRouter from "./taxSettings.js";
 import ledgerRouter from "./ledger.js";
 import auditRouter from "./audit.js";
 import periodLocksRouter from "./periodLocks.js";
+import bankAccountsRouter from "./bankAccounts.js";
+import statementsRouter from "./statements.js";
+import reconcileRouter from "./reconcile.js";
+import cashFloatsRouter from "./cashFloats.js";
 
 const router: IRouter = Router();
 
@@ -73,5 +77,9 @@ router.use("/tax-settings", taxSettingsRouter);
 router.use("/ledger", ledgerRouter);
 router.use("/audit", auditRouter);
 router.use("/period-locks", periodLocksRouter);
+router.use("/bank-accounts", bankAccountsRouter);
+router.use("/statements", statementsRouter);
+router.use("/reconcile", reconcileRouter);
+router.use("/cash-floats", cashFloatsRouter);
 
 export default router;

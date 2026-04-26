@@ -33,6 +33,10 @@ import AdminTaxSettings from "@/pages/admin/TaxSettings";
 import AdminLedger from "@/pages/admin/Ledger";
 import AdminAuditLog from "@/pages/admin/AuditLog";
 import AdminPeriodLocks from "@/pages/admin/PeriodLocks";
+import AdminBankAccounts from "@/pages/admin/BankAccounts";
+import AdminBankStatements from "@/pages/admin/BankStatements";
+import AdminReconcile from "@/pages/admin/Reconcile";
+import AdminCashFloats from "@/pages/admin/CashFloats";
 import AdminRiderInbox from "@/pages/admin/RiderInbox";
 import AdminVendorInbox from "@/pages/admin/VendorInbox";
 import AdminNotifications from "@/pages/admin/Notifications";
@@ -118,6 +122,10 @@ function RoleBasedRouter() {
         <Route path="/ledger" component={AdminLedger} />
         <Route path="/audit-log" component={AdminAuditLog} />
         <Route path="/period-locks" component={AdminPeriodLocks} />
+        <Route path="/bank-accounts" component={AdminBankAccounts} />
+        <Route path="/bank-statements" component={AdminBankStatements} />
+        <Route path="/reconcile" component={AdminReconcile} />
+        <Route path="/cash-floats" component={AdminCashFloats} />
         <Route path="/rider-messages" component={AdminRiderInbox} />
         <Route path="/vendor-inbox" component={AdminVendorInbox} />
         <Route path="/notifications" component={AdminNotifications} />

@@ -6,7 +6,7 @@ import {
   UsersRound, PackagePlus, Building2, MessageSquareWarning, TrendingUp,
   Briefcase, ShoppingBasket, BarChart3, Tag, MessageCircle, Store, Menu, Bell,
   ShieldAlert, ChevronDown, ChevronLeft, ChevronRight, Banknote, BadgeCheck, Receipt, BookOpen,
-  ShieldCheck, Lock,
+  ShieldCheck, Lock, CreditCard, FileSpreadsheet, Scale, Wallet,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ const SECTION_PATHS: Record<string, string[]> = {
   operations:  ['/', '/create-order', '/call-log', '/riders', '/delivery-partners', '/rider-messages', '/vendor-inbox', '/complaints'],
   catalogue:   ['/catalogue', '/pricing'],
   people:      ['/employees', '/subscribers', '/users'],
-  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger', '/period-locks'],
+  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger', '/period-locks', '/bank-accounts', '/bank-statements', '/reconcile', '/cash-floats'],
   engagement:  ['/notifications'],
   governance:  ['/audit-log'],
   system:      ['/settings'],
@@ -512,6 +512,10 @@ export function AdminSidebar() {
         { icon: Receipt,    label: 'Tax & Levies',  path: '/tax-settings' },
         { icon: BarChart3,  label: 'Reports',       path: '/reports' },
         { icon: Lock,       label: 'Period Locks',  path: '/period-locks' },
+        { icon: CreditCard,    label: 'Bank Accounts',  path: '/bank-accounts' },
+        { icon: FileSpreadsheet, label: 'Statements',   path: '/bank-statements' },
+        { icon: Scale,         label: 'Reconcile',      path: '/reconcile' },
+        { icon: Wallet,        label: 'Cash Floats',    path: '/cash-floats' },
       ],
     },
     {
