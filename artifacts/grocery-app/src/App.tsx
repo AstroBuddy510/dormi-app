@@ -38,6 +38,7 @@ import AdminBankStatements from "@/pages/admin/BankStatements";
 import AdminReconcile from "@/pages/admin/Reconcile";
 import AdminCashFloats from "@/pages/admin/CashFloats";
 import AdminFinancialReports from "@/pages/admin/FinancialReports";
+import AdminTaxFilings from "@/pages/admin/TaxFilings";
 import AdminRiderInbox from "@/pages/admin/RiderInbox";
 import AdminVendorInbox from "@/pages/admin/VendorInbox";
 import AdminNotifications from "@/pages/admin/Notifications";
@@ -128,6 +129,7 @@ function RoleBasedRouter() {
         <Route path="/reconcile" component={AdminReconcile} />
         <Route path="/cash-floats" component={AdminCashFloats} />
         <Route path="/financial-reports" component={AdminFinancialReports} />
+        <Route path="/tax-filings" component={AdminTaxFilings} />
         <Route path="/rider-messages" component={AdminRiderInbox} />
         <Route path="/vendor-inbox" component={AdminVendorInbox} />
         <Route path="/notifications" component={AdminNotifications} />

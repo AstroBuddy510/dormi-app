@@ -20,7 +20,7 @@ const SECTION_PATHS: Record<string, string[]> = {
   operations:  ['/', '/create-order', '/call-log', '/riders', '/delivery-partners', '/rider-messages', '/vendor-inbox', '/complaints'],
   catalogue:   ['/catalogue', '/pricing'],
   people:      ['/employees', '/subscribers', '/users'],
-  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger', '/period-locks', '/bank-accounts', '/bank-statements', '/reconcile', '/cash-floats', '/financial-reports'],
+  finance:     ['/finance', '/payouts', '/reports', '/tax-settings', '/ledger', '/period-locks', '/bank-accounts', '/bank-statements', '/reconcile', '/cash-floats', '/financial-reports', '/tax-filings'],
   engagement:  ['/notifications'],
   governance:  ['/audit-log'],
   system:      ['/settings'],
@@ -517,6 +517,7 @@ export function AdminSidebar() {
         { icon: Scale,         label: 'Reconcile',      path: '/reconcile' },
         { icon: Wallet,        label: 'Cash Floats',    path: '/cash-floats' },
         { icon: FileBarChart,  label: 'Financial Reports', path: '/financial-reports' },
+        { icon: Receipt,       label: 'Tax Filings (GRA)', path: '/tax-filings' },
       ],
     },
     {
