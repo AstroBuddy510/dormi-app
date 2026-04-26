@@ -97,9 +97,9 @@ export default function ReconcilePage() {
   const reconciled = Math.abs(diffNum) < 0.005;
 
   return (
-    <div className="flex">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <main className="flex-1 p-6 max-w-7xl mx-auto">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Reconciliation</h1>
           <p className="text-muted-foreground text-sm">Compare statement closing balance against ledger balance for a period.</p>

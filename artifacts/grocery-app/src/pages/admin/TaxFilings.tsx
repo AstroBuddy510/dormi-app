@@ -109,9 +109,9 @@ export default function TaxFilingsPage() {
   });
 
   return (
-    <div className="flex">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <main className="flex-1 p-6 max-w-7xl mx-auto">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Tax Filings (GRA)</h1>
           <p className="text-muted-foreground text-sm">Compute, file, and pay GRA monthly returns. Payments auto-post a remittance journal that clears the relevant payable account.</p>

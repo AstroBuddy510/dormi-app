@@ -162,9 +162,9 @@ export default function BankStatementsPage() {
   const isPaystack = account?.glAccountCode === '1300-PAYSTACK-RECV';
 
   return (
-    <div className="flex">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <main className="flex-1 p-6 max-w-7xl mx-auto">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold">Bank Statements</h1>

@@ -106,9 +106,9 @@ export default function BankAccountsPage() {
   });
 
   return (
-    <div className="flex">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
       <AdminSidebar />
-      <main className="flex-1 p-6 max-w-7xl mx-auto">
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">Bank Accounts</h1>
