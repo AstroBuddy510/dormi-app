@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Search, Send, MessageCircle, ChevronLeft, Phone, Users, ShieldAlert,
+  Search, Send, MessageCircle, ChevronLeft, Phone, Users, ShieldAlert, Smile,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -14,6 +14,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -226,6 +229,246 @@ function EscalateDialog({
   );
 }
 
+// ─── Single Message bubble with click-to-react / escalate popover ───────────
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+
+function MessageBubble({
+  msg, conv, agentId, agentName, isAgent,
+}: {
+  msg: any;
+  conv: any;
+  agentId: number;
+  agentName: string;
+  isAgent: boolean;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [escalateOpen, setEscalateOpen] = useState(false);
+
+  const reactMutation = useMutation({
+    mutationFn: (emoji: string) => apiFetch(`/agent-messages/${msg.id}/reactions`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji, by: 'agent', byName: agentName }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agent-messages', conv.residentId, agentId] });
+    },
+    onError: () => toast({ title: 'Could not react', variant: 'destructive' }),
+  });
+
+  // Escalate JUST this single message to admin Complaints.
+  const escalateMutation = useMutation({
+    mutationFn: async ({ subject, priority, note }: { subject: string; priority: string; note?: string }) => {
+      const senderName = msg.senderRole === 'resident' ? (conv.residentName ?? 'Resident') : (msg.senderName ?? 'Agent');
+      const ts = format(parseISO(msg.createdAt), 'dd MMM yyyy, HH:mm');
+      const description =
+        (note ? `${note}\n\n` : '') +
+        `— Escalated message —\n[${ts}] ${senderName}: ${msg.content}`;
+      const res = await fetch(`${BASE}/api/complaints`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId,
+          residentId: conv.residentId,
+          residentName: conv.residentName,
+          residentPhone: conv.residentPhone,
+          subject, priority, description,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message ?? 'Failed to escalate');
+      return body;
+    },
+    onSuccess: () => {
+      toast({ title: 'Escalated to admin', description: 'Sent to admin Complaints tab.' });
+      setEscalateOpen(false);
+    },
+    onError: (e: any) => toast({ title: 'Failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const reactions: any[] = Array.isArray(msg.reactions) ? msg.reactions : [];
+  // Group reactions by emoji for compact rendering
+  const reactionCounts = reactions.reduce<Record<string, { count: number; mine: boolean }>>((acc, r) => {
+    const k = r.emoji;
+    if (!acc[k]) acc[k] = { count: 0, mine: false };
+    acc[k].count += 1;
+    if (r.by === 'agent' && r.byName === agentName) acc[k].mine = true;
+    return acc;
+  }, {});
+
+  return (
+    <div className={cn('flex', isAgent ? 'justify-end' : 'justify-start')}>
+      <div className="flex flex-col items-stretch max-w-[70%]">
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'rounded-2xl px-4 py-2.5 shadow-sm text-left transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+                isAgent
+                  ? 'bg-blue-600 text-white rounded-br-sm'
+                  : 'bg-white text-gray-800 border border-border rounded-bl-sm',
+              )}
+            >
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+              <p className={cn('text-[10px] mt-1 text-right', isAgent ? 'text-blue-200' : 'text-muted-foreground')}>
+                {formatTime(msg.createdAt)}
+                {isAgent && msg.readAt && <span className="ml-1">· seen</span>}
+              </p>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align={isAgent ? 'end' : 'start'}
+            className="p-0 rounded-2xl border-border shadow-lg w-auto"
+            sideOffset={6}
+          >
+            {/* Quick reactions */}
+            <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border bg-white rounded-t-2xl">
+              {QUICK_REACTIONS.map(e => (
+                <button
+                  key={e}
+                  type="button"
+                  className="px-2 py-1.5 rounded-full hover:bg-blue-50 active:scale-95 transition text-xl leading-none"
+                  onClick={() => { reactMutation.mutate(e); setPopoverOpen(false); }}
+                  title={`React ${e}`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            {/* Action: Escalate this message */}
+            <button
+              type="button"
+              onClick={() => { setPopoverOpen(false); setEscalateOpen(true); }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-amber-700 hover:bg-amber-50 rounded-b-2xl transition-colors"
+            >
+              <ShieldAlert size={14} /> Push to escalate
+            </button>
+          </PopoverContent>
+        </Popover>
+
+        {/* Reaction badges below the bubble */}
+        {Object.keys(reactionCounts).length > 0 && (
+          <div className={cn('flex flex-wrap gap-1 mt-1', isAgent ? 'justify-end' : 'justify-start')}>
+            {Object.entries(reactionCounts).map(([emoji, info]) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => reactMutation.mutate(emoji)}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 h-6 rounded-full text-xs border bg-white shadow-sm hover:bg-gray-50 transition',
+                  info.mine ? 'border-blue-400 bg-blue-50' : 'border-border',
+                )}
+                title={info.mine ? 'Click to remove your reaction' : `${info.count} reaction${info.count > 1 ? 's' : ''}`}
+              >
+                <span className="text-sm leading-none">{emoji}</span>
+                <span className="font-medium text-gray-700">{info.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Escalate-this-message dialog */}
+      <SingleMessageEscalateDialog
+        open={escalateOpen}
+        onOpenChange={setEscalateOpen}
+        msg={msg}
+        conv={conv}
+        onSubmit={(args) => escalateMutation.mutate(args)}
+        submitting={escalateMutation.isPending}
+      />
+    </div>
+  );
+}
+
+function SingleMessageEscalateDialog({
+  open, onOpenChange, msg, conv, onSubmit, submitting,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  msg: any;
+  conv: any;
+  onSubmit: (a: { subject: string; priority: string; note?: string }) => void;
+  submitting: boolean;
+}) {
+  const defaultSubject = `${conv?.residentName ?? 'Resident'}: ${(msg?.content ?? '').slice(0, 60).replace(/\n+/g, ' ')}`;
+  const [subject, setSubject] = useState(defaultSubject);
+  const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('high');
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    setSubject(defaultSubject);
+    setPriority('high');
+    setNote('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msg?.id, open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-2xl max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-600" /> Push to escalate
+          </DialogTitle>
+          <DialogDescription>
+            Forwards just this message to the admin Complaints tab.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {/* Quoted message preview */}
+          <div className="rounded-xl border border-border bg-gray-50 p-3 text-sm">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+              {msg?.senderRole === 'resident' ? (conv?.residentName ?? 'Resident') : (msg?.senderName ?? 'Agent')}
+              {' · '}
+              {msg?.createdAt ? format(parseISO(msg.createdAt), 'dd MMM yyyy, HH:mm') : ''}
+            </p>
+            <p className="whitespace-pre-wrap break-words text-gray-700">{msg?.content}</p>
+          </div>
+          <div>
+            <Label className="text-xs">Subject</Label>
+            <Input value={subject} onChange={e => setSubject(e.target.value)} className="rounded-xl" />
+          </div>
+          <div>
+            <Label className="text-xs">Priority</Label>
+            <Select value={priority} onValueChange={v => setPriority(v as any)}>
+              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Note for admin (optional)</Label>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              rows={3}
+              placeholder="Anything that adds context…"
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        </div>
+        <DialogFooter className="flex-row gap-2">
+          <Button variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button
+            className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+            disabled={!subject.trim() || submitting}
+            onClick={() => onSubmit({ subject, priority, note })}
+          >
+            {submitting ? 'Escalating…' : 'Escalate'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Chat Thread ──────────────────────────────────────────────────────────────
 function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: number; agentName: string; onBack: () => void }) {
   const [text, setText] = useState('');
@@ -348,25 +591,16 @@ function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: 
             <p className="text-sm">No messages yet. Say hello! 👋</p>
           </div>
         )}
-        {(messages as any[]).map((msg: any) => {
-          const isAgent = msg.senderRole === 'agent';
-          return (
-            <div key={msg.id} className={cn('flex', isAgent ? 'justify-end' : 'justify-start')}>
-              <div className={cn(
-                'max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm',
-                isAgent
-                  ? 'bg-blue-600 text-white rounded-br-sm'
-                  : 'bg-white text-gray-800 border border-border rounded-bl-sm',
-              )}>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                <p className={cn('text-[10px] mt-1 text-right', isAgent ? 'text-blue-200' : 'text-muted-foreground')}>
-                  {formatTime(msg.createdAt)}
-                  {isAgent && msg.readAt && <span className="ml-1">· seen</span>}
-                </p>
-              </div>
-            </div>
-          );
-        })}
+        {(messages as any[]).map((msg: any) => (
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            conv={conv}
+            agentId={agentId}
+            agentName={agentName}
+            isAgent={msg.senderRole === 'agent'}
+          />
+        ))}
         <div ref={bottomRef} />
       </div>
 

@@ -118,6 +118,44 @@ router.put("/:id/read", async (req, res) => {
   }
 });
 
+// POST /api/agent-messages/:id/reactions  — body: { emoji, by, byName }
+// Adds an emoji reaction to a single message. Each (by, byName, emoji) combo
+// is allowed once — re-posting the same trio toggles it off (acts like
+// clicking the same emoji again to remove your reaction).
+const ReactionBody = z.object({
+  emoji: z.string().min(1).max(16),
+  by: z.enum(["agent", "resident"]),
+  byName: z.string().min(1),
+});
+
+router.post("/:id/reactions", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const body = ReactionBody.parse(req.body);
+    const [msg] = await db.select().from(agentMessagesTable).where(eq(agentMessagesTable.id, id));
+    if (!msg) { res.status(404).json({ error: "not_found" }); return; }
+
+    const existing = (msg.reactions as any[] | null) ?? [];
+    const matchIdx = existing.findIndex(
+      (r: any) => r.by === body.by && r.byName === body.byName && r.emoji === body.emoji
+    );
+    let next: any[];
+    if (matchIdx >= 0) {
+      // Toggle off: same person + same emoji clicked again
+      next = [...existing.slice(0, matchIdx), ...existing.slice(matchIdx + 1)];
+    } else {
+      next = [...existing, { ...body, at: new Date().toISOString() }];
+    }
+    const [updated] = await db.update(agentMessagesTable)
+      .set({ reactions: next })
+      .where(eq(agentMessagesTable.id, id))
+      .returning();
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // PUT /api/agent-messages/read-all?residentId=&agentId=&role=   — mark all as read
 router.put("/read-all", async (req, res) => {
   try {
