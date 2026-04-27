@@ -36,3 +36,4 @@ export * from "./bank_statement_imports.js";
 export * from "./reconciliation_runs.js";
 export * from "./cash_float_counts.js";
 export * from "./tax_filings.js";
+export * from "./rider_payouts.js";

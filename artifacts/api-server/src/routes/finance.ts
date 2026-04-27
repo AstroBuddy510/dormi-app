@@ -10,6 +10,7 @@ import {
   payrollPaymentsTable,
   deliveryPartnersTable,
   payoutsTable,
+  ridersTable,
 } from "../../../../lib/db/src/schema/index.js";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -18,6 +19,7 @@ const router: IRouter = Router();
 
 const FinanceSettingsBody = z.object({
   vendorCommissionPercent: z.number().min(0).max(100),
+  riderCommissionPercent: z.number().min(0).max(100).optional(),
   courierCommissionFixed: z.number().min(0),
   distanceRateCedisPerKm: z.number().min(0),
   distanceThresholdKm: z.number().min(0),
@@ -45,6 +47,7 @@ router.put("/settings", async (req, res) => {
     if (!settings) {
       [settings] = await db.insert(financeSettingsTable).values({
         vendorCommissionPercent: body.vendorCommissionPercent.toString(),
+        ...(body.riderCommissionPercent !== undefined && { riderCommissionPercent: body.riderCommissionPercent.toString() }),
         courierCommissionFixed: body.courierCommissionFixed.toString(),
         distanceRateCedisPerKm: body.distanceRateCedisPerKm.toString(),
         distanceThresholdKm: body.distanceThresholdKm.toString(),
@@ -53,6 +56,7 @@ router.put("/settings", async (req, res) => {
       [settings] = await db.update(financeSettingsTable)
         .set({
           vendorCommissionPercent: body.vendorCommissionPercent.toString(),
+          ...(body.riderCommissionPercent !== undefined && { riderCommissionPercent: body.riderCommissionPercent.toString() }),
           courierCommissionFixed: body.courierCommissionFixed.toString(),
           distanceRateCedisPerKm: body.distanceRateCedisPerKm.toString(),
           distanceThresholdKm: body.distanceThresholdKm.toString(),
@@ -209,16 +213,25 @@ router.get("/stats", async (req, res) => {
     const partnerCommissionMap: Record<number, number> = {};
     partners.forEach(p => { if (p.id) partnerCommissionMap[p.id] = parseFloat(p.commissionPercent); });
 
+    // Rider type map — drives whether we keep the full delivery fee (in_house)
+    // or only the global rider commission % of it (independent).
+    const riders = await db.select({ id: ridersTable.id, type: ridersTable.type }).from(ridersTable);
+    const riderTypeMap: Record<number, "in_house" | "independent"> = {};
+    riders.forEach(r => { if (r.id) riderTypeMap[r.id] = (r.type === "in_house" ? "in_house" : "independent"); });
+
     const [financeSettings] = await db.select().from(financeSettingsTable).limit(1);
     const globalVendorCommission = financeSettings ? parseFloat(financeSettings.vendorCommissionPercent) : 5;
+    const globalRiderCommission = financeSettings ? parseFloat(financeSettings.riderCommissionPercent ?? "20") : 20;
 
-    // ── Net Revenue formula (same as Admin dashboard) ──────────────────────
-    // Service fee: all delivered orders
-    // In-house delivery: full fee for orders with our rider (no third-party partner)
-    // Third-party commission: our % of fee for orders routed to external partners
-    // Vendor commission: vendor's % of subtotal for vendor-sourced orders
+    // ── Net Revenue formula ────────────────────────────────────────────────
+    // Service fee:        all delivered orders (full)
+    // In-house delivery:  full delivery fee for orders with an in-house rider
+    // Independent rider:  delivery_fee × global rider commission % only
+    // Third-party:        delivery_fee × partner commission %
+    // Vendor commission:  ALWAYS vendor's % of SUBTOTAL (goods value), never of total/fees
     let serviceChargeRevenue = 0;
     let inHouseDeliveryRevenue = 0;
+    let independentRiderCommissionRevenue = 0;
     let thirdPartyCommissionRevenue = 0;
     let vendorCommissionRevenue = 0;
     let cashRevenue = 0;
@@ -236,10 +249,17 @@ router.get("/stats", async (req, res) => {
         const rate = (partnerCommissionMap[order.deliveryPartnerId] ?? 0) / 100;
         thirdPartyCommissionRevenue += deliveryFee * rate;
       } else if (order.riderId) {
-        inHouseDeliveryRevenue += deliveryFee;
+        const t = riderTypeMap[order.riderId] ?? "independent";
+        if (t === "in_house") {
+          inHouseDeliveryRevenue += deliveryFee;
+        } else {
+          independentRiderCommissionRevenue += deliveryFee * globalRiderCommission / 100;
+        }
       }
 
       if (order.vendorId) {
+        // Vendor commission is computed on SUBTOTAL ONLY (goods value).
+        // Never on total, service fee, delivery fee, or taxes.
         const commPct = vendorCommissionMap[order.vendorId] ?? globalVendorCommission;
         vendorCommissionRevenue += (subtotal * commPct) / 100;
       }
@@ -292,13 +312,14 @@ router.get("/stats", async (req, res) => {
       vendorPayoutsCash += parseFloat(p.cashPortion ?? "0");
     }
 
-    const totalRevenue = serviceChargeRevenue + inHouseDeliveryRevenue + thirdPartyCommissionRevenue + vendorCommissionRevenue;
+    const totalRevenue = serviceChargeRevenue + inHouseDeliveryRevenue + independentRiderCommissionRevenue + thirdPartyCommissionRevenue + vendorCommissionRevenue;
     const netProfit = totalRevenue - totalExpenses - totalPayroll;
     const utilitiesFlag = totalRevenue > 0 && utilitiesExpenses / totalRevenue > 0.2;
 
     res.json({
       serviceChargeRevenue: round2(serviceChargeRevenue),
       deliveryFeeRevenue: round2(inHouseDeliveryRevenue),
+      independentRiderCommissionRevenue: round2(independentRiderCommissionRevenue),
       vendorCommissionRevenue: round2(vendorCommissionRevenue),
       courierCommissionRevenue: round2(thirdPartyCommissionRevenue),
       totalRevenue: round2(totalRevenue),
@@ -393,6 +414,7 @@ function mapSettings(s: typeof financeSettingsTable.$inferSelect) {
   return {
     id: s.id,
     vendorCommissionPercent: parseFloat(s.vendorCommissionPercent),
+    riderCommissionPercent: parseFloat(s.riderCommissionPercent ?? "20"),
     courierCommissionFixed: parseFloat(s.courierCommissionFixed),
     distanceRateCedisPerKm: parseFloat(s.distanceRateCedisPerKm),
     distanceThresholdKm: parseFloat(s.distanceThresholdKm),

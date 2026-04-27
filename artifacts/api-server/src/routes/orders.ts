@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
-import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable } from "../../../../lib/db/src/schema/index.js";
+import { ordersTable, residentsTable, vendorsTable, ridersTable, pricingTable, itemsTable, deliveryPartnersTable, deliveryZonesTable, deliveryTownsTable, financeSettingsTable } from "../../../../lib/db/src/schema/index.js";
 import { computeOrderTaxes } from "../lib/taxes.js";
 import { postOrderPayment, postRiderEarning } from "../lib/ledger.js";
 import { eq, and, desc } from "drizzle-orm";
@@ -304,12 +304,18 @@ router.put("/:id/status", async (req, res) => {
             postedAt: order.deliveredAt ?? new Date(),
           });
         }
-        // 2. Rider earning recognition (full delivery fee passes through).
+        // 2. Rider earning recognition. Type-aware:
+        //    - in_house: skipped (salaried; platform keeps full fee as revenue).
+        //    - independent: rider share = fee × (1 − global commission %); platform keeps the rest.
         if (order.riderId) {
+          const [rider] = await db.select({ type: ridersTable.type }).from(ridersTable).where(eq(ridersTable.id, order.riderId)).limit(1);
+          const [settings] = await db.select({ pct: financeSettingsTable.riderCommissionPercent }).from(financeSettingsTable).limit(1);
           await postRiderEarning({
             orderId: order.id,
             riderId: order.riderId,
+            riderType: (rider?.type === "in_house" ? "in_house" : "independent"),
             amount: parseFloat(order.deliveryFee),
+            commissionPercent: parseFloat(settings?.pct ?? "20"),
             postedAt: order.deliveredAt ?? new Date(),
           });
         }

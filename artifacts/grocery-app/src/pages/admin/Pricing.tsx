@@ -224,12 +224,13 @@ export default function AdminPricing() {
     queryFn: () => apiFetch('/finance/settings'),
   });
 
-  const [fs, setFs] = useState({ vendorCommissionPercent: '', courierCommissionFixed: '', distanceRateCedisPerKm: '', distanceThresholdKm: '' });
+  const [fs, setFs] = useState({ vendorCommissionPercent: '', riderCommissionPercent: '', courierCommissionFixed: '', distanceRateCedisPerKm: '', distanceThresholdKm: '' });
 
   useEffect(() => {
     if (finSettings) {
       setFs({
         vendorCommissionPercent: finSettings.vendorCommissionPercent.toString(),
+        riderCommissionPercent: (finSettings.riderCommissionPercent ?? 20).toString(),
         courierCommissionFixed: finSettings.courierCommissionFixed.toString(),
         distanceRateCedisPerKm: finSettings.distanceRateCedisPerKm.toString(),
         distanceThresholdKm: finSettings.distanceThresholdKm.toString(),
@@ -247,6 +248,7 @@ export default function AdminPricing() {
     e.preventDefault();
     updateFsMutation.mutate({
       vendorCommissionPercent: parseFloat(fs.vendorCommissionPercent),
+      riderCommissionPercent: parseFloat(fs.riderCommissionPercent),
       courierCommissionFixed: parseFloat(fs.courierCommissionFixed),
       distanceRateCedisPerKm: parseFloat(fs.distanceRateCedisPerKm),
       distanceThresholdKm: parseFloat(fs.distanceThresholdKm),
@@ -527,8 +529,18 @@ export default function AdminPricing() {
                     <Input type="number" step="0.1" min="0" max="100" className="pr-8 h-12 rounded-xl" value={fs.vendorCommissionPercent} onChange={e => setFs({ ...fs, vendorCommissionPercent: e.target.value })} required />
                     <span className="absolute right-3 top-3 text-muted-foreground font-medium">%</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Global default. Override per vendor in Settings.</p>
+                  <p className="text-xs text-muted-foreground">Global default. Override per vendor in Settings. Applied to <strong>goods value (subtotal) only</strong>, never on fees or total.</p>
                 </div>
+                <div className="space-y-2">
+                  <Label>Independent Rider Commission (%)</Label>
+                  <div className="relative">
+                    <Input type="number" step="0.1" min="0" max="100" className="pr-8 h-12 rounded-xl" value={fs.riderCommissionPercent} onChange={e => setFs({ ...fs, riderCommissionPercent: e.target.value })} required />
+                    <span className="absolute right-3 top-3 text-muted-foreground font-medium">%</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Platform's share of delivery fee for Independent riders. Remainder is paid to the rider. In-house riders are unaffected (full fee = revenue, paid via payroll).</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Courier Commission (Fixed, GH₵)</Label>
                   <div className="relative">

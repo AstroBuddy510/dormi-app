@@ -10,6 +10,8 @@ import {
   deliveryPartnersTable,
   deliveryZonesTable,
   deliveryTownsTable,
+  ridersTable,
+  financeSettingsTable,
 } from "../../../../lib/db/src/schema/index.js";
 import { eq, and, gte } from "drizzle-orm";
 import { CreateCallLogOrderBody } from "../../../../lib/api-zod/src/index.js";
@@ -414,10 +416,26 @@ router.get("/stats", async (_req, res) => {
   // 1. Service fee (18% markup) — belongs entirely to GrocerEase
   const serviceFeeEarnings = delivered.reduce((s, o) => s + parseFloat(o.serviceFee ?? "0"), 0);
 
-  // 2. In-house rider delivery fees — where riderId is set and no delivery partner
-  const inHouseDeliveryEarnings = delivered
-    .filter(o => o.riderId !== null && o.deliveryPartnerId === null)
-    .reduce((s, o) => s + parseFloat(o.deliveryFee ?? "0"), 0);
+  // 2. Rider deliveries — split by rider type:
+  //    in_house     → full delivery fee = revenue (salaried; platform keeps it all)
+  //    independent  → delivery_fee × global rider commission % only (rider keeps the rest)
+  const riderIds = [...new Set(delivered.filter(o => o.riderId !== null && o.deliveryPartnerId === null).map(o => o.riderId!))];
+  let inHouseDeliveryEarnings = 0;
+  let independentRiderCommissionEarnings = 0;
+  if (riderIds.length > 0) {
+    const allRiders = await db.select().from(ridersTable);
+    const riderTypeMap = new Map(allRiders.map(r => [r.id, r.type]));
+    const [fs] = await db.select().from(financeSettingsTable).limit(1);
+    const globalRiderPct = parseFloat(fs?.riderCommissionPercent ?? "20");
+
+    for (const o of delivered) {
+      if (o.riderId === null || o.deliveryPartnerId !== null) continue;
+      const fee = parseFloat(o.deliveryFee ?? "0");
+      const t = riderTypeMap.get(o.riderId) ?? "independent";
+      if (t === "in_house") inHouseDeliveryEarnings += fee;
+      else independentRiderCommissionEarnings += fee * globalRiderPct / 100;
+    }
+  }
 
   // 3. Third-party delivery partner commissions — we earn commissionPercent of their delivery fee
   const partnerIds = [...new Set(delivered.filter(o => o.deliveryPartnerId !== null).map(o => o.deliveryPartnerId!))];
@@ -433,7 +451,8 @@ router.get("/stats", async (_req, res) => {
       }, 0);
   }
 
-  // 4. Vendor commission — each vendor may have a commissionPercent on the order subtotal
+  // 4. Vendor commission — vendor's commissionPercent of SUBTOTAL only.
+  //    Vendor commission is NEVER applied to total, service fee, delivery fee, or taxes.
   const vendorIds = [...new Set(delivered.filter(o => o.vendorId !== null).map(o => o.vendorId!))];
   let vendorCommissionEarnings = 0;
   if (vendorIds.length > 0) {
@@ -443,15 +462,16 @@ router.get("/stats", async (_req, res) => {
       .filter(o => o.vendorId !== null)
       .reduce((s, o) => {
         const rate = (vendorMap.get(o.vendorId!) ?? 0) / 100;
-        return s + parseFloat(o.subtotal ?? "0") * rate;
+        return s + parseFloat(o.subtotal ?? "0") * rate; // subtotal = goods value
       }, 0);
   }
 
-  const netRevenue = serviceFeeEarnings + inHouseDeliveryEarnings + partnerCommissionEarnings + vendorCommissionEarnings;
+  const netRevenue = serviceFeeEarnings + inHouseDeliveryEarnings + independentRiderCommissionEarnings + partnerCommissionEarnings + vendorCommissionEarnings;
 
   const revenueBreakdown = {
     serviceFee: parseFloat(serviceFeeEarnings.toFixed(2)),
     inHouseDelivery: parseFloat(inHouseDeliveryEarnings.toFixed(2)),
+    independentRiderCommission: parseFloat(independentRiderCommissionEarnings.toFixed(2)),
     partnerCommission: parseFloat(partnerCommissionEarnings.toFixed(2)),
     vendorCommission: parseFloat(vendorCommissionEarnings.toFixed(2)),
   };

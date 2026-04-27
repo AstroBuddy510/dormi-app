@@ -66,26 +66,37 @@ function FormStatus({ success, error }: { success?: string; error?: string }) {
 }
 
 function CreateRiderForm() {
-  const [form, setForm] = useState({ name: '', phone: '', pin: '' });
+  const [form, setForm] = useState({ name: '', phone: '', pin: '', type: 'independent' as 'independent' | 'in_house' });
   const [status, setStatus] = useState<{ success?: string; error?: string }>({});
-  const mutation = useCreateRider();
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus({});
-    mutation.mutate(
-      { data: { name: form.name, phone: form.phone, pin: form.pin || undefined } },
-      {
-        onSuccess: () => {
-          setStatus({ success: 'Rider account created successfully.' });
-          setForm({ name: '', phone: '', pin: '' });
-        },
-        onError: (err: any) => {
-          const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create rider.';
-          setStatus({ error: msg });
-        },
-      }
-    );
+    setSubmitting(true);
+    try {
+      const token = (() => {
+        try { return JSON.parse(localStorage.getItem('grocerease-auth') || '{}')?.state?.token; } catch { return null; }
+      })();
+      const res = await fetch('/api/riders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          pin: form.pin || undefined,
+          type: form.type,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message ?? body?.error ?? 'Failed to create rider.');
+      setStatus({ success: `Rider account created successfully (${form.type === 'in_house' ? 'In-house' : 'Independent'}).` });
+      setForm({ name: '', phone: '', pin: '', type: 'independent' });
+    } catch (err: any) {
+      setStatus({ error: err?.message ?? 'Failed to create rider.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -124,13 +135,35 @@ function CreateRiderForm() {
           onChange={e => setForm({ ...form, pin: e.target.value })}
         />
       </div>
+      <div className="space-y-2">
+        <Label>Rider Type</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {(['independent', 'in_house'] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setForm({ ...form, type: t })}
+              className={`h-12 rounded-xl border text-sm font-semibold transition-colors ${
+                form.type === t ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-border text-foreground hover:bg-gray-50'
+              }`}
+            >
+              {t === 'in_house' ? 'In-house (salaried)' : 'Independent (gig)'}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {form.type === 'in_house'
+            ? 'Platform keeps the full delivery fee. Rider is paid via payroll, not per order.'
+            : 'Platform takes the global rider commission % set in Pricing. Rider keeps the rest, settled via payouts.'}
+        </p>
+      </div>
       <FormStatus {...status} />
       <Button
         type="submit"
         className="w-full h-12 text-base font-bold rounded-xl"
-        disabled={mutation.isPending}
+        disabled={submitting}
       >
-        {mutation.isPending ? 'Creating...' : 'Create Rider Account'}
+        {submitting ? 'Creating...' : 'Create Rider Account'}
       </Button>
     </form>
   );

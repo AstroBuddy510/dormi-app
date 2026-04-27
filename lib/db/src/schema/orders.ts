@@ -50,6 +50,8 @@ export const ordersTable = pgTable("orders", {
   // Set when a vendor-payout is requested for this order. Prevents double-
   // inclusion of the same delivered order in multiple payout requests.
   vendorPayoutId: integer("vendor_payout_id").references(() => payoutsTable.id),
+  // Same idea but for the independent rider's payout request.
+  riderPayoutId: integer("rider_payout_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

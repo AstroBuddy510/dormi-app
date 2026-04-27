@@ -199,29 +199,45 @@ export async function postOrderPayment(input: OrderPaymentInput) {
 
 /**
  * Recognise rider earnings on delivery completion (matching principle).
- *   DR  Rider delivery cost
- *   CR  Rider payable
+ *
+ * Compensation depends on rider type:
+ *   in_house    — salaried; platform keeps the full delivery_fee as revenue
+ *                 (already credited to 4200-DELIVERY-REVENUE in postOrderPayment).
+ *                 Returns null without posting anything.
+ *   independent — gig worker; platform takes commissionPercent of the fee as
+ *                 revenue, the remainder is owed to the rider:
+ *                   DR 5100-RIDER-COST     (delivery_fee × (1 − pct/100))
+ *                   CR 2110-RIDER-PAYABLE  (delivery_fee × (1 − pct/100))
+ *                 Net delivery revenue then = delivery_fee × pct/100.
  */
 export interface RiderEarningInput {
   orderId: number;
   riderId: number;
+  riderType: "in_house" | "independent";
+  /** Full delivery fee charged to the customer. */
   amount: number;
+  /** Global rider commission % (0..100). Required only for independent riders. */
+  commissionPercent?: number;
   postedAt?: Date;
   createdBy?: string;
 }
 
 export async function postRiderEarning(input: RiderEarningInput) {
   if (input.amount <= 0) return null;
+  if (input.riderType === "in_house") return null; // salaried — platform keeps full fee
+  const pct = Math.max(0, Math.min(100, input.commissionPercent ?? 20));
+  const riderShare = round2(input.amount * (100 - pct) / 100);
+  if (riderShare <= 0) return null;
   return postTransaction({
     lines: [
-      { accountCode: "5100-RIDER-COST", debit: round2(input.amount) },
-      { accountCode: "2110-RIDER-PAYABLE", credit: round2(input.amount) },
+      { accountCode: "5100-RIDER-COST", debit: riderShare },
+      { accountCode: "2110-RIDER-PAYABLE", credit: riderShare },
     ],
     sourceType: "rider_earning",
     sourceId: input.orderId,
     postedAt: input.postedAt,
-    description: `Rider #${input.riderId} earning on Order #${input.orderId}`,
-    meta: { riderId: input.riderId },
+    description: `Rider #${input.riderId} earning on Order #${input.orderId} (independent, ${pct}% commission)`,
+    meta: { riderId: input.riderId, riderType: input.riderType, commissionPercent: pct, deliveryFee: input.amount, riderShare },
     createdBy: input.createdBy,
   });
 }

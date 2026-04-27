@@ -5,11 +5,12 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
 import { RiderStats } from './RiderStats';
 import { RiderMessages } from './RiderMessages';
+import { RiderPayouts } from './RiderPayouts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff, BarChart3, MessageCircle, Boxes, Package } from 'lucide-react';
+import { Bike, MapPin, Camera, CheckCircle2, Navigation, X, ImageIcon, Phone, Bell, BellOff, BarChart3, MessageCircle, Boxes, Package, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage, formatBytes } from '@/lib/imageCompression';
 
@@ -348,7 +349,7 @@ export default function RiderJobs() {
 
         {/* Tabs */}
         <Tabs defaultValue="jobs" className="w-full mt-4">
-          <TabsList className="w-full grid grid-cols-3 mb-5 rounded-2xl bg-white border border-border shadow-sm h-11">
+          <TabsList className="w-full grid grid-cols-4 mb-5 rounded-2xl bg-white border border-border shadow-sm h-11">
             <TabsTrigger value="jobs" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
               <Bike size={14} /> Jobs
               {(totalIncoming + totalActive) > 0 && (
@@ -359,6 +360,9 @@ export default function RiderJobs() {
             </TabsTrigger>
             <TabsTrigger value="stats" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
               <BarChart3 size={14} /> Stats
+            </TabsTrigger>
+            <TabsTrigger value="payouts" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
+              <Wallet size={14} /> Payouts
             </TabsTrigger>
             <TabsTrigger value="messages" className="rounded-xl text-sm font-medium flex items-center gap-1.5">
               <MessageCircle size={14} /> Chat
@@ -811,6 +815,10 @@ export default function RiderJobs() {
           {/* ── Stats Tab ── */}
           <TabsContent value="stats" className="mt-0">
             <RiderStats allJobs={allJobsRaw as any} />
+          </TabsContent>
+
+          <TabsContent value="payouts" className="mt-0">
+            {user?.id && <RiderPayouts riderId={user.id} />}
           </TabsContent>
 
           {/* ── Messages Tab ── */}

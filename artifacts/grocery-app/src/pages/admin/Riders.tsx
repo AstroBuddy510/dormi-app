@@ -26,6 +26,27 @@ export default function AdminRiders() {
     queryKey: ['/api/delivery-partners'],
     queryFn: () => fetch('/api/delivery-partners').then(r => r.json()),
   });
+  // Per-rider earnings + commission + cash/Paystack held + pending payouts.
+  const { data: riderStats } = useQuery<{
+    globalRiderCommissionPercent: number;
+    riders: Array<{
+      id: number; type: 'in_house' | 'independent';
+      totalEarnings: number; commissionDeducted: number;
+      paystackHeld: number; cashHeld: number;
+      pendingPayoutRequests: number;
+    }>;
+  }>({
+    queryKey: ['/api/riders/stats'],
+    queryFn: () => fetch('/api/riders/stats', {
+      headers: (() => {
+        try {
+          const t = JSON.parse(localStorage.getItem('grocerease-auth') || '{}')?.state?.token;
+          return t ? { Authorization: `Bearer ${t}` } : {};
+        } catch { return {}; }
+      })(),
+    }).then(r => r.json()),
+  });
+  const statsById = new Map((riderStats?.riders ?? []).map(r => [r.id, r]));
   const activePartners = deliveryPartners.filter(p => p.isActive);
 
   const assignRiderMutation = useAssignRider();
@@ -97,34 +118,70 @@ export default function AdminRiders() {
         {/* Rider Overview Cards */}
         {!ridersLoading && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {riderOrders.map(({ rider, assigned, completed }) => (
-              <Card key={rider.id} className="rounded-2xl shadow-sm border-border/50">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-base">
-                      {rider.name.charAt(0)}
+            {riderOrders.map(({ rider, assigned, completed }) => {
+              const s = statsById.get(rider.id);
+              const isInHouse = ((rider as any).type ?? s?.type) === 'in_house';
+              return (
+                <Card key={rider.id} className="rounded-2xl shadow-sm border-border/50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-base">
+                        {rider.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{rider.name}</p>
+                        <p className="text-xs text-muted-foreground">{rider.phone}</p>
+                      </div>
+                      <span className={`ml-auto text-xs px-2 py-1 rounded-full font-medium shrink-0 ${rider.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {rider.isAvailable ? 'Available' : 'Busy'}
+                      </span>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm">{rider.name}</p>
-                      <p className="text-xs text-muted-foreground">{rider.phone}</p>
+                    {/* Type badge */}
+                    <div className="mb-3">
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${isInHouse ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                        {isInHouse ? 'In-house' : 'Independent'}
+                      </span>
+                      {!isInHouse && riderStats && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          Platform takes {riderStats.globalRiderCommissionPercent}%
+                        </span>
+                      )}
                     </div>
-                    <span className={`ml-auto text-xs px-2 py-1 rounded-full font-medium ${rider.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {rider.isAvailable ? 'Available' : 'Busy'}
-                    </span>
-                  </div>
-                  <div className="flex gap-4 text-center border-t border-border/50 pt-3">
-                    <div className="flex-1">
-                      <p className="text-lg font-bold text-amber-600">{assigned.length}</p>
-                      <p className="text-xs text-muted-foreground">Active</p>
+                    <div className="flex gap-4 text-center border-t border-border/50 pt-3 mb-3">
+                      <div className="flex-1">
+                        <p className="text-lg font-bold text-amber-600">{assigned.length}</p>
+                        <p className="text-xs text-muted-foreground">Active</p>
+                      </div>
+                      <div className="flex-1 border-l border-border/50">
+                        <p className="text-lg font-bold text-green-600">{completed}</p>
+                        <p className="text-xs text-muted-foreground">Delivered</p>
+                      </div>
                     </div>
-                    <div className="flex-1 border-l border-border/50">
-                      <p className="text-lg font-bold text-green-600">{completed}</p>
-                      <p className="text-xs text-muted-foreground">Delivered</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    {/* Earnings, commission, held balances, payout requests */}
+                    {s && (
+                      <div className="border-t border-border/50 pt-3 space-y-1.5 text-xs">
+                        {isInHouse ? (
+                          <p className="text-muted-foreground italic">Salaried — paid via payroll. Platform keeps full delivery fee.</p>
+                        ) : (
+                          <>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Total earnings</span><span className="font-mono font-semibold">₵{s.totalEarnings.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Commission deducted</span><span className="font-mono">₵{s.commissionDeducted.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Paystack held</span><span className="font-mono">₵{s.paystackHeld.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Cash held (rider)</span><span className="font-mono">₵{s.cashHeld.toFixed(2)}</span></div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Payout requests</span>
+                              <span className={`font-medium ${s.pendingPayoutRequests > 0 ? 'text-orange-600' : 'text-muted-foreground'}`}>
+                                {s.pendingPayoutRequests} pending
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 

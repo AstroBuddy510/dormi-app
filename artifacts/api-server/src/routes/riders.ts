@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db } from "../../../../lib/db/src/index.js";
-import { ridersTable } from "../../../../lib/db/src/schema/index.js";
-import { eq } from "drizzle-orm";
+import {
+  ridersTable, ordersTable, riderPayoutsTable, financeSettingsTable,
+} from "../../../../lib/db/src/schema/index.js";
+import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { createHash } from "crypto";
 
 const router: IRouter = Router();
@@ -15,6 +17,7 @@ function mapRider(r: typeof ridersTable.$inferSelect) {
     id: r.id,
     name: r.name,
     phone: r.phone,
+    type: r.type ?? "independent",
     isAvailable: r.isAvailable,
     photoUrl: r.photoUrl,
     suspended: r.suspended,
@@ -30,7 +33,7 @@ router.get("/", async (_req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { name, phone, pin } = req.body;
+    const { name, phone, pin, type } = req.body;
     if (!name || !phone) {
       res.status(400).json({ error: "bad_request", message: "name and phone are required" });
       return;
@@ -40,10 +43,12 @@ router.post("/", async (req, res) => {
       res.status(400).json({ error: "phone_exists", message: "Phone already registered" });
       return;
     }
+    const riderType = type === "in_house" ? "in_house" : "independent";
     const [rider] = await db.insert(ridersTable).values({
       name,
       phone,
       pin: pin ? hashPin(pin) : null,
+      type: riderType,
       isAvailable: true,
     }).returning();
     res.status(201).json(mapRider(rider));
@@ -55,12 +60,13 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { name, phone, isAvailable } = req.body;
+    const { name, phone, isAvailable, type } = req.body;
     const [rider] = await db.update(ridersTable)
       .set({
         ...(name && { name }),
         ...(phone && { phone }),
         ...(isAvailable !== undefined && { isAvailable }),
+        ...(type && (type === "in_house" || type === "independent") && { type }),
       })
       .where(eq(ridersTable.id, id))
       .returning();
@@ -129,6 +135,79 @@ router.put("/:id/photo", async (req, res) => {
     res.json(mapRider(rider));
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+/**
+ * GET /riders/stats — per-rider earnings + commission breakdown for the
+ * admin Riders tab. Computes from orders + rider_payouts using the global
+ * rider commission % from finance_settings.
+ *
+ * Response per rider: type, totalEarnings, commissionDeducted,
+ * paystackHeld, cashHeld, pendingPayoutRequests.
+ */
+router.get("/stats", async (_req, res) => {
+  try {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const riders = await db.select().from(ridersTable);
+    const [fs] = await db.select().from(financeSettingsTable).limit(1);
+    const globalRiderPct = parseFloat(fs?.riderCommissionPercent ?? "20");
+
+    // Pull all delivered orders that have a rider assigned, in one round-trip.
+    const deliveredRiderOrders = await db
+      .select({
+        riderId: ordersTable.riderId,
+        deliveryFee: ordersTable.deliveryFee,
+        paymentMethod: ordersTable.paymentMethod,
+        riderPayoutId: ordersTable.riderPayoutId,
+      })
+      .from(ordersTable)
+      .where(and(eq(ordersTable.status, "delivered"), sql`${ordersTable.riderId} IS NOT NULL`));
+
+    // Pending payout-request counts grouped by rider.
+    const pendingByRider = await db
+      .select({ riderId: riderPayoutsTable.riderId, count: sql<number>`COUNT(*)::int` })
+      .from(riderPayoutsTable)
+      .where(eq(riderPayoutsTable.status, "pending"))
+      .groupBy(riderPayoutsTable.riderId);
+    const pendingMap = new Map(pendingByRider.map(r => [r.riderId, r.count]));
+
+    const stats = riders.map(r => {
+      const isInHouse = r.type === "in_house";
+      let fullFeeTotal = 0;
+      let paystackHeld = 0; // from card payments still held by platform (only meaningful for independent)
+      let cashHeld = 0;     // collected on delivery, sitting with rider (independent)
+      for (const o of deliveredRiderOrders) {
+        if (o.riderId !== r.id) continue;
+        const fee = parseFloat(o.deliveryFee ?? "0");
+        fullFeeTotal += fee;
+        if (!isInHouse && o.riderPayoutId === null) {
+          // Rider's share for unsettled orders
+          const share = round2(fee * (100 - globalRiderPct) / 100);
+          if (o.paymentMethod === "paystack") paystackHeld += share;
+          else cashHeld += share;
+        }
+      }
+      const commissionDeducted = isInHouse ? fullFeeTotal : round2(fullFeeTotal * globalRiderPct / 100);
+      const totalEarnings = isInHouse ? 0 : round2(fullFeeTotal * (100 - globalRiderPct) / 100);
+      return {
+        id: r.id,
+        name: r.name,
+        phone: r.phone,
+        type: r.type ?? "independent",
+        isAvailable: r.isAvailable,
+        suspended: r.suspended,
+        photoUrl: r.photoUrl,
+        totalEarnings,
+        commissionDeducted,
+        paystackHeld: round2(paystackHeld),
+        cashHeld: round2(cashHeld),
+        pendingPayoutRequests: pendingMap.get(r.id) ?? 0,
+      };
+    });
+    res.json({ globalRiderCommissionPercent: globalRiderPct, riders: stats });
+  } catch (err: any) {
+    res.status(500).json({ error: "server_error", message: err.message });
   }
 });
 

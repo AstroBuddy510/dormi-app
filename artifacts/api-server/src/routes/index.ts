@@ -40,6 +40,7 @@ import reconcileRouter from "./reconcile.js";
 import cashFloatsRouter from "./cashFloats.js";
 import financialReportsRouter from "./financialReports.js";
 import taxFilingsRouter from "./taxFilings.js";
+import riderPayoutsRouter from "./riderPayouts.js";
 
 const router: IRouter = Router();
 
@@ -85,5 +86,6 @@ router.use("/reconcile", reconcileRouter);
 router.use("/cash-floats", cashFloatsRouter);
 router.use("/financial-reports", financialReportsRouter);
 router.use("/tax-filings", taxFilingsRouter);
+router.use("/rider-payouts", riderPayoutsRouter);
 
 export default router;
