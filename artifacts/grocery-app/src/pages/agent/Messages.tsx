@@ -21,9 +21,25 @@ import EmojiPickerButton from '@/components/EmojiPickerButton';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+function authHeader(): Record<string, string> {
+  try {
+    if (typeof window === 'undefined') return {};
+    const raw = window.localStorage.getItem('grocerease-auth');
+    if (!raw) return {};
+    const t = JSON.parse(raw)?.state?.token;
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  } catch { return {}; }
+}
+
 async function apiFetch(path: string, opts?: RequestInit) {
-  const r = await fetch(`${BASE}/api${path}`, opts);
-  if (!r.ok) throw new Error((await r.json()).error || 'Request failed');
+  const r = await fetch(`${BASE}/api${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...authHeader(), ...(opts?.headers ?? {}) },
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.message ?? body?.error ?? 'Request failed');
+  }
   return r.json();
 }
 

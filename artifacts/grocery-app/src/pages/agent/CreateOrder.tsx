@@ -14,16 +14,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Zap, CheckCircle, AlertCircle } from "lucide-react";
 import { ItemsBuilder } from "@/components/ItemsBuilder";
 
+import { authFetchArray } from "@/lib/authFetch";
+
 const API = "/api";
 
-async function fetchResidents() {
-  const r = await fetch(`${API}/residents`);
-  return r.json();
-}
-async function fetchVendors() {
-  const r = await fetch(`${API}/vendors`);
-  return r.json();
-}
+const fetchResidents = () => authFetchArray(`${API}/residents`);
+const fetchVendors = () => authFetchArray(`${API}/vendors`);
 
 function OrderPreview({ rawItems }: { rawItems: string }) {
   const lines = rawItems.split("\n").filter(l => l.trim());

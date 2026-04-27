@@ -13,16 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { Plus, MessageSquareWarning, Clock, CheckCircle, AlertTriangle, ChevronDown } from "lucide-react";
 
+import { authFetchArray } from "@/lib/authFetch";
+
 const API = "/api";
 
-async function fetchResidents() {
-  const r = await fetch(`${API}/residents`);
-  return r.json();
-}
-async function fetchComplaints(agentId: number) {
-  const r = await fetch(`${API}/complaints?agentId=${agentId}`);
-  return r.json();
-}
+const fetchResidents = () => authFetchArray(`${API}/residents`);
+const fetchComplaints = (agentId: number) => authFetchArray(`${API}/complaints?agentId=${agentId}`);
 
 const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-gray-100 text-gray-600",

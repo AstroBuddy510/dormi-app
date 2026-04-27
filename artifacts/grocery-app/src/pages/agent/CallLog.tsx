@@ -18,24 +18,14 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+import { authFetchArray } from "@/lib/authFetch";
+
 const API = "/api";
 
-async function fetchResidents() {
-  const r = await fetch(`${API}/residents`);
-  return r.json();
-}
-async function fetchCallLogs(agentId: number) {
-  const r = await fetch(`${API}/agents/${agentId}/call-logs`);
-  return r.json();
-}
-async function fetchScheduledCalls(agentId: number) {
-  const r = await fetch(`${API}/agents/${agentId}/scheduled-calls`);
-  return r.json();
-}
-async function fetchTempList(agentId: number) {
-  const r = await fetch(`${API}/agents/${agentId}/temp-list`);
-  return r.json();
-}
+const fetchResidents = () => authFetchArray(`${API}/residents`);
+const fetchCallLogs = (agentId: number) => authFetchArray(`${API}/agents/${agentId}/call-logs`);
+const fetchScheduledCalls = (agentId: number) => authFetchArray(`${API}/agents/${agentId}/scheduled-calls`);
+const fetchTempList = (agentId: number) => authFetchArray(`${API}/agents/${agentId}/temp-list`);
 
 const OUTCOME_META: Record<string, { label: string; color: string; Icon: any }> = {
   order_created:      { label: "Order Created",       color: "bg-green-100 text-green-700 border-green-200",  Icon: PackagePlus },

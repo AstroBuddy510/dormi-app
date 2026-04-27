@@ -17,28 +17,18 @@ import {
   Users, PhoneCall, CalendarClock, Plus, ListChecks,
 } from "lucide-react";
 
+import { authFetch, authFetchArray } from "@/lib/authFetch";
+
 const API = "/api";
 
-async function fetchResidents() {
-  const r = await fetch(`${API}/residents`);
-  return r.json();
-}
-async function fetchAgentStats(agentId: number) {
-  const r = await fetch(`${API}/agents/${agentId}/orders`);
-  return r.json();
-}
-async function fetchComplaints(agentId: number) {
-  const r = await fetch(`${API}/complaints?agentId=${agentId}`);
-  return r.json();
-}
-async function fetchScheduledCalls(agentId: number) {
-  const r = await fetch(`${API}/agents/${agentId}/scheduled-calls`);
-  return r.json();
-}
-async function fetchTempList(agentId: number) {
-  const r = await fetch(`${API}/agents/${agentId}/temp-list`);
-  return r.json();
-}
+// Use authFetch* so the JWT bearer token rides on every request. /residents
+// (and any other authenticate-gated endpoint) returns {error: "unauthorized"}
+// without it, which would crash the page on .filter() / .reduce() etc.
+const fetchResidents = () => authFetchArray(`${API}/residents`);
+const fetchAgentStats = (agentId: number) => authFetch(`${API}/agents/${agentId}/orders`);
+const fetchComplaints = (agentId: number) => authFetchArray(`${API}/complaints?agentId=${agentId}`);
+const fetchScheduledCalls = (agentId: number) => authFetchArray(`${API}/agents/${agentId}/scheduled-calls`);
+const fetchTempList = (agentId: number) => authFetchArray(`${API}/agents/${agentId}/temp-list`);
 
 // ─── Inline Quick Log Dialog ──────────────────────────────────────────────────
 function QuickLogDialog({
