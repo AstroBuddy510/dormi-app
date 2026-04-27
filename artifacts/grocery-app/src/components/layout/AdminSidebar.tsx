@@ -469,6 +469,20 @@ export function AdminSidebar() {
   });
   const vendorMsgUnread = vendorUnreadData?.total ?? 0;
 
+  // Pending payout count = vendor pending + rider pending. Drives the red dot
+  // on the Payouts sidebar item so admin sees new requests at a glance.
+  const { data: vendorPendingPayouts = [] } = useQuery<any[]>({
+    queryKey: ['admin-pending-payouts', 'vendor'],
+    queryFn: () => fetch(`${BASE}/api/payouts/admin/list?status=pending`).then(r => r.json()),
+    refetchInterval: 15000,
+  });
+  const { data: riderPendingPayouts = [] } = useQuery<any[]>({
+    queryKey: ['admin-pending-payouts', 'rider'],
+    queryFn: () => fetch(`${BASE}/api/rider-payouts/admin/list?status=pending`).then(r => r.json()),
+    refetchInterval: 15000,
+  });
+  const payoutPendingCount = (vendorPendingPayouts?.length ?? 0) + (riderPendingPayouts?.length ?? 0);
+
   // ── Nav structure ──────────────────────────────────────────────────────────
   const sections: NavSection[] = [
     {
@@ -508,7 +522,7 @@ export function AdminSidebar() {
       items: [
         { icon: TrendingUp, label: 'Finance',       path: '/finance' },
         { icon: BookOpen,   label: 'Ledger',        path: '/ledger' },
-        { icon: Banknote,   label: 'Payouts',       path: '/payouts' },
+        { icon: Banknote,   label: 'Payouts',       path: '/payouts', badge: payoutPendingCount || undefined },
         { icon: Receipt,    label: 'Tax & Levies',  path: '/tax-settings' },
         { icon: BarChart3,  label: 'Reports',       path: '/reports' },
         { icon: Lock,       label: 'Period Locks',  path: '/period-locks' },

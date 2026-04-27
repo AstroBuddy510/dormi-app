@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Banknote, Hourglass, CheckCircle2, CreditCard, HandCoins,
-  RefreshCcw, Filter, Inbox, AlertTriangle, Store,
+  RefreshCcw, Filter, Inbox, AlertTriangle, Store, Bike,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -26,11 +26,13 @@ interface AdminStats {
   paidThisMonth: { total: number; paystack: number; cash: number; count: number };
 }
 
+/** Unified row used by the table — vendor and rider rows are normalised into this shape. */
 interface PayoutRow {
+  type: 'vendor' | 'rider';
   id: number;
-  vendorId: number;
-  vendorName: string;
-  vendorPhone: string | null;
+  partyId: number;
+  partyName: string;
+  partyPhone: string | null;
   totalAmount: number;
   paystackPortion: number;
   cashPortion: number;
@@ -41,10 +43,25 @@ interface PayoutRow {
   paidAt: string | null;
 }
 
+/** Raw responses (slightly different shapes between vendor + rider). */
+interface VendorPayoutRow {
+  id: number; vendorId: number; vendorName: string; vendorPhone: string | null;
+  totalAmount: number; paystackPortion: number; cashPortion: number;
+  orderCount: number; status: 'pending' | 'paid'; notes: string | null;
+  requestedAt: string; paidAt: string | null;
+}
+interface RiderPayoutRow {
+  id: number; riderId: number; riderName: string; riderPhone: string | null;
+  totalAmount: number; paystackPortion: number; cashPortion: number;
+  orderCount: number; status: 'pending' | 'paid'; notes: string | null;
+  requestedAt: string; paidAt: string | null;
+}
+
 const CEDI = (n: number) =>
   `GH₵${(n ?? 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type StatusFilter = 'all' | 'pending' | 'paid';
+type TypeFilter = 'all' | 'vendor' | 'rider';
 
 function SummaryCard({
   icon: Icon,
@@ -60,20 +77,9 @@ function SummaryCard({
   tone: 'amber' | 'green';
 }) {
   const tones = {
-    amber: {
-      border: 'border-amber-100',
-      bg: 'bg-gradient-to-br from-amber-50 to-white',
-      iconBg: 'bg-amber-100 text-amber-700',
-      text: 'text-amber-700',
-    },
-    green: {
-      border: 'border-green-100',
-      bg: 'bg-gradient-to-br from-green-50 to-white',
-      iconBg: 'bg-green-100 text-green-700',
-      text: 'text-green-700',
-    },
+    amber: { border: 'border-amber-100', bg: 'bg-gradient-to-br from-amber-50 to-white', iconBg: 'bg-amber-100 text-amber-700', text: 'text-amber-700' },
+    green: { border: 'border-green-100', bg: 'bg-gradient-to-br from-green-50 to-white', iconBg: 'bg-green-100 text-green-700', text: 'text-green-700' },
   }[tone];
-
   return (
     <Card className={`rounded-2xl border shadow-sm ${tones.border} ${tones.bg}`}>
       <CardContent className="p-5">
@@ -107,32 +113,78 @@ function StatusPill({ status }: { status: 'pending' | 'paid' }) {
   );
 }
 
+function TypePill({ type }: { type: 'vendor' | 'rider' }) {
+  if (type === 'vendor') {
+    return <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border border-purple-200 gap-1"><Store size={12} /> Vendor</Badge>;
+  }
+  return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border border-blue-200 gap-1"><Bike size={12} /> Rider</Badge>;
+}
+
 export default function AdminPayouts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [confirmRow, setConfirmRow] = useState<PayoutRow | null>(null);
 
-  const { data: stats, refetch: refetchStats, isLoading: statsLoading } = useQuery<AdminStats>({
-    queryKey: ['admin-payout-stats'],
+  const { data: vendorStats, refetch: refetchVendorStats } = useQuery<AdminStats>({
+    queryKey: ['admin-payout-stats', 'vendor'],
     queryFn: () => fetch(`${BASE}/api/payouts/admin/stats`).then(r => r.json()),
     refetchInterval: 30000,
   });
 
-  const listUrl =
-    filter === 'all'
-      ? `${BASE}/api/payouts/admin/list`
-      : `${BASE}/api/payouts/admin/list?status=${filter}`;
+  // No /admin/stats for rider yet — derive from list payload.
+  const vendorListUrl = statusFilter === 'all'
+    ? `${BASE}/api/payouts/admin/list`
+    : `${BASE}/api/payouts/admin/list?status=${statusFilter}`;
+  const riderListUrl = statusFilter === 'all'
+    ? `${BASE}/api/rider-payouts/admin/list`
+    : `${BASE}/api/rider-payouts/admin/list?status=${statusFilter}`;
 
-  const { data: rows = [], refetch: refetchList, isLoading: listLoading } = useQuery<PayoutRow[]>({
-    queryKey: ['admin-payout-list', filter],
-    queryFn: () => fetch(listUrl).then(r => r.json()),
+  const { data: vendorRows = [], refetch: refetchVendorList, isLoading: vendorLoading } = useQuery<VendorPayoutRow[]>({
+    queryKey: ['admin-payout-list', 'vendor', statusFilter],
+    queryFn: () => fetch(vendorListUrl).then(r => r.json()),
+    refetchInterval: 30000,
+  });
+  const { data: riderRows = [], refetch: refetchRiderList, isLoading: riderLoading } = useQuery<RiderPayoutRow[]>({
+    queryKey: ['admin-payout-list', 'rider', statusFilter],
+    queryFn: () => fetch(riderListUrl).then(r => r.json()),
     refetchInterval: 30000,
   });
 
+  const rows: PayoutRow[] = useMemo(() => {
+    const vendor: PayoutRow[] = vendorRows.map(v => ({
+      type: 'vendor', id: v.id, partyId: v.vendorId, partyName: v.vendorName, partyPhone: v.vendorPhone,
+      totalAmount: v.totalAmount, paystackPortion: v.paystackPortion, cashPortion: v.cashPortion,
+      orderCount: v.orderCount, status: v.status, notes: v.notes, requestedAt: v.requestedAt, paidAt: v.paidAt,
+    }));
+    const rider: PayoutRow[] = riderRows.map(r => ({
+      type: 'rider', id: r.id, partyId: r.riderId, partyName: r.riderName, partyPhone: r.riderPhone,
+      totalAmount: r.totalAmount, paystackPortion: r.paystackPortion, cashPortion: r.cashPortion,
+      orderCount: r.orderCount, status: r.status, notes: r.notes, requestedAt: r.requestedAt, paidAt: r.paidAt,
+    }));
+    let combined: PayoutRow[];
+    if (typeFilter === 'vendor') combined = vendor;
+    else if (typeFilter === 'rider') combined = rider;
+    else combined = [...vendor, ...rider];
+    combined.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+    return combined;
+  }, [vendorRows, riderRows, typeFilter]);
+
+  // Combined pending stats across vendor + rider so admin sees one number.
+  const combinedPending = useMemo(() => {
+    const vendorPending = vendorRows.filter(v => v.status === 'pending');
+    const riderPending = riderRows.filter(r => r.status === 'pending');
+    const total = [...vendorPending, ...riderPending].reduce((s, r) => s + Number(r.totalAmount ?? 0), 0);
+    return { total, count: vendorPending.length + riderPending.length, vendorCount: vendorPending.length, riderCount: riderPending.length };
+  }, [vendorRows, riderRows]);
+
   const markPaid = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`${BASE}/api/payouts/admin/${id}/pay`, { method: 'PATCH' });
+    mutationFn: async (row: PayoutRow) => {
+      const path = row.type === 'vendor'
+        ? `/api/payouts/admin/${row.id}/pay`
+        : `/api/rider-payouts/admin/${row.id}/pay`;
+      const res = await fetch(`${BASE}${path}`, { method: 'PATCH' });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? 'Failed');
       return body;
@@ -140,6 +192,7 @@ export default function AdminPayouts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-payout-stats'] });
       queryClient.invalidateQueries({ queryKey: ['admin-payout-list'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-pending-payouts'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       toast({ title: 'Marked as Paid', description: 'Payout updated.' });
       setConfirmRow(null);
@@ -154,9 +207,12 @@ export default function AdminPayouts() {
   });
 
   const handleRefresh = () => {
-    refetchStats();
-    refetchList();
+    refetchVendorStats();
+    refetchVendorList();
+    refetchRiderList();
   };
+
+  const isLoading = vendorLoading || riderLoading;
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50/50">
@@ -166,9 +222,9 @@ export default function AdminPayouts() {
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-2xl font-bold font-display">Vendor Payout Requests</h1>
+              <h1 className="text-2xl font-bold font-display">Payout Requests</h1>
               <p className="text-muted-foreground text-sm mt-0.5">
-                Approve and mark vendor payouts as paid. Paystack & cash portions track separately.
+                Approve vendor + independent rider payouts. Paystack & cash portions track separately.
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -184,42 +240,64 @@ export default function AdminPayouts() {
               icon={Hourglass}
               tone="amber"
               label="Total Pending Payouts"
-              value={statsLoading ? '…' : CEDI(stats?.pending.total ?? 0)}
-              sub={`${stats?.pending.count ?? 0} request${(stats?.pending.count ?? 0) === 1 ? '' : 's'} awaiting payment`}
+              value={isLoading ? '…' : CEDI(combinedPending.total)}
+              sub={`${combinedPending.count} request${combinedPending.count === 1 ? '' : 's'} · ${combinedPending.vendorCount} vendor · ${combinedPending.riderCount} rider`}
             />
             <SummaryCard
               icon={CheckCircle2}
               tone="green"
-              label="Total Paid This Month"
-              value={statsLoading ? '…' : CEDI(stats?.paidThisMonth.total ?? 0)}
-              sub={`${stats?.paidThisMonth.count ?? 0} settled · ${CEDI(stats?.paidThisMonth.paystack ?? 0)} Paystack · ${CEDI(stats?.paidThisMonth.cash ?? 0)} Cash`}
+              label="Vendor Paid This Month"
+              value={vendorStats ? CEDI(vendorStats.paidThisMonth.total ?? 0) : '…'}
+              sub={vendorStats
+                ? `${vendorStats.paidThisMonth.count} settled · ${CEDI(vendorStats.paidThisMonth.paystack ?? 0)} Paystack · ${CEDI(vendorStats.paidThisMonth.cash ?? 0)} Cash`
+                : 'Loading'}
             />
           </div>
 
           {/* Filter + Table */}
           <Card className="rounded-2xl border-0 shadow-sm">
-            <CardHeader className="pb-3 flex-row items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Banknote size={18} className="text-green-600" />
-                Requests
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Filter size={14} className="text-muted-foreground" />
-                {(['all', 'pending', 'paid'] as StatusFilter[]).map(f => (
-                  <Button
-                    key={f}
-                    size="sm"
-                    variant={filter === f ? 'default' : 'outline'}
-                    onClick={() => setFilter(f)}
-                    className="rounded-xl capitalize h-8 text-xs"
-                  >
-                    {f}
-                  </Button>
-                ))}
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Banknote size={18} className="text-green-600" />
+                  Requests
+                </CardTitle>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Type filter */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Type</span>
+                    {(['all', 'vendor', 'rider'] as TypeFilter[]).map(f => (
+                      <Button
+                        key={f}
+                        size="sm"
+                        variant={typeFilter === f ? 'default' : 'outline'}
+                        onClick={() => setTypeFilter(f)}
+                        className="rounded-xl capitalize h-8 text-xs"
+                      >
+                        {f}
+                      </Button>
+                    ))}
+                  </div>
+                  {/* Status filter */}
+                  <div className="flex items-center gap-1.5">
+                    <Filter size={14} className="text-muted-foreground" />
+                    {(['all', 'pending', 'paid'] as StatusFilter[]).map(f => (
+                      <Button
+                        key={f}
+                        size="sm"
+                        variant={statusFilter === f ? 'default' : 'outline'}
+                        onClick={() => setStatusFilter(f)}
+                        className="rounded-xl capitalize h-8 text-xs"
+                      >
+                        {f}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {listLoading ? (
+              {isLoading ? (
                 <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
                   <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   Loading…
@@ -227,15 +305,16 @@ export default function AdminPayouts() {
               ) : rows.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
                   <Inbox size={36} />
-                  <p className="text-sm">No payout requests{filter !== 'all' ? ` with status "${filter}"` : ''}.</p>
+                  <p className="text-sm">No payout requests{statusFilter !== 'all' ? ` with status "${statusFilter}"` : ''}{typeFilter !== 'all' ? ` for ${typeFilter}s` : ''}.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-gray-50/70">
-                        <th className="text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Vendor</th>
-                        <th className="text-right font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Total Amount</th>
+                        <th className="text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Type</th>
+                        <th className="text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Recipient</th>
+                        <th className="text-right font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Total</th>
                         <th className="text-right font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Paystack</th>
                         <th className="text-right font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Cash</th>
                         <th className="text-left font-semibold text-xs uppercase tracking-wide text-muted-foreground px-4 py-3">Requested</th>
@@ -245,17 +324,18 @@ export default function AdminPayouts() {
                     </thead>
                     <tbody>
                       {rows.map(r => (
-                        <tr key={r.id} className="border-b border-border/60 hover:bg-gray-50/50 transition-colors">
+                        <tr key={`${r.type}-${r.id}`} className="border-b border-border/60 hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3"><TypePill type={r.type} /></td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                <Store size={14} className="text-primary" />
+                              <div className={`w-8 h-8 rounded-full ${r.type === 'vendor' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} flex items-center justify-center shrink-0`}>
+                                {r.type === 'vendor' ? <Store size={14} /> : <Bike size={14} />}
                               </div>
                               <div>
-                                <p className="font-semibold text-gray-900">{r.vendorName}</p>
+                                <p className="font-semibold text-gray-900">{r.partyName}</p>
                                 <p className="text-[11px] text-muted-foreground">
                                   {r.orderCount} order{r.orderCount === 1 ? '' : 's'}
-                                  {r.vendorPhone ? ` · ${r.vendorPhone}` : ''}
+                                  {r.partyPhone ? ` · ${r.partyPhone}` : ''}
                                 </p>
                               </div>
                             </div>
@@ -319,15 +399,15 @@ export default function AdminPayouts() {
               Mark Payout as Paid
             </DialogTitle>
             <DialogDescription>
-              Confirm you've transferred the funds to the vendor. This action can't be undone.
+              Confirm you've transferred the funds to the {confirmRow?.type ?? 'recipient'}. This action can't be undone.
             </DialogDescription>
           </DialogHeader>
 
           {confirmRow && (
             <div className="space-y-2 bg-gray-50 rounded-xl p-4 border border-border">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Vendor</span>
-                <span className="font-semibold text-gray-900">{confirmRow.vendorName}</span>
+                <span className="text-muted-foreground">{confirmRow.type === 'vendor' ? 'Vendor' : 'Rider'}</span>
+                <span className="font-semibold text-gray-900">{confirmRow.partyName}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Paystack portion</span>
@@ -355,7 +435,7 @@ export default function AdminPayouts() {
             </Button>
             <Button
               className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => confirmRow && markPaid.mutate(confirmRow.id)}
+              onClick={() => confirmRow && markPaid.mutate(confirmRow)}
               disabled={markPaid.isPending}
             >
               {markPaid.isPending ? 'Marking…' : 'Confirm Paid'}

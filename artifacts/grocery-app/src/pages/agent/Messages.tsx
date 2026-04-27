@@ -6,8 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Search, Send, MessageCircle, ChevronLeft, Phone, Users,
+  Search, Send, MessageCircle, ChevronLeft, Phone, Users, ShieldAlert,
 } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import EmojiPickerButton from '@/components/EmojiPickerButton';
@@ -84,9 +91,129 @@ function NewConvPicker({ agentId, onStart, onClose }: { agentId: number; onStart
   );
 }
 
+// ─── Escalate-to-Complaint Dialog ─────────────────────────────────────────────
+function EscalateDialog({
+  open, onOpenChange, conv, agentId, messages,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  conv: any;
+  agentId: number;
+  messages: any[];
+}) {
+  const { toast } = useToast();
+  const lastResidentMsg = [...(messages ?? [])].reverse().find((m: any) => m.senderRole === 'resident');
+  const defaultSubject = lastResidentMsg
+    ? lastResidentMsg.content.slice(0, 80).replace(/\n+/g, ' ')
+    : `Escalated chat with ${conv?.residentName ?? 'resident'}`;
+  const [subject, setSubject] = useState(defaultSubject);
+  const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
+  const [extra, setExtra] = useState('');
+
+  // Reset whenever a different conversation is opened
+  useEffect(() => {
+    setSubject(defaultSubject);
+    setPriority('normal');
+    setExtra('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conv?.residentId, open]);
+
+  const escalate = useMutation({
+    mutationFn: async () => {
+      // Build a transcript so the admin sees the full context inside the
+      // complaint description.
+      const transcript = (messages ?? []).map((m: any) => {
+        const who = m.senderRole === 'resident' ? (conv.residentName ?? 'Resident') : (m.senderName ?? 'Agent');
+        const ts = format(parseISO(m.createdAt), 'dd MMM yyyy, HH:mm');
+        return `[${ts}] ${who}: ${m.content}`;
+      }).join('\n');
+      const description = (extra ? `${extra}\n\n— Conversation transcript —\n` : '— Conversation transcript —\n') + transcript;
+
+      const res = await fetch(`${BASE}/api/complaints`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId,
+          residentId: conv.residentId,
+          residentName: conv.residentName,
+          residentPhone: conv.residentPhone,
+          subject,
+          description,
+          priority,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message ?? 'Failed to escalate');
+      return body;
+    },
+    onSuccess: () => {
+      toast({ title: 'Escalated to admin', description: 'Admin will see this in their Complaints tab.' });
+      onOpenChange(false);
+    },
+    onError: (err: any) => toast({ title: 'Escalation failed', description: err.message, variant: 'destructive' }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-2xl max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-600" /> Escalate to Complaints
+          </DialogTitle>
+          <DialogDescription>
+            Pushes this chat to the admin Complaints tab with the full transcript attached.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Subject</Label>
+            <Input value={subject} onChange={e => setSubject(e.target.value)} className="rounded-xl" />
+          </div>
+          <div>
+            <Label className="text-xs">Priority</Label>
+            <Select value={priority} onValueChange={v => setPriority(v as any)}>
+              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Note for admin (optional)</Label>
+            <textarea
+              value={extra}
+              onChange={e => setExtra(e.target.value)}
+              rows={3}
+              placeholder="Anything the transcript doesn't capture…"
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            The full chat transcript ({(messages ?? []).length} messages) will be appended to the complaint.
+          </p>
+        </div>
+        <DialogFooter className="flex-row gap-2">
+          <Button variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)} disabled={escalate.isPending}>Cancel</Button>
+          <Button
+            className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+            disabled={!subject.trim() || escalate.isPending}
+            onClick={() => escalate.mutate()}
+          >
+            {escalate.isPending ? 'Escalating…' : 'Escalate'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Chat Thread ──────────────────────────────────────────────────────────────
 function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: number; agentName: string; onBack: () => void }) {
   const [text, setText] = useState('');
+  const [escalateOpen, setEscalateOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -179,7 +306,23 @@ function ChatThread({ conv, agentId, agentName, onBack }: { conv: any; agentId: 
             <Phone size={12} /> Call
           </Button>
         </a>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setEscalateOpen(true)}
+          className="h-8 rounded-xl text-xs gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+          title="Escalate this conversation to the admin Complaints tab"
+        >
+          <ShieldAlert size={12} /> Escalate
+        </Button>
       </div>
+      <EscalateDialog
+        open={escalateOpen}
+        onOpenChange={setEscalateOpen}
+        conv={conv}
+        agentId={agentId}
+        messages={messages as any[]}
+      />
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 py-4 space-y-2.5 bg-gray-50/60">
