@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -175,12 +176,35 @@ function RoleBasedRouter() {
   return <Route component={NotFound} />;
 }
 
+/**
+ * Resets scroll on every path change.
+ *
+ * Admin pages put their scroll on an inner `flex-1 overflow-auto` div, not
+ * on the window — so a plain `window.scrollTo(0, 0)` isn't enough. We
+ * walk all scroll containers and reset them. Cheap (only fires on
+ * navigation) and covers every layout consistently.
+ */
+function ScrollToTopOnNavigate() {
+  const [path] = useLocation();
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Window itself
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    // Any inner scroll container with vertical overflow set in inline/computed style.
+    document.querySelectorAll<HTMLElement>(
+      'main, [data-scroll-container], .overflow-auto, .overflow-y-auto'
+    ).forEach(el => { el.scrollTop = 0; });
+  }, [path]);
+  return null;
+}
+
 function MainApp() {
   const { user, role } = useAuth();
   const isAuthRoute = ['/login', '/signup'].includes(useLocation()[0]);
 
   return (
     <>
+      <ScrollToTopOnNavigate />
       <Switch>
         <Route path="/login" component={Login} />
         <Route path="/signup" component={Signup} />
