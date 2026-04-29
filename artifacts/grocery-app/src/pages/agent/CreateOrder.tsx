@@ -134,7 +134,7 @@ export default function AgentCreateOrder() {
 
   return (
     <AgentLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Create Order</h1>
           <p className="text-gray-500 mt-1">Log an order on behalf of a resident after their call.</p>

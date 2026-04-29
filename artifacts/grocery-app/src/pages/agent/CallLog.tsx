@@ -554,7 +554,7 @@ export default function AgentCallLog() {
 
   return (
     <AgentLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
