@@ -377,6 +377,28 @@ router.put("/:id/rider-response", async (req, res) => {
   }
 });
 
+router.put("/:id/assign-vendor", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { vendorId } = req.body;
+    if (!vendorId) {
+      res.status(400).json({ error: "bad_request", message: "vendorId is required" });
+      return;
+    }
+    const [order] = await db.update(ordersTable)
+      .set({ vendorId: parseInt(vendorId), updatedAt: new Date() })
+      .where(eq(ordersTable.id, id))
+      .returning();
+    if (!order) {
+      res.status(404).json({ error: "not_found", message: "Order not found" });
+      return;
+    }
+    res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
 router.put("/:id/assign-delivery-partner", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

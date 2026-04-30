@@ -21,7 +21,7 @@ import {
 import {
   Activity, ShoppingCart, Users, DollarSign, RefreshCcw,
   CheckCircle, Package, Eye, ChevronLeft, ChevronRight,
-  Calendar, Clock3, Boxes, Zap, Building2, Truck,
+  Calendar, Clock3, Boxes, Zap, Building2, Truck, Store, AlertTriangle,
 } from 'lucide-react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +30,7 @@ import { BulkGroupDetailModal } from '@/components/ui/BulkGroupDetailModal';
 import { cn } from '@/lib/utils';
 
 interface DeliveryPartner { id: number; name: string; commissionPercent: number; isActive: boolean; }
+interface Vendor { id: number; name: string; phone: string; isActive: boolean; categories: string[]; }
 
 type LiveFilter  = 'all' | 'pending' | 'in_progress';
 type DatePreset  = 'all' | 'today' | 'week' | 'custom';
@@ -128,6 +129,12 @@ export default function AdminDashboard() {
   });
   const activePartners = deliveryPartners.filter(p => p.isActive);
 
+  const { data: vendors = [] } = useQuery<Vendor[]>({
+    queryKey: ['/api/vendors'],
+    queryFn: () => fetch('/api/vendors').then(r => r.json()),
+  });
+  const activeVendors = vendors.filter(v => v.isActive);
+
   /* ── Mutations ────────────────────────────────────── */
   const updateStatusMutation  = useUpdateOrderStatus();
   const assignRiderMutation   = useAssignRider();
@@ -142,6 +149,19 @@ export default function AdminDashboard() {
     onSuccess: (_data, { orderId }) => {
       queryClient.invalidateQueries();
       toast({ title: 'Delivery Company Assigned', description: `Delivery partner assigned to order #${orderId}` });
+    },
+  });
+
+  const assignVendorMutation = useMutation({
+    mutationFn: ({ orderId, vendorId }: { orderId: number; vendorId: number }) =>
+      fetch(`/api/orders/${orderId}/assign-vendor`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorId }),
+      }).then(r => r.json()),
+    onSuccess: (_data, { orderId }) => {
+      queryClient.invalidateQueries();
+      toast({ title: 'Vendor Assigned', description: `Vendor assigned to order #${orderId}` });
     },
   });
 
@@ -597,12 +617,14 @@ export default function AdminDashboard() {
                   orders={liveOrders}
                   riders={riders}
                   activePartners={activePartners}
+                  activeVendors={activeVendors}
                   nextStatus={nextStatus}
                   nextStatusLabel={nextStatusLabel}
                   updateStatusMutation={updateStatusMutation}
                   updateBulkStatusMutation={updateBulkStatusMutation}
                   assignRiderMutation={assignRiderMutation}
                   assignDeliveryPartnerMutation={assignDeliveryPartnerMutation}
+                  assignVendorMutation={assignVendorMutation}
                   onSelectOrder={setSelectedOrder}
                   onSelectBulkGroup={setSelectedBulkGroup}
                   onStatusUpdate={handleStatusUpdate}
@@ -868,9 +890,9 @@ const SINGLE_NEXT_LABEL: Record<string, string> = {
 
 /* ── Live Orders Table ─────────────────────────────── */
 function LiveOrdersTable({
-  orders, riders, activePartners, nextStatus, nextStatusLabel,
+  orders, riders, activePartners, activeVendors, nextStatus, nextStatusLabel,
   updateStatusMutation, updateBulkStatusMutation,
-  assignRiderMutation, assignDeliveryPartnerMutation,
+  assignRiderMutation, assignDeliveryPartnerMutation, assignVendorMutation,
   onSelectOrder, onSelectBulkGroup, onStatusUpdate, onAssignRider,
   onBulkAssignRider, onBulkStatusUpdate,
 }: any) {
@@ -886,6 +908,7 @@ function LiveOrdersTable({
             <TableHead>Items / Summary</TableHead>
             <TableHead>Total</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Vendor</TableHead>
             <TableHead>Rider / Delivery Co.</TableHead>
             <TableHead>Action</TableHead>
             <TableHead>Created</TableHead>
@@ -950,6 +973,9 @@ function LiveOrdersTable({
                         </span>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="min-w-[140px]">
+                    <span className="text-xs text-muted-foreground">—</span>
                   </TableCell>
                   <TableCell className="min-w-[160px]">
                     <Select
@@ -1046,6 +1072,42 @@ function LiveOrdersTable({
                       <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap">
                         ✓ Rider Accepted
                       </span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="min-w-[140px]">
+                  <div className="space-y-1">
+                    <Select
+                      value={entry.vendorId?.toString() ?? ''}
+                      onValueChange={(val) =>
+                        assignVendorMutation.mutate({ orderId: entry.id, vendorId: parseInt(val) })
+                      }
+                    >
+                      <SelectTrigger className={cn(
+                        'h-8 text-xs rounded-lg',
+                        !entry.vendorId
+                          ? 'border-orange-300 bg-orange-50 text-orange-700 animate-pulse'
+                          : 'border-orange-200 bg-orange-50'
+                      )}>
+                        <SelectValue placeholder={!entry.vendorId ? '⚠ Assign vendor' : 'Change vendor'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeVendors.map((v: any) => (
+                          <SelectItem key={v.id} value={v.id.toString()}>
+                            <span className="flex items-center gap-1.5">
+                              <Store size={10} className="text-orange-500" />
+                              {v.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {entry.vendorName ? (
+                      <p className="text-[10px] text-orange-600 font-medium truncate">✓ {entry.vendorName}</p>
+                    ) : (
+                      <p className="text-[10px] text-orange-500 font-medium flex items-center gap-0.5">
+                        <AlertTriangle size={9} /> No vendor
+                      </p>
                     )}
                   </div>
                 </TableCell>
