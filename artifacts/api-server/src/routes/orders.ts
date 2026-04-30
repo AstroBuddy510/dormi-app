@@ -388,7 +388,12 @@ router.put("/:id/assign-vendor", async (req, res) => {
       return;
     }
     const [order] = await db.update(ordersTable)
-      .set({ vendorId: parseInt(vendorId), updatedAt: new Date() })
+      .set({ 
+        vendorId: parseInt(vendorId), 
+        status: 'pending', // Reset to pending so the new vendor sees it
+        declineReason: null, // Clear decline reason
+        updatedAt: new Date() 
+      })
       .where(eq(ordersTable.id, id))
       .returning();
     if (!order) {
