@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { AdminSidebar } from '@/components/layout/AdminSidebar';
+import { useAuth } from '@/store';
 import {
   useGetAdminStats,
   useListOrders,
@@ -39,6 +40,7 @@ type OrderTypeFilter = 'all' | 'single' | 'bulk' | 'third_party';
 const HISTORY_PAGE_SIZE = 10;
 
 export default function AdminDashboard() {
+  const { token } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -156,7 +158,10 @@ export default function AdminDashboard() {
     mutationFn: ({ orderId, vendorId }: { orderId: number; vendorId: number }) =>
       fetch(`/api/orders/${orderId}/assign-vendor`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ vendorId }),
       }).then(r => r.json()),
     onSuccess: (_data, { orderId }) => {
@@ -1113,10 +1118,13 @@ function LiveOrdersTable({
                       </SelectContent>
                     </Select>
                     {entry.vendorName ? (
-                      <p className="text-[10px] text-orange-600 font-medium truncate">✓ {entry.vendorName}</p>
+                      <div className="inline-flex items-center gap-1.5 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg px-2 py-1 shadow-sm animate-in fade-in zoom-in duration-300">
+                        <Store size={11} />
+                        <p className="text-[10px] font-bold truncate">{entry.vendorName}</p>
+                      </div>
                     ) : (
-                      <p className="text-[10px] text-orange-500 font-medium flex items-center gap-0.5">
-                        <AlertTriangle size={9} /> No vendor
+                      <p className="text-[10px] text-orange-500 font-medium flex items-center gap-0.5 animate-pulse">
+                        <AlertTriangle size={9} /> Pending Assignment
                       </p>
                     )}
                   </div>

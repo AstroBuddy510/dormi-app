@@ -855,7 +855,7 @@ function PayoutBreakdown({ vendorId }: { vendorId: number }) {
 type Tab = 'overview' | 'orders' | 'chat';
 
 export default function VendorDashboard() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
@@ -929,7 +929,10 @@ export default function VendorDashboard() {
     mutationFn: ({ orderId, payload }: { orderId: number; payload: any }) =>
       fetch(`${BASE}/api/orders/${orderId}/vendor-respond`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       }).then(async r => {
         if (!r.ok) {
