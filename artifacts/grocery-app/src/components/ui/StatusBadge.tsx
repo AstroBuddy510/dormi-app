@@ -3,11 +3,12 @@ import { cn } from '@/lib/utils';
 
 const STATUS_LABEL: Record<string, string> = {
   pending:    'Pending',
-  accepted:   'Order Received',
-  ready:      'Being Prepared',
+  accepted:   'Accepted - Preparing',
+  ready:      'Ready for Pickup',
   in_transit: 'On the Way',
   delivered:  'Delivered',
   cancelled:  'Cancelled',
+  vendor_declined: 'Finding New Vendor',
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -17,10 +18,11 @@ const STATUS_COLOR: Record<string, string> = {
   in_transit: 'bg-purple-50 text-purple-700 border-purple-200',
   delivered:  'bg-green-50 text-green-700 border-green-200',
   cancelled:  'bg-red-50 text-red-600 border-red-200',
+  vendor_declined: 'bg-orange-50 text-orange-700 border-orange-200',
 };
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const label = STATUS_LABEL[status] ?? status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+export function StatusBadge({ status, className, label: customLabel }: { status: string; className?: string; label?: string }) {
+  const label = customLabel ?? (STATUS_LABEL[status] ?? status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()));
   const color = STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-700 border-gray-200';
   return (
     <Badge variant="outline" className={cn('font-medium px-2.5 py-0.5', color, className)}>

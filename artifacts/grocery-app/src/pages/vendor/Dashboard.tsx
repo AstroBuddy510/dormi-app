@@ -102,21 +102,30 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-primary" />
           <span className="text-sm font-bold text-gray-800">Order #{order.id}</span>
-        </div>
-        <StatusBadge status={order.status} />
-      </div>
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
+      <CardHeader className="p-4 pb-3">
+        <div className="flex justify-between items-start">
           <div>
             <p className="font-semibold text-gray-900">{order.residentName}</p>
             <p className="text-xs text-muted-foreground">{order.residentAddress}</p>
           </div>
-          <p className="text-xs text-muted-foreground">{format(new Date(order.createdAt), 'dd MMM · HH:mm')}</p>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="text-[10px] font-bold text-gray-400 uppercase">#{order.id}</span>
+            <StatusBadge status={order.status} label={order.status === 'vendor_declined' ? 'Declined' : undefined} />
+          </div>
         </div>
-
+        {order.status === 'vendor_declined' && order.declineReason && (
+          <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3">
+            <p className="text-[10px] font-bold text-red-800 uppercase tracking-wide mb-1">Decline Reason</p>
+            <p className="text-sm text-red-700 font-medium italic">"{order.declineReason}"</p>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
         <div className="space-y-1.5 border-t border-border/50 pt-3">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Items to Prepare</p>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+              {order.status === 'pending' ? 'Review & Accept' : order.status === 'vendor_declined' ? 'Declined' : 'Order Items'}
+            </p>
             {order.status === 'pending' && (
               <p className="text-[10px] text-muted-foreground">{checkedCount} / {totalCount} available</p>
             )}
@@ -158,42 +167,26 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
       </CardContent>
 
       {order.status === 'pending' && !showDecline && !showPartial && (
-        <CardFooter className="bg-gray-50/80 p-4 border-t border-border flex flex-col gap-2">
-          {allChecked ? (
-            <Button
-              className="w-full h-11 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold"
-              onClick={() => onRespond(order.id, { action: 'accept' })}
-              disabled={isPending}
-            >
-              <CheckCircle className="mr-2 h-4 w-4" /> Accept All
-            </Button>
-          ) : noneChecked ? (
-            <Button
-              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold"
-              onClick={() => setShowDecline(true)}
-              disabled={isPending}
-            >
-              <XCircle className="mr-2 h-4 w-4" /> Decline Entire Order
-            </Button>
-          ) : (
-            <Button
-              className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold"
-              onClick={() => setShowPartial(true)}
-              disabled={isPending}
-            >
-              <CheckCircle className="mr-2 h-4 w-4" /> Accept {checkedCount} Items Only
-            </Button>
-          )}
-          {allChecked && (
-            <Button
-              variant="ghost"
-              className="w-full h-9 text-xs text-muted-foreground hover:text-red-600"
-              onClick={() => setShowDecline(true)}
-              disabled={isPending}
-            >
-              Decline Order...
-            </Button>
-          )}
+        <CardFooter className="p-4 bg-gray-50 flex gap-2 border-t border-border">
+          <Button
+            variant="outline"
+            className="flex-1 rounded-xl text-red-600 border-red-100 hover:bg-red-50 font-bold"
+            onClick={() => setShowDecline(true)}
+            disabled={isPending}
+          >
+            Decline
+          </Button>
+          <Button
+            className="flex-[2] rounded-xl bg-primary hover:bg-primary/90 font-bold shadow-lg shadow-primary/20"
+            onClick={() => {
+              if (noneChecked) return;
+              if (!allChecked) setShowPartial(true);
+              else onRespond(order.id, { action: 'accept' });
+            }}
+            disabled={isPending || noneChecked}
+          >
+            Accept {allChecked ? 'Full Order' : `Partial (${checkedCount})`}
+          </Button>
         </CardFooter>
       )}
 
@@ -243,14 +236,20 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
         </CardFooter>
       )}
 
+      {order.status === 'vendor_declined' && (
+        <CardFooter className="p-4 bg-red-50/30 flex gap-2 border-t border-border">
+          <p className="text-xs text-red-500 font-medium italic">This order was declined and will be reassigned by Admin.</p>
+        </CardFooter>
+      )}
+
       {order.status === 'accepted' && (
-        <CardFooter className="bg-gray-50/80 p-4 border-t border-border">
+        <CardFooter className="p-4 bg-blue-50/50 flex gap-2 border-t border-border">
           <Button
-            className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold"
-            onClick={() => onUpdate(order.id, OrderStatus.ready)}
+            className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-200"
+            onClick={() => onUpdate(order.id, 'ready')}
             disabled={isPending}
           >
-            <PackageCheck className="mr-2 h-4 w-4" /> Mark Ready for Pickup
+            Mark as Ready
           </Button>
         </CardFooter>
       )}
@@ -959,8 +958,13 @@ export default function VendorDashboard() {
     respondMutation.mutate({ orderId, payload });
   };
 
-  const activeOrders = appOrders.filter(o => ['pending', 'accepted', 'ready'].includes(o.status));
-  const totalActive = activeOrders.length + callOrders.filter(o => ['pending', 'accepted', 'ready'].includes(o.status)).length;
+  const activeAppOrders = appOrders.filter(o => ['pending', 'accepted', 'ready'].includes(o.status));
+  const historyAppOrders = appOrders.filter(o => ['delivered', 'cancelled', 'vendor_declined'].includes(o.status));
+  
+  const activeCallOrders = callOrders.filter(o => ['pending', 'accepted', 'ready'].includes(o.status));
+  const historyCallOrders = callOrders.filter(o => ['delivered', 'cancelled', 'vendor_declined'].includes(o.status));
+
+  const totalActive = activeAppOrders.length + activeCallOrders.length;
 
   const tabs: { id: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -1093,10 +1097,24 @@ export default function VendorDashboard() {
                   <p className="text-muted-foreground font-medium">No app orders</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {appOrders.map(order => (
-                    <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
-                  ))}
+                <div className="space-y-8">
+                  {activeAppOrders.length > 0 && (
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Active Orders</p>
+                      {activeAppOrders.map(order => (
+                        <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
+                      ))}
+                    </div>
+                  )}
+
+                  {historyAppOrders.length > 0 && (
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">History / Declined</p>
+                      {historyAppOrders.map(order => (
+                        <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             ) : (
@@ -1108,10 +1126,24 @@ export default function VendorDashboard() {
                   <p className="text-muted-foreground font-medium">No call orders</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {callOrders.map(order => (
-                    <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
-                  ))}
+                <div className="space-y-8">
+                  {activeCallOrders.length > 0 && (
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Active Orders</p>
+                      {activeCallOrders.map(order => (
+                        <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
+                      ))}
+                    </div>
+                  )}
+
+                  {historyCallOrders.length > 0 && (
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">History / Declined</p>
+                      {historyCallOrders.map(order => (
+                        <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             )}

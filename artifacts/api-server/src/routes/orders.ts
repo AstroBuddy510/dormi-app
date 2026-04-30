@@ -116,7 +116,10 @@ router.get("/", async (req, res) => {
   const conditions: any[] = [];
   if (status) conditions.push(eq(ordersTable.status, status as string));
   if (residentId) conditions.push(eq(ordersTable.residentId, parseInt(residentId as string)));
-  if (vendorId) conditions.push(eq(ordersTable.vendorId, parseInt(vendorId as string)));
+  if (vendorId) {
+    const vId = parseInt(vendorId as string);
+    conditions.push(or(eq(ordersTable.vendorId, vId), eq(ordersTable.declinedByVendorId, vId)));
+  }
   if (riderId) conditions.push(eq(ordersTable.riderId, parseInt(riderId as string)));
   if (isSubscription !== undefined) conditions.push(eq(ordersTable.isSubscription, isSubscription === "true"));
   if (callOnly !== undefined) conditions.push(eq(ordersTable.callOnly, callOnly === "true"));
@@ -432,6 +435,7 @@ router.put("/:id/vendor-respond", async (req, res) => {
       const [updated] = await db.update(ordersTable)
         .set({ 
           status: 'vendor_declined', 
+          declinedByVendorId: order.vendorId, // Store who declined it
           vendorId: null, // Unassign so Admin sees it clearly
           declineReason: declineReason ?? null,
           updatedAt: new Date() 

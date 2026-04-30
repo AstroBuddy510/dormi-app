@@ -55,6 +55,7 @@ export const ordersTable = pgTable("orders", {
   // Vendor review: tracks partial-fulfillment splits and decline reasons
   splitFromOrderId: integer("split_from_order_id"),
   declineReason: text("decline_reason"),
+  declinedByVendorId: integer("declined_by_vendor_id").references(() => vendorsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

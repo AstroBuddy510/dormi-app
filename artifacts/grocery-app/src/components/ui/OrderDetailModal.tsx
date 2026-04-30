@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DeliveryTimer } from '@/components/ui/DeliveryTimer';
 import { format } from 'date-fns';
@@ -66,6 +67,16 @@ function OrderProgressTracker({ status }: { status: string }) {
           <div>
             <p className="font-semibold text-red-700 text-sm">Order Cancelled</p>
             <p className="text-xs text-red-400">This order was cancelled.</p>
+          </div>
+        </div>
+      ) : status === 'vendor_declined' ? (
+        <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+          <div className="relative">
+            <RefreshCw size={18} className="text-orange-500 animate-spin" />
+          </div>
+          <div>
+            <p className="font-semibold text-orange-700 text-sm">Finding New Vendor</p>
+            <p className="text-[10px] text-orange-600 leading-tight">The initial vendor is busy. We are reassigning your order to ensure fast delivery.</p>
           </div>
         </div>
       ) : (
@@ -288,6 +299,16 @@ export function OrderDetailModal({ order, open, onClose }: OrderDetailModalProps
 
           {/* Progress tracker */}
           <OrderProgressTracker status={order.status} />
+
+          {order.status === 'vendor_declined' && order.declineReason && (
+            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex items-start gap-3">
+              <AlertTriangle size={16} className="text-orange-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] font-bold text-orange-800 uppercase tracking-wide mb-0.5">Note from Vendor</p>
+                <p className="text-sm text-orange-700 font-medium italic">"{order.declineReason}"</p>
+              </div>
+            </div>
+          )}
 
           {/* Resident Info */}
           <Section title="Customer" icon={User}>

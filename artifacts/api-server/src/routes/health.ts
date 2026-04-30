@@ -15,7 +15,8 @@ router.get("/migrate", async (_req, res) => {
     await db.execute(sql`
       ALTER TABLE orders 
       ADD COLUMN IF NOT EXISTS split_from_order_id INTEGER,
-      ADD COLUMN IF NOT EXISTS decline_reason TEXT;
+      ADD COLUMN IF NOT EXISTS decline_reason TEXT,
+      ADD COLUMN IF NOT EXISTS declined_by_vendor_id INTEGER REFERENCES vendors(id);
     `);
     res.json({ status: "ok", message: "Migration applied successfully" });
   } catch (error: any) {
