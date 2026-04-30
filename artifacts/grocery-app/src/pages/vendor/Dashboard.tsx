@@ -74,11 +74,13 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
   const [showDecline, setShowDecline] = useState(false);
   const [showPartial, setShowPartial] = useState(false);
 
+  const itemsList = Array.isArray(order.items) ? order.items : [];
+
   // Initialize all items as checked when pending
   useEffect(() => {
     if (order.status === 'pending') {
       const initial: Record<number, boolean> = {};
-      order.items.forEach((_: any, idx: number) => { initial[idx] = true; });
+      itemsList.forEach((_: any, idx: number) => { initial[idx] = true; });
       setCheckedItems(initial);
     }
   }, [order.status, order.items]);
@@ -89,8 +91,8 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
   };
 
   const checkedCount = Object.values(checkedItems).filter(Boolean).length;
-  const totalCount = order.items.length;
-  const allChecked = checkedCount === totalCount;
+  const totalCount = itemsList.length;
+  const allChecked = totalCount > 0 && checkedCount === totalCount;
   const noneChecked = checkedCount === 0;
 
   return (
@@ -118,7 +120,7 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
               <p className="text-[10px] text-muted-foreground">{checkedCount} / {totalCount} available</p>
             )}
           </div>
-          {order.items.map((item: any, idx: number) => (
+          {itemsList.map((item: any, idx: number) => (
             <div 
               key={idx} 
               onClick={() => toggleItem(idx)}
@@ -131,7 +133,7 @@ function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUp
               <div className="flex items-center gap-2">
                 {order.status === 'pending' && (
                   <Checkbox 
-                    checked={checkedItems[idx]} 
+                    checked={checkedItems[idx] || false} 
                     onCheckedChange={() => toggleItem(idx)} 
                     className="h-4 w-4 rounded-sm"
                   />
