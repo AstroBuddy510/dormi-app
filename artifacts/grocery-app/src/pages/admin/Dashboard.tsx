@@ -21,7 +21,7 @@ import {
 import {
   Activity, ShoppingCart, Users, DollarSign, RefreshCcw,
   CheckCircle, Package, Eye, ChevronLeft, ChevronRight,
-  Calendar, Clock3, Boxes,
+  Calendar, Clock3, Boxes, Zap, Building2, Truck,
 } from 'lucide-react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +33,7 @@ interface DeliveryPartner { id: number; name: string; commissionPercent: number;
 
 type LiveFilter  = 'all' | 'pending' | 'in_progress';
 type DatePreset  = 'all' | 'today' | 'week' | 'custom';
+type OrderTypeFilter = 'all' | 'single' | 'bulk' | 'third_party';
 
 const HISTORY_PAGE_SIZE = 10;
 
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
   const [fromDate, setFromDate]     = useState('');
   const [toDate, setToDate]         = useState('');
   const [historyPage, setHistoryPage] = useState(1);
+  const [orderTypeFilter, setOrderTypeFilter] = useState<OrderTypeFilter>('all');
 
   /* ── Data ─────────────────────────────────────────── */
   const { data: stats, refetch: refetchStats } = useGetAdminStats({
@@ -250,6 +252,14 @@ export default function AdminDashboard() {
     const combined: any[] = [...deliveredSingle, ...deliveredBulk];
     return combined
       .filter((o) => {
+        /* Order type filter */
+        if (orderTypeFilter !== 'all') {
+          const isBulk = !!o.isBulkGroup;
+          if (orderTypeFilter === 'bulk' && !isBulk) return false;
+          if (orderTypeFilter === 'single' && (isBulk || o.orderType === 'third_party')) return false;
+          if (orderTypeFilter === 'third_party' && (isBulk || o.orderType !== 'third_party')) return false;
+        }
+        /* Date filter */
         if (datePreset === 'all') return true;
         /* Use deliveredAt for individual orders, updatedAt for bulk groups, fall back to createdAt */
         const rawDate = o.deliveredAt ?? o.updatedAt ?? o.createdAt;
@@ -268,7 +278,7 @@ export default function AdminDashboard() {
         const bDate = b.deliveredAt ?? b.updatedAt ?? b.createdAt;
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
-  }, [deliveredSingle, deliveredBulk, datePreset, fromDate, toDate]);
+  }, [deliveredSingle, deliveredBulk, datePreset, fromDate, toDate, orderTypeFilter]);
 
   const historyTotalPages = Math.max(1, Math.ceil(deliveredFiltered.length / HISTORY_PAGE_SIZE));
   const safePage          = Math.min(historyPage, historyTotalPages);
@@ -618,45 +628,69 @@ export default function AdminDashboard() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {([
-                { key: 'all',   label: 'All Time' },
-                { key: 'today', label: 'Today' },
-                { key: 'week',  label: 'This Week' },
-              ] as const).map(({ key, label }) => (
-                <button key={key} onClick={() => { setDatePreset(key); setHistoryPage(1); }}
+            <div className="flex flex-col gap-2">
+              {/* Date filter row */}
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  { key: 'all',   label: 'All Time' },
+                  { key: 'today', label: 'Today' },
+                  { key: 'week',  label: 'This Week' },
+                ] as const).map(({ key, label }) => (
+                  <button key={key} onClick={() => { setDatePreset(key); setHistoryPage(1); }}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
+                      datePreset === key
+                        ? 'bg-green-600 text-white border-green-600 shadow-sm'
+                        : 'bg-white border-border text-muted-foreground hover:text-foreground',
+                    )}>
+                    <Clock3 size={11} />
+                    {label}
+                  </button>
+                ))}
+                <button onClick={() => { setDatePreset('custom'); setHistoryPage(1); }}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
-                    datePreset === key
+                    datePreset === 'custom'
                       ? 'bg-green-600 text-white border-green-600 shadow-sm'
                       : 'bg-white border-border text-muted-foreground hover:text-foreground',
                   )}>
-                  <Clock3 size={11} />
-                  {label}
+                  <Calendar size={11} /> Custom range
                 </button>
-              ))}
-              <button onClick={() => { setDatePreset('custom'); setHistoryPage(1); }}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
-                  datePreset === 'custom'
-                    ? 'bg-green-600 text-white border-green-600 shadow-sm'
-                    : 'bg-white border-border text-muted-foreground hover:text-foreground',
-                )}>
-                <Calendar size={11} /> Custom range
-              </button>
-              {datePreset === 'custom' && (
-                <div className="flex items-center gap-2">
-                  <input type="date" value={fromDate}
-                    onChange={(e) => { setFromDate(e.target.value); setHistoryPage(1); }}
-                    className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
-                  />
-                  <span className="text-xs text-muted-foreground">→</span>
-                  <input type="date" value={toDate} min={fromDate}
-                    onChange={(e) => { setToDate(e.target.value); setHistoryPage(1); }}
-                    className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
-                  />
-                </div>
-              )}
+                {datePreset === 'custom' && (
+                  <div className="flex items-center gap-2">
+                    <input type="date" value={fromDate}
+                      onChange={(e) => { setFromDate(e.target.value); setHistoryPage(1); }}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                    />
+                    <span className="text-xs text-muted-foreground">→</span>
+                    <input type="date" value={toDate} min={fromDate}
+                      onChange={(e) => { setToDate(e.target.value); setHistoryPage(1); }}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                    />
+                  </div>
+                )}
+              </div>
+              {/* Order type filter row */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mr-1">Type:</span>
+                {([
+                  { key: 'all',         label: 'All Types',    icon: Boxes },
+                  { key: 'single',      label: 'Single',       icon: Zap },
+                  { key: 'bulk',        label: 'Bulk',         icon: Building2 },
+                  { key: 'third_party', label: 'Third-Party',  icon: Truck },
+                ] as const).map(({ key, label, icon: Icon }) => (
+                  <button key={key} onClick={() => { setOrderTypeFilter(key as OrderTypeFilter); setHistoryPage(1); }}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
+                      orderTypeFilter === key
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white border-border text-muted-foreground hover:text-foreground',
+                    )}>
+                    <Icon size={11} />
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
