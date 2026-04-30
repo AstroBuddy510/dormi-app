@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import EmojiPickerButton from '@/components/EmojiPickerButton';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
