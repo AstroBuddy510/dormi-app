@@ -12,9 +12,10 @@ import {
   Store, CheckCircle, PackageCheck, BarChart3, MessageCircle,
   ShoppingBag, TrendingUp, Clock, Send, Star, Package,
   ChevronRight, Inbox, LogOut, Wallet, Calendar, Percent,
-  Banknote, CreditCard, HandCoins, Hourglass,
+  Banknote, CreditCard, HandCoins, Hourglass, XCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 import EmojiPickerButton from '@/components/EmojiPickerButton';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -67,7 +68,31 @@ function StatCard({ icon: Icon, label, value, sub, color = 'green' }: {
   );
 }
 
-function OrderCard({ order, onUpdate, isPending }: { order: any; onUpdate: (id: number, status: OrderStatus) => void; isPending: boolean }) {
+function OrderCard({ order, onUpdate, onRespond, isPending }: { order: any; onUpdate: (id: number, status: OrderStatus) => void; onRespond: (id: number, payload: any) => void; isPending: boolean }) {
+  const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
+  const [declineReason, setDeclineReason] = useState('');
+  const [showDecline, setShowDecline] = useState(false);
+  const [showPartial, setShowPartial] = useState(false);
+
+  // Initialize all items as checked when pending
+  useEffect(() => {
+    if (order.status === 'pending') {
+      const initial: Record<number, boolean> = {};
+      order.items.forEach((_: any, idx: number) => { initial[idx] = true; });
+      setCheckedItems(initial);
+    }
+  }, [order.status, order.items]);
+
+  const toggleItem = (idx: number) => {
+    if (order.status !== 'pending') return;
+    setCheckedItems(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const checkedCount = Object.values(checkedItems).filter(Boolean).length;
+  const totalCount = order.items.length;
+  const allChecked = checkedCount === totalCount;
+  const noneChecked = checkedCount === 0;
+
   return (
     <Card className="rounded-2xl shadow-sm border border-border/50 overflow-hidden">
       <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 px-4 py-3 border-b border-border flex justify-between items-center">
@@ -87,11 +112,41 @@ function OrderCard({ order, onUpdate, isPending }: { order: any; onUpdate: (id: 
         </div>
 
         <div className="space-y-1.5 border-t border-border/50 pt-3">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">Items to Prepare</p>
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Items to Prepare</p>
+            {order.status === 'pending' && (
+              <p className="text-[10px] text-muted-foreground">{checkedCount} / {totalCount} available</p>
+            )}
+          </div>
           {order.items.map((item: any, idx: number) => (
-            <div key={idx} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-xl">
-              <span className="font-medium text-sm text-gray-800">{item.itemName}</span>
-              <span className="bg-white border border-border px-2 py-0.5 rounded-lg text-xs font-bold text-gray-700 shadow-sm">
+            <div 
+              key={idx} 
+              onClick={() => toggleItem(idx)}
+              className={cn(
+                "flex justify-between items-center px-3 py-2 rounded-xl transition-colors",
+                order.status === 'pending' ? "cursor-pointer select-none" : "",
+                order.status === 'pending' && checkedItems[idx] ? "bg-primary/5 border border-primary/20" : "bg-gray-50 border border-transparent"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                {order.status === 'pending' && (
+                  <Checkbox 
+                    checked={checkedItems[idx]} 
+                    onCheckedChange={() => toggleItem(idx)} 
+                    className="h-4 w-4 rounded-sm"
+                  />
+                )}
+                <span className={cn(
+                  "font-medium text-sm transition-colors",
+                  order.status === 'pending' && !checkedItems[idx] ? "text-gray-400 line-through" : "text-gray-800"
+                )}>
+                  {item.itemName}
+                </span>
+              </div>
+              <span className={cn(
+                "bg-white border border-border px-2 py-0.5 rounded-lg text-xs font-bold shadow-sm transition-colors",
+                order.status === 'pending' && !checkedItems[idx] ? "text-gray-400" : "text-gray-700"
+              )}>
                 {item.quantity} {item.unit || 'x'}
               </span>
             </div>
@@ -99,17 +154,92 @@ function OrderCard({ order, onUpdate, isPending }: { order: any; onUpdate: (id: 
         </div>
       </CardContent>
 
-      {order.status === 'pending' && (
-        <CardFooter className="bg-gray-50/80 p-4 border-t border-border">
-          <Button
-            className="w-full h-11 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold"
-            onClick={() => onUpdate(order.id, OrderStatus.accepted)}
-            disabled={isPending}
-          >
-            <CheckCircle className="mr-2 h-4 w-4" /> Accept Order
-          </Button>
+      {order.status === 'pending' && !showDecline && !showPartial && (
+        <CardFooter className="bg-gray-50/80 p-4 border-t border-border flex flex-col gap-2">
+          {allChecked ? (
+            <Button
+              className="w-full h-11 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold"
+              onClick={() => onRespond(order.id, { action: 'accept' })}
+              disabled={isPending}
+            >
+              <CheckCircle className="mr-2 h-4 w-4" /> Accept All
+            </Button>
+          ) : noneChecked ? (
+            <Button
+              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold"
+              onClick={() => setShowDecline(true)}
+              disabled={isPending}
+            >
+              <XCircle className="mr-2 h-4 w-4" /> Decline Entire Order
+            </Button>
+          ) : (
+            <Button
+              className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-semibold"
+              onClick={() => setShowPartial(true)}
+              disabled={isPending}
+            >
+              <CheckCircle className="mr-2 h-4 w-4" /> Accept {checkedCount} Items Only
+            </Button>
+          )}
+          {allChecked && (
+            <Button
+              variant="ghost"
+              className="w-full h-9 text-xs text-muted-foreground hover:text-red-600"
+              onClick={() => setShowDecline(true)}
+              disabled={isPending}
+            >
+              Decline Order...
+            </Button>
+          )}
         </CardFooter>
       )}
+
+      {showDecline && (
+        <CardFooter className="bg-red-50/50 p-4 border-t border-red-100 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-red-800">Decline Order</p>
+          <Input
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+            placeholder="Reason (e.g. Out of stock)"
+            className="h-10 text-sm bg-white"
+          />
+          <div className="flex gap-2 w-full">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowDecline(false)} disabled={isPending}>Cancel</Button>
+            <Button 
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl" 
+              onClick={() => onRespond(order.id, { action: 'decline', declineReason })}
+              disabled={isPending}
+            >
+              Confirm Decline
+            </Button>
+          </div>
+        </CardFooter>
+      )}
+
+      {showPartial && (
+        <CardFooter className="bg-amber-50/50 p-4 border-t border-amber-100 flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Partial Fulfillment</p>
+            <p className="text-[11px] text-amber-700/80 mt-1">
+              You are accepting {checkedCount} item{checkedCount !== 1 ? 's' : ''}. The remaining {totalCount - checkedCount} item{totalCount - checkedCount !== 1 ? 's' : ''} will be sent to Admin to reassign to another vendor.
+            </p>
+          </div>
+          <div className="flex gap-2 w-full">
+            <Button variant="outline" className="flex-1 rounded-xl border-amber-200 hover:bg-amber-100/50" onClick={() => setShowPartial(false)} disabled={isPending}>Cancel</Button>
+            <Button 
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl" 
+              onClick={() => {
+                const fulfilledItemIndexes = Object.entries(checkedItems).filter(([_, checked]) => checked).map(([idx]) => parseInt(idx));
+                onRespond(order.id, { action: 'partial', fulfilledItemIndexes });
+              }}
+              disabled={isPending}
+            >
+              Confirm
+            </Button>
+          </div>
+        </CardFooter>
+      )}
+
       {order.status === 'accepted' && (
         <CardFooter className="bg-gray-50/80 p-4 border-t border-border">
           <Button
@@ -792,8 +922,35 @@ export default function VendorDashboard() {
     },
   });
 
+  const respondMutation = useMutation({
+    mutationFn: ({ orderId, payload }: { orderId: number; payload: any }) =>
+      fetch(`${BASE}/api/orders/${orderId}/vendor-respond`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(async r => {
+        if (!r.ok) {
+          const body = await r.json();
+          throw new Error(body.message || 'Failed to respond to order');
+        }
+        return r.json();
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-stats', user?.id] });
+      toast({ title: 'Success', description: 'Order updated successfully.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  });
+
   const handleUpdate = (orderId: number, status: OrderStatus) => {
     updateStatus.mutate({ id: orderId, data: { status } });
+  };
+
+  const handleRespond = (orderId: number, payload: any) => {
+    respondMutation.mutate({ orderId, payload });
   };
 
   const activeOrders = appOrders.filter(o => ['pending', 'accepted', 'ready'].includes(o.status));
@@ -932,7 +1089,7 @@ export default function VendorDashboard() {
               ) : (
                 <div className="space-y-4">
                   {appOrders.map(order => (
-                    <OrderCard key={order.id} order={order} onUpdate={handleUpdate} isPending={updateStatus.isPending} />
+                    <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
                   ))}
                 </div>
               )
@@ -947,7 +1104,7 @@ export default function VendorDashboard() {
               ) : (
                 <div className="space-y-4">
                   {callOrders.map(order => (
-                    <OrderCard key={order.id} order={order} onUpdate={handleUpdate} isPending={updateStatus.isPending} />
+                    <OrderCard key={order.id} order={order} onUpdate={handleUpdate} onRespond={handleRespond} isPending={updateStatus.isPending || respondMutation.isPending} />
                   ))}
                 </div>
               )

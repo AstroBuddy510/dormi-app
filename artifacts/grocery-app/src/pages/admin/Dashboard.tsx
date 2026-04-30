@@ -236,7 +236,7 @@ export default function AdminDashboard() {
   const liveSingle = useMemo(() => {
     return allOrders.filter((o: any) => {
       if (o.status === 'delivered' || o.status === 'cancelled') return false;
-      if (liveFilter === 'pending')     return o.status === 'pending';
+      if (liveFilter === 'pending')     return o.status === 'pending' || o.status === 'vendor_declined';
       if (liveFilter === 'in_progress') return ['accepted', 'ready', 'in_transit'].includes(o.status);
       return true;
     });
@@ -245,7 +245,7 @@ export default function AdminDashboard() {
   const liveBulkGroups = useMemo(() => {
     return blockGroups.filter((g: any) => {
       if (g.status === 'delivered' || g.status === 'cancelled') return false;
-      if (liveFilter === 'pending')     return g.status === 'pending';
+      if (liveFilter === 'pending')     return g.status === 'pending' || g.status === 'vendor_declined';
       if (liveFilter === 'in_progress') return ['accepted', 'ready', 'in_transit'].includes(g.status);
       return true;
     });
@@ -1068,6 +1068,16 @@ function LiveOrdersTable({
                 <TableCell>
                   <div className="flex flex-col gap-1">
                     <StatusBadge status={entry.status} />
+                    {entry.declineReason && (
+                      <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 rounded-lg px-2 py-1 text-[10px] font-semibold">
+                        <AlertTriangle size={10} /> {entry.declineReason}
+                      </span>
+                    )}
+                    {entry.splitFromOrderId && (
+                      <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-2 py-1 text-[10px] font-semibold">
+                        <RefreshCcw size={10} /> Split from #{entry.splitFromOrderId}
+                      </span>
+                    )}
                     {entry.riderAccepted === true && (
                       <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap">
                         ✓ Rider Accepted

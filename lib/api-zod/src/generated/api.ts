@@ -198,6 +198,7 @@ export const ListOrdersQueryParams = zod.object({
       "in_transit",
       "delivered",
       "cancelled",
+      "vendor_declined"
     ])
     .optional(),
   residentId: zod.coerce.number().optional(),
@@ -238,6 +239,7 @@ export const ListOrdersResponseItem = zod.object({
     "in_transit",
     "delivered",
     "cancelled",
+    "vendor_declined"
   ]),
   paymentMethod: zod.string(),
   isSubscription: zod.boolean(),
@@ -312,6 +314,7 @@ export const GetOrderResponse = zod.object({
     "in_transit",
     "delivered",
     "cancelled",
+    "vendor_declined"
   ]),
   paymentMethod: zod.string(),
   isSubscription: zod.boolean(),
@@ -345,6 +348,7 @@ export const UpdateOrderStatusBody = zod.object({
     "in_transit",
     "delivered",
     "cancelled",
+    "vendor_declined"
   ]),
   callAccepted: zod.boolean().optional(),
   note: zod.string().optional(),
@@ -381,6 +385,7 @@ export const UpdateOrderStatusResponse = zod.object({
     "in_transit",
     "delivered",
     "cancelled",
+    "vendor_declined"
   ]),
   paymentMethod: zod.string(),
   isSubscription: zod.boolean(),
@@ -441,6 +446,7 @@ export const AssignRiderResponse = zod.object({
     "in_transit",
     "delivered",
     "cancelled",
+    "vendor_declined"
   ]),
   paymentMethod: zod.string(),
   isSubscription: zod.boolean(),
@@ -502,6 +508,7 @@ export const UploadOrderPhotoResponse = zod.object({
     "in_transit",
     "delivered",
     "cancelled",
+    "vendor_declined"
   ]),
   paymentMethod: zod.string(),
   isSubscription: zod.boolean(),

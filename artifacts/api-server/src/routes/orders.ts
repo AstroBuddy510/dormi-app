@@ -103,6 +103,8 @@ async function enrichOrder(order: typeof ordersTable.$inferSelect) {
     pickupDeadline: order.pickupDeadline?.toISOString() ?? null,
     eta: order.eta,
     notes: order.notes,
+    splitFromOrderId: order.splitFromOrderId,
+    declineReason: order.declineReason,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
   };
@@ -394,6 +396,120 @@ router.put("/:id/assign-vendor", async (req, res) => {
       return;
     }
     res.json(await enrichOrder(order));
+  } catch (err: any) {
+    res.status(400).json({ error: "bad_request", message: err.message });
+  }
+});
+
+router.put("/:id/vendor-respond", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { action, fulfilledItemIndexes, declineReason } = req.body;
+
+    if (!['accept', 'decline', 'partial'].includes(action)) {
+      return res.status(400).json({ error: "bad_request", message: "Invalid action" });
+    }
+
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      return res.status(404).json({ error: "not_found", message: "Order not found" });
+    }
+
+    if (action === 'accept') {
+      const [updated] = await db.update(ordersTable)
+        .set({ status: 'accepted', updatedAt: new Date() })
+        .where(eq(ordersTable.id, id))
+        .returning();
+      return res.json(await enrichOrder(updated));
+    }
+
+    if (action === 'decline') {
+      const [updated] = await db.update(ordersTable)
+        .set({ 
+          status: 'vendor_declined', 
+          vendorId: null, // Unassign so Admin sees it clearly
+          declineReason: declineReason ?? null,
+          updatedAt: new Date() 
+        })
+        .where(eq(ordersTable.id, id))
+        .returning();
+      return res.json(await enrichOrder(updated));
+    }
+
+    if (action === 'partial') {
+      if (!Array.isArray(fulfilledItemIndexes) || fulfilledItemIndexes.length === 0) {
+        return res.status(400).json({ error: "bad_request", message: "fulfilledItemIndexes required for partial acceptance" });
+      }
+
+      const allItems = order.items as any[];
+      const fulfilledItems = fulfilledItemIndexes.map(i => allItems[i]).filter(Boolean);
+      const unfulfilledItems = allItems.filter((_, i) => !fulfilledItemIndexes.includes(i));
+
+      if (fulfilledItems.length === 0 || unfulfilledItems.length === 0) {
+        return res.status(400).json({ error: "bad_request", message: "Partial acceptance must split items" });
+      }
+
+      // Recalculate original order (now just fulfilled items)
+      const newSubtotal = fulfilledItems.reduce((sum, item) => sum + item.totalPrice, 0);
+      const [pricing] = await db.select().from(pricingTable).limit(1);
+      const markupPercent = pricing ? parseFloat(pricing.serviceMarkupPercent) : 18;
+      const newServiceFee = Math.round((newSubtotal * markupPercent / 100) * 100) / 100;
+      
+      // Original order keeps the delivery fee since it's still being delivered
+      const currentDeliveryFee = parseFloat(order.deliveryFee);
+      const newTax = await computeOrderTaxes(newServiceFee, currentDeliveryFee);
+      const newTotal = Math.round((newSubtotal + newServiceFee + currentDeliveryFee + newTax.taxTotal) * 100) / 100;
+
+      const [updatedOriginal] = await db.update(ordersTable)
+        .set({
+          items: fulfilledItems,
+          subtotal: newSubtotal.toString(),
+          serviceFee: newServiceFee.toString(),
+          taxBase: newTax.base.toString(),
+          vatAmount: newTax.vatAmount.toString(),
+          nhilAmount: newTax.nhilAmount.toString(),
+          getfundAmount: newTax.getfundAmount.toString(),
+          total: newTotal.toString(),
+          status: 'accepted',
+          updatedAt: new Date(),
+        })
+        .where(eq(ordersTable.id, id))
+        .returning();
+
+      // Recalculate split order (unfulfilled items)
+      const splitSubtotal = unfulfilledItems.reduce((sum, item) => sum + item.totalPrice, 0);
+      const splitServiceFee = Math.round((splitSubtotal * markupPercent / 100) * 100) / 100;
+      // Split order gets 0 delivery fee so resident isn't charged twice
+      const splitDeliveryFee = 0;
+      const splitTax = await computeOrderTaxes(splitServiceFee, splitDeliveryFee);
+      const splitTotal = Math.round((splitSubtotal + splitServiceFee + splitDeliveryFee + splitTax.taxTotal) * 100) / 100;
+
+      const [splitOrder] = await db.insert(ordersTable).values({
+        ...order,
+        id: undefined, // let DB auto-generate
+        vendorId: null, // Admin needs to reassign
+        items: unfulfilledItems,
+        subtotal: splitSubtotal.toString(),
+        serviceFee: splitServiceFee.toString(),
+        deliveryFee: splitDeliveryFee.toString(),
+        taxBase: splitTax.base.toString(),
+        vatAmount: splitTax.vatAmount.toString(),
+        nhilAmount: splitTax.nhilAmount.toString(),
+        getfundAmount: splitTax.getfundAmount.toString(),
+        total: splitTotal.toString(),
+        status: 'pending',
+        splitFromOrderId: order.id,
+        paymentStatus: order.paymentStatus === 'paid' ? 'paid' : 'pending', // Copy payment state
+        paystackReference: order.paystackReference ? `${order.paystackReference}-split` : null, // Prevent unique constraint errors
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      return res.json({
+        original: await enrichOrder(updatedOriginal),
+        split: await enrichOrder(splitOrder)
+      });
+    }
   } catch (err: any) {
     res.status(400).json({ error: "bad_request", message: err.message });
   }

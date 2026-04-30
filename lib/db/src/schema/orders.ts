@@ -52,6 +52,9 @@ export const ordersTable = pgTable("orders", {
   vendorPayoutId: integer("vendor_payout_id").references(() => payoutsTable.id),
   // Same idea but for the independent rider's payout request.
   riderPayoutId: integer("rider_payout_id"),
+  // Vendor review: tracks partial-fulfillment splits and decline reasons
+  splitFromOrderId: integer("split_from_order_id"),
+  declineReason: text("decline_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
